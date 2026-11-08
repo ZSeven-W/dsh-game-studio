@@ -40,8 +40,9 @@
 | 🤖 **자동 플레이 테스트** | `game_studio_playtest`가 헤드리스 Chrome 또는 Edge에서 최신 코드를 플레이하고 단계, 점수, 프레임 레이트, 스크립트 오류, 스크린샷을 보고합니다. 방향키로 조작하지 않는 게임(그리드, 카드, 조준, 리듬…)은 `window.__autoplay`를 정의해서 플레이 테스트가 실제 루프를 플레이합니다. |
 | 🕰️ **버전 기록** | 게임을 변경한 모든 빌드가 저장됩니다. `game_studio_restore_version`이 코드, 규칙, 아트를 한꺼번에 되돌립니다. |
 | 📦 **단일 파일 내보내기** | `game_studio_export`가 네트워크 접근 없이 자립적인 HTML 파일 하나를 만듭니다 — 어떤 브라우저에서든 열거나 아무 정적 호스트에 올릴 수 있습니다. |
-| 📱 **휴대폰에서 사용해 보기** | `game_studio_share`가 로컬 네트워크에 임시 읽기 전용 링크를 열고, 사이드바에 QR 코드를 보여줍니다. |
-| 🗂️ **내 게임** | 오른쪽 사이드바의 **+** 에서 **Game Studio · My games**를 고르면, 워크스페이스의 게임이 최근 플레이테스트 화면을 표지로 한 타일로 펼쳐집니다. 2D/3D로 거르고 최근순·버전 수·이름순으로 정렬할 수 있으며, 클릭하면 바로 플레이합니다(agent·토큰 사용 없음). **Export wall**은 보이는 게임을 오프라인 페이지 하나로 묶어 친구에게 보낼 수 있게 합니다. |
+| 📱 **휴대폰에서 사용해 보기** | `game_studio_share`가 로컬 네트워크에 임시 읽기 전용 링크를 열거나, Cloudflare Quick Tunnel(`cloudflared`)을 통한 임시 공개 링크를 열어 어느 네트워크에 있는 친구든 플레이할 수 있게 하며, 사이드바에 QR 코드를 보여줍니다. |
+| 🌐 **GitHub Pages에 게시** | `game_studio_publish`가 빌드된 HTML(또는 게임 월 전체)을 로그인한 `gh` 계정의 공개 저장소에 푸시하고 GitHub Pages를 켜서, 컴퓨터를 닫아도 유지되는 영구 링크를 만듭니다. |
+| 🗂️ **내 게임** | 오른쪽 사이드바의 **+** 에서 **Game Studio · My games**를 고르면, 워크스페이스의 게임이 최근 플레이테스트 화면을 표지로 한 타일로 펼쳐집니다. 2D/3D로 거르고 최근순·버전 수·이름순으로 정렬할 수 있으며, 클릭하면 바로 플레이합니다(agent·토큰 사용 없음). 온라인 게임 소스(`owner/repo`, GitHub 저장소 URL 또는 GitHub Pages URL)를 구독하면 게시된 게임을 내 게임과 함께 둘러보고 플레이할 수도 있습니다. **Export wall**은 로컬 게임을 오프라인 페이지 하나로 묶어 친구에게 보낼 수 있게 합니다. |
 
 ## 이걸로 만든 게임
 
@@ -83,11 +84,12 @@
 | `game_studio_versions` | 저장된 버전을 최신순으로 나열합니다. |
 | `game_studio_restore_version` | 게임 전체의 이전 버전을 복원합니다. |
 | `game_studio_export` | 자립적이고 오프라인인 HTML 파일 하나로 내보냅니다. |
-| `game_studio_share` | 휴대폰에서 게임을 플레이할 수 있도록 로컬 네트워크에 임시 읽기 전용 링크를 열거나 닫습니다. |
+| `game_studio_share` | 로컬 네트워크에 임시 읽기 전용 링크를 열거나 닫습니다. `public: true`를 넘기면 `cloudflared`를 통한 임시 공개 링크가 열려 링크를 가진 누구나 플레이할 수 있습니다. |
 | `game_studio_list` | 워크스페이스의 게임을 제목·2D/3D·빌드 여부·버전 수와 함께 나열해, agent가 "그 펭귄 게임"을 이름으로 찾게 합니다. |
 | `game_studio_export_wall` | 게임 월 내보내기: 빌드된 게임마다 타일 하나씩 있는 오프라인 HTML 페이지. 타일을 클릭하면 플레이합니다. |
+| `game_studio_publish` | 빌드된 게임(또는 게임 월은 `wall: true`)을 로컬에서 로그인한 `gh` CLI로 GitHub Pages에 게시하거나, `remove: true`를 넘겨 삭제합니다. 먼저 승인을 요청하며, `.dsh-game-studio.json` 마커가 있는 저장소에만 기록합니다. |
 
-사이드바의 버튼(적용, 되돌리기, 빌드, 내보내기, 복원, 공유)은 `/game-studio` 명령을 통해 같은 작업을 수행합니다.
+사이드바의 버튼(적용, 되돌리기, 빌드, 내보내기, 복원, 공유, 게시)은 `/game-studio` 명령을 통해 같은 작업을 수행합니다.
 
 ## 이미지 서비스와 지출
 
@@ -102,7 +104,9 @@
 
 - 게임은 네트워크 접근을 차단하는 콘텐츠 보안 정책이 적용된 샌드박스 iframe에서 실행됩니다. 내보낸 파일은 네트워크 요청을 하지 않습니다.
 - 컴퓨터 밖으로 전송되는 것은 프롬프트와 (제공하는 경우) 참고 사진뿐이며, 사용자가 선택한 이미지 서비스로 전송됩니다.
-- 공유 링크는 읽기 전용이며 해당 게임의 빌드만 제공하고, 로컬 네트워크에서만 수신하며, 설정한 시간 후 닫힙니다 (기본 30분).
+- 공유 링크는 읽기 전용이며 해당 게임의 빌드만 제공하고, 설정한 시간 후 닫힙니다 (기본 30분). 로컬 링크는 로컬 네트워크에서만 수신하며, 공개 링크는 `127.0.0.1`에서만 수신하고 승인 후 Cloudflare(`trycloudflare.com`)를 통해 터널링됩니다.
+- GitHub Pages 게시(`game_studio_publish`)는 로컬에서 로그인한 `gh` CLI를 사용하며(플러그인은 GitHub 토큰에 절대 접근하지 않습니다), 승인 후 빌드된 HTML만 **공개** 저장소에 업로드하고, `.dsh-game-studio.json` 마커가 없는 기존 저장소에는 쓰기를 거부합니다.
+- 온라인 게임 소스는 DSH나 워크스페이스에 접근할 수 없는 샌드박스 iframe(`sandbox="allow-scripts"`) 안에서 제공자 자신의 사이트에서 실행되며, 로컬 게임 월을 내보내거나 게시할 때 복사되거나 전달되지 않습니다.
 - API 키는 DSH 자격 증명 또는 환경에서 읽히며 프로젝트, 로그, 도구 결과에 절대 기록되지 않습니다.
 
 ## 요구 사항
@@ -110,6 +114,7 @@
 - DeepSeek Harness `0.2.1` 이상 (웹 또는 데스크톱), Node.js `24.11` 이상.
 - 플레이 테스트를 위해 같은 컴퓨터에 설치된 Google Chrome 또는 Microsoft Edge.
 - AI 아트를 위해서는 OpenAI API 키 또는 로그인된 Codex CLI 중 하나가 필요합니다. 둘 다 없어도 게임은 코드로 그린 캐릭터로 작동합니다.
+- 선택 사항: 임시 공개 공유 링크를 위한 `cloudflared`(macOS에서 `brew install cloudflared`), GitHub Pages 게시를 위한 `gh`(`brew install gh` 후 `gh auth login`).
 
 ## DSH에 설치
 
@@ -149,6 +154,9 @@ dsh web
 | `codexReasoningEffort` | `low` | Codex 이미지 실행의 추론 강도. |
 | `codexTimeoutMinutes` | `15` | 이 시간이 지나면 Codex 이미지 하나를 포기합니다. |
 | `confirmSpending` | `true` | 매번 생성 전에 승인을 요청합니다. |
+| `cloudflaredPath` | `PATH` 또는 Homebrew에서 찾음 | 임시 공개 공유 링크를 위한 `cloudflared` 실행 파일. |
+| `ghPath` | `PATH` 또는 Homebrew에서 찾음 | GitHub Pages 게시를 위한 GitHub CLI(`gh`) 실행 파일. |
+| `githubRepo` | `dsh-games` | GitHub Pages용 공개 GitHub 저장소 이름(로그인한 계정 아래). |
 
 ## 게임 프로젝트 형식
 

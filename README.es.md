@@ -40,8 +40,9 @@ Pídele al agente un juego en palabras sencillas — «un juego 3D: un panda roj
 | 🤖 **Pruebas de juego autónomas** | `game_studio_playtest` juega el código más reciente en un Chrome o Edge sin interfaz e informa de fases, puntuación, frecuencia de fotogramas, errores de script y capturas de pantalla. Los juegos que no se dirigen con las flechas (cuadrículas, cartas, puntería, ritmo…) definen `window.__autoplay`, de modo que la prueba de juego ejecuta su bucle real. |
 | 🕰️ **Historial de versiones** | Cada compilación que cambió el juego se guarda; `game_studio_restore_version` restaura juntos el código, las reglas y el arte. |
 | 📦 **Exportación en un solo archivo** | `game_studio_export` escribe un archivo HTML autosuficiente y sin acceso a la red — ábrelo en cualquier navegador o ponlo en cualquier servidor estático. |
-| 📱 **Pruébalo en tu teléfono** | `game_studio_share` abre un enlace temporal de solo lectura en tu red local, con un código QR en la barra lateral. |
-| 🗂️ **Mis juegos** | Abre el **+** de la barra lateral y elige **Game Studio · My games**: cada juego del espacio de trabajo como una tarjeta con la imagen de su última prueba, con filtro 2D/3D y orden por fecha, versiones o nombre. Un clic para jugar, sin agente y sin tokens. **Export wall** reúne los juegos mostrados en una sola página sin conexión para enviarla a tus amigos. |
+| 📱 **Pruébalo en tu teléfono** | `game_studio_share` abre un enlace temporal de solo lectura en tu red local — o un enlace público temporal a través de un Cloudflare Quick Tunnel (`cloudflared`) para que tus amigos puedan jugar desde cualquier red — con un código QR en la barra lateral. |
+| 🌐 **Publicar en GitHub Pages** | `game_studio_publish` sube el HTML compilado (o el muro de juegos completo) a un repositorio público bajo tu cuenta de `gh` con la sesión iniciada y activa GitHub Pages para obtener un enlace permanente que se mantiene en línea después de apagar tu computadora. |
+| 🗂️ **Mis juegos** | Abre el **+** de la barra lateral y elige **Game Studio · My games**: cada juego del espacio de trabajo como una tarjeta con la imagen de su última prueba, con filtro 2D/3D y orden por fecha, versiones o nombre. Un clic para jugar, sin agente y sin tokens. También puedes suscribirte a fuentes de juegos en línea (`owner/repo`, URL de repositorio de GitHub o URL de GitHub Pages) para explorar y jugar juegos publicados junto a los tuyos. **Export wall** reúne tus juegos locales en una sola página sin conexión para enviarla a tus amigos. |
 
 ## Juegos hechos con él
 
@@ -83,11 +84,12 @@ Medido en un DSH real con DeepSeek-V4.1-Flash, cada juego creado a partir de una
 | `game_studio_versions` | Enumera las versiones guardadas, la más reciente primero. |
 | `game_studio_restore_version` | Restaura una versión anterior del juego completo. |
 | `game_studio_export` | Exporta un único archivo HTML autosuficiente y sin conexión. |
-| `game_studio_share` | Abre (o cierra) un enlace temporal de solo lectura en la red local para que un teléfono pueda jugar. |
+| `game_studio_share` | Abre (o cierra) un enlace temporal de solo lectura en la red local, o acepta `public: true` para un enlace público temporal a través de `cloudflared` con el que cualquier persona que tenga el enlace pueda jugar. |
 | `game_studio_list` | Lista los juegos del espacio de trabajo con título, 2D/3D, estado de compilación y versiones, para que el agente encuentre «el juego del pingüino» por su nombre. |
 | `game_studio_export_wall` | Exporta el muro de juegos: una página HTML sin conexión con una tarjeta por juego compilado; haz clic en una para jugar. |
+| `game_studio_publish` | Publica el juego compilado (o `wall: true` para el muro de juegos) en GitHub Pages a través de la CLI local `gh` con la sesión iniciada, o acepta `remove: true` para eliminarlo. Pide aprobación primero y solo escribe en repositorios que lleven su marcador `.dsh-game-studio.json`. |
 
-Los botones de la barra lateral (aplicar, revertir, compilar, exportar, restaurar, compartir) llaman a las mismas operaciones a través del comando `/game-studio`.
+Los botones de la barra lateral (aplicar, revertir, compilar, exportar, restaurar, compartir, publicar) llaman a las mismas operaciones a través del comando `/game-studio`.
 
 ## Servicios de imágenes y gasto
 
@@ -102,7 +104,9 @@ Los botones de la barra lateral (aplicar, revertir, compilar, exportar, restaura
 
 - Los juegos corren en un iframe aislado con una política de seguridad de contenidos que bloquea el acceso a la red; los archivos exportados no hacen peticiones de red.
 - Lo único que sale de tu máquina son los prompts — y la imagen de referencia, si aportas una — hacia el servicio de imágenes que elijas.
-- El enlace para compartir es de solo lectura, sirve solo la compilación de ese juego, escucha únicamente en tu red local y se cierra pasado el tiempo que configures (30 minutos por defecto).
+- El enlace para compartir es de solo lectura, sirve solo la compilación de ese juego y se cierra pasado el tiempo que configures (30 minutos por defecto). Los enlaces locales escuchan únicamente en tu red local; los enlaces públicos escuchan solo en `127.0.0.1` y pasan por un túnel de Cloudflare (`trycloudflare.com`) después de que lo apruebes.
+- Publicar en GitHub Pages (`game_studio_publish`) usa tu CLI local `gh` con la sesión iniciada (el plugin nunca toca tu token de GitHub), sube solo el HTML compilado a un repositorio **público** después de que lo apruebes y se niega a escribir en cualquier repositorio existente que no lleve su marcador `.dsh-game-studio.json`.
+- Las fuentes de juegos en línea corren en el propio sitio del proveedor dentro de un iframe aislado (`sandbox="allow-scripts"`) sin acceso a DSH ni a tu espacio de trabajo, y nunca se copian ni se reenvían al exportar o publicar tu muro de juegos local.
 - Las claves de API se leen de las credenciales de DSH o del entorno y nunca se escriben en proyectos, registros ni resultados de herramientas.
 
 ## Requisitos
@@ -110,6 +114,7 @@ Los botones de la barra lateral (aplicar, revertir, compilar, exportar, restaura
 - DeepSeek Harness `0.2.1` o posterior (web o escritorio), Node.js `24.11` o posterior.
 - Google Chrome o Microsoft Edge en la misma computadora para las pruebas de juego.
 - Para el arte con IA, una clave de API de OpenAI o el Codex CLI con la sesión iniciada. Sin ninguna de las dos, los juegos siguen funcionando con sus personajes dibujados por código.
+- Opcional: `cloudflared` (`brew install cloudflared` en macOS) para enlaces públicos temporales para compartir; `gh` (`brew install gh` y `gh auth login`) para publicar en GitHub Pages.
 
 ## Instalar en DSH
 
@@ -149,6 +154,9 @@ Define estas opciones bajo `config` en el `cordis.patch.yml` de tu perfil:
 | `codexReasoningEffort` | `low` | Esfuerzo de razonamiento para las ejecuciones de imágenes de Codex. |
 | `codexTimeoutMinutes` | `15` | Abandona una imagen de Codex pasado este tiempo. |
 | `confirmSpending` | `true` | Pide aprobación antes de cada generación. |
+| `cloudflaredPath` | se encuentra en `PATH` o en Homebrew | Ejecutable de `cloudflared` para los enlaces públicos temporales para compartir. |
+| `ghPath` | se encuentra en `PATH` o en Homebrew | Ejecutable de la CLI de GitHub (`gh`) para publicar en GitHub Pages. |
+| `githubRepo` | `dsh-games` | Nombre del repositorio público de GitHub (bajo tu cuenta con la sesión iniciada) para GitHub Pages. |
 
 ## Formato del proyecto de juego
 

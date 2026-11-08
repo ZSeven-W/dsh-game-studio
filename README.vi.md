@@ -40,8 +40,9 @@ Yêu cầu agent tạo một trò chơi bằng lời lẽ tự nhiên — "một
 | 🤖 **Tự động chơi thử (playtest)** | `game_studio_playtest` chạy bản mã mới nhất trong Chrome hoặc Edge chế độ không giao diện (headless) và báo cáo các giai đoạn, điểm số, tốc độ khung hình, lỗi kịch bản cùng ảnh chụp màn hình. Các trò chơi không điều khiển bằng phím mũi tên (lưới, thẻ bài, ngắm bắn, nhịp điệu…) định nghĩa `window.__autoplay`, nhờ đó quá trình chơi thử diễn ra đúng với vòng lặp thực tế của trò chơi. |
 | 🕰️ **Lịch sử phiên bản** | Mọi bản dựng làm thay đổi trò chơi đều được lưu lại; `game_studio_restore_version` khôi phục đồng thời cả mã, luật chơi và đồ họa. |
 | 📦 **Xuất một tệp duy nhất** | `game_studio_export` ghi ra một tệp HTML độc lập không cần kết nối mạng — mở được trên mọi trình duyệt hoặc đưa lên bất kỳ máy chủ tĩnh nào. |
-| 📱 **Thử ngay trên điện thoại** | `game_studio_share` mở một liên kết chỉ đọc tạm thời trên mạng cục bộ của bạn, kèm mã QR ở thanh bên. |
-| 🗂️ **Trò chơi của tôi** | Mở nút **+** ở thanh bên và chọn **Game Studio · My games**: mỗi trò chơi trong không gian làm việc là một ô kèm ảnh lần chơi thử gần nhất, lọc theo 2D/3D và sắp xếp theo thời gian, số phiên bản hoặc tên. Bấm là chơi, không cần agent, không tốn token. **Export wall** gói các trò đang hiển thị thành một trang ngoại tuyến để gửi cho bạn bè. |
+| 📱 **Thử ngay trên điện thoại** | `game_studio_share` mở một liên kết chỉ đọc tạm thời trên mạng cục bộ của bạn — hoặc một liên kết công khai tạm thời qua Cloudflare Quick Tunnel (`cloudflared`) để bạn bè trên bất kỳ mạng nào cũng có thể chơi — kèm mã QR ở thanh bên. |
+| 🌐 **Xuất bản lên GitHub Pages** | `game_studio_publish` đẩy tệp HTML đã dựng (hoặc toàn bộ bức tường trò chơi) lên một kho lưu trữ công khai dưới tài khoản `gh` đã đăng nhập của bạn và bật GitHub Pages để tạo một liên kết vĩnh viễn vẫn hoạt động ngay cả khi bạn đóng máy tính. |
+| 🗂️ **Trò chơi của tôi** | Mở nút **+** ở thanh bên và chọn **Game Studio · My games**: mỗi trò chơi trong không gian làm việc là một ô kèm ảnh lần chơi thử gần nhất, lọc theo 2D/3D và sắp xếp theo thời gian, số phiên bản hoặc tên. Bấm là chơi, không cần agent, không tốn token. Bạn cũng có thể đăng ký theo dõi các nguồn trò chơi trực tuyến (`owner/repo`, URL kho lưu trữ GitHub hoặc URL GitHub Pages) để duyệt và chơi các trò chơi đã xuất bản cùng với trò chơi của riêng mình. **Export wall** gói các trò chơi cục bộ của bạn thành một trang ngoại tuyến để gửi cho bạn bè. |
 
 ## Những trò chơi làm bằng nó
 
@@ -83,11 +84,12 @@ Bốn trò chơi từ các lần thử nghiệm. Mỗi trò bắt đầu từ m�
 | `game_studio_versions` | Liệt kê các phiên bản đã lưu, mới nhất xếp trước. |
 | `game_studio_restore_version` | Khôi phục một phiên bản trước đó của toàn bộ trò chơi. |
 | `game_studio_export` | Xuất ra một tệp HTML độc lập, chạy ngoại tuyến. |
-| `game_studio_share` | Mở (hoặc đóng) một liên kết chỉ đọc tạm thời trên mạng cục bộ để điện thoại có thể chơi trò chơi. |
+| `game_studio_share` | Mở (hoặc đóng) một liên kết chỉ đọc tạm thời trên mạng cục bộ, hoặc truyền `public: true` để tạo một liên kết công khai tạm thời qua `cloudflared` giúp bất kỳ ai có liên kết đều chơi được. |
 | `game_studio_list` | Liệt kê các trò chơi trong không gian làm việc với tên, 2D/3D, trạng thái build và số phiên bản, để agent tìm "trò chim cánh cụt đó" theo tên. |
 | `game_studio_export_wall` | Xuất bức tường trò chơi: một trang HTML ngoại tuyến, mỗi trò đã build một ô; bấm vào ô để chơi. |
+| `game_studio_publish` | Xuất bản trò chơi đã dựng (hoặc `wall: true` cho bức tường trò chơi) lên GitHub Pages thông qua `gh` CLI cục bộ đã đăng nhập, hoặc truyền `remove: true` để xóa. Yêu cầu phê duyệt trước và chỉ ghi vào các kho lưu trữ có chứa tệp đánh dấu `.dsh-game-studio.json`. |
 
-Các nút ở thanh bên (áp dụng, hoàn tác, dựng, xuất, khôi phục, chia sẻ) cũng gọi cùng các thao tác này thông qua lệnh `/game-studio`.
+Các nút ở thanh bên (áp dụng, hoàn tác, dựng, xuất, khôi phục, chia sẻ, xuất bản) cũng gọi cùng các thao tác này thông qua lệnh `/game-studio`.
 
 ## Dịch vụ hình ảnh và chi phí
 
@@ -102,7 +104,9 @@ Các nút ở thanh bên (áp dụng, hoàn tác, dựng, xuất, khôi phục, 
 
 - Trò chơi chạy trong một iframe tách biệt (sandbox) với chính sách bảo mật nội dung chặn truy cập mạng; các tệp đã xuất không thực hiện bất kỳ yêu cầu mạng nào.
 - Những thứ duy nhất được gửi ra khỏi máy của bạn là các câu lệnh tạo ảnh (prompt) — và ảnh tham chiếu, nếu bạn cung cấp — tới dịch vụ hình ảnh mà bạn chọn.
-- Liên kết chia sẻ ở chế độ chỉ đọc, chỉ phục vụ bản dựng của trò chơi đó, chỉ lắng nghe trên mạng cục bộ của bạn và tự đóng sau khoảng thời gian bạn đặt (mặc định là 30 phút).
+- Liên kết chia sẻ ở chế độ chỉ đọc, chỉ phục vụ bản dựng của trò chơi đó và tự đóng sau khoảng thời gian bạn đặt (mặc định là 30 phút). Liên kết cục bộ chỉ lắng nghe trên mạng cục bộ của bạn; liên kết công khai chỉ lắng nghe trên `127.0.0.1` và đi qua đường hầm Cloudflare (`trycloudflare.com`) sau khi bạn phê duyệt.
+- Việc xuất bản lên GitHub Pages (`game_studio_publish`) sử dụng `gh` CLI cục bộ đã đăng nhập của bạn (plugin không bao giờ chạm vào token GitHub của bạn), chỉ tải tệp HTML đã dựng lên một kho lưu trữ **công khai** sau khi bạn phê duyệt, và từ chối ghi vào bất kỳ kho lưu trữ hiện có nào không chứa tệp đánh dấu `.dsh-game-studio.json`.
+- Các nguồn trò chơi trực tuyến chạy trên trang riêng của nhà cung cấp bên trong một iframe tách biệt (`sandbox="allow-scripts"`), không có quyền truy cập vào DSH hay không gian làm việc của bạn, và không bao giờ được sao chép hoặc chuyển tiếp khi xuất hoặc xuất bản bức tường trò chơi cục bộ của bạn.
 - Khóa API được đọc từ thông tin xác thực DSH hoặc biến môi trường và không bao giờ được ghi vào dự án, nhật ký hay kết quả của công cụ.
 
 ## Yêu cầu hệ thống
@@ -110,6 +114,7 @@ Các nút ở thanh bên (áp dụng, hoàn tác, dựng, xuất, khôi phục, 
 - DeepSeek Harness `0.2.1` trở lên (bản web hoặc máy tính), Node.js `24.11` trở lên.
 - Google Chrome hoặc Microsoft Edge trên cùng máy tính để chạy tự động chơi thử.
 - Đối với đồ họa AI, cần có khóa API OpenAI hoặc Codex CLI đã đăng nhập. Nếu không có cả hai, trò chơi vẫn hoạt động với các nhân vật được vẽ bằng mã.
+- Tùy chọn: `cloudflared` (`brew install cloudflared` trên macOS) cho các liên kết chia sẻ công khai tạm thời; `gh` (`brew install gh` và `gh auth login`) để xuất bản lên GitHub Pages.
 
 ## Cài đặt vào DSH
 
@@ -149,6 +154,9 @@ Thiết lập các tùy chọn này dưới mục `config` trong tệp `cordis.p
 | `codexReasoningEffort` | `low` | Mức độ suy luận cho các lượt tạo ảnh bằng Codex. |
 | `codexTimeoutMinutes` | `15` | Hủy bỏ một lượt tạo ảnh Codex sau khoảng thời gian này (tính bằng phút). |
 | `confirmSpending` | `true` | Yêu cầu phê duyệt trước mỗi lần tạo ảnh. |
+| `cloudflaredPath` | tìm trên `PATH` hoặc Homebrew | Tệp thực thi `cloudflared` cho các liên kết chia sẻ công khai tạm thời. |
+| `ghPath` | tìm trên `PATH` hoặc Homebrew | Tệp thực thi GitHub CLI (`gh`) để xuất bản lên GitHub Pages. |
+| `githubRepo` | `dsh-games` | Tên kho lưu trữ GitHub công khai (dưới tài khoản đã đăng nhập của bạn) dành cho GitHub Pages. |
 
 ## Định dạng dự án trò chơi
 

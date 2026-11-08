@@ -40,8 +40,9 @@ Ajandan günlük dille bir oyun isteyin — "3D bir oyun: kırmızı bir panda o
 | 🤖 **Kendi kendine oynayan oynanış testleri** | `game_studio_playtest` en son kodu başsız (headless) bir Chrome veya Edge'de oynar ve aşamaları, skoru, kare hızını, betik hatalarını ve ekran görüntülerini raporlar. Yön tuşlarıyla yönetilmeyen oyunlar (ızgaralar, kartlar, nişan alma, ritim…) `window.__autoplay` tanımlar, böylece oynanış testi oyunun gerçek döngüsünü oynar. |
 | 🕰️ **Sürüm geçmişi** | Oyunu değiştiren her derleme kaydedilir; `game_studio_restore_version` kodu, kuralları ve görselleri birlikte geri getirir. |
 | 📦 **Tek dosya dışa aktarma** | `game_studio_export` ağ erişimi olmayan, bağımsız bir HTML dosyası yazar — istediğiniz tarayıcıda açın veya herhangi bir statik barındırma hizmetine koyun. |
-| 📱 **Telefonunuzda deneyin** | `game_studio_share` kenar çubuğunda bir QR koduyla yerel ağınızda geçici, salt okunur bir bağlantı açar. |
-| 🗂️ **Oyunlarım** | Kenar çubuğundaki **+** ile **Game Studio · My games**'i seçin: çalışma alanındaki her oyun son test görüntüsüyle bir kutucuk olarak listelenir; 2D/3D süzgeci ve tarih, sürüm ya da ada göre sıralama vardır. Tıklayıp oynayın; agent da token da gerekmez. **Export wall**, gösterilen oyunları arkadaşlarınıza gönderebileceğiniz tek bir çevrimdışı sayfada toplar. |
+| 📱 **Telefonunuzda deneyin** | `game_studio_share` kenar çubuğunda bir QR koduyla yerel ağınızda geçici, salt okunur bir bağlantı — veya herhangi bir ağdaki arkadaşlarınızın oynayabilmesi için Cloudflare Quick Tunnel (`cloudflared`) üzerinden geçici bir herkese açık bağlantı — açar. |
+| 🌐 **GitHub Pages'te yayınlayın** | `game_studio_publish` derlenmiş HTML'yi (veya tüm oyun duvarını) oturum açılmış `gh` hesabınızın altındaki herkese açık bir depoya gönderir ve bilgisayarınızı kapattıktan sonra da açık kalan kalıcı bir bağlantı için GitHub Pages'i etkinleştirir. |
+| 🗂️ **Oyunlarım** | Kenar çubuğundaki **+** ile **Game Studio · My games**'i seçin: çalışma alanındaki her oyun son test görüntüsüyle bir kutucuk olarak listelenir; 2D/3D süzgeci ve tarih, sürüm ya da ada göre sıralama vardır. Tıklayıp oynayın; agent da token da gerekmez. Ayrıca yayınlanmış oyunlara kendi oyunlarınızın yanında göz atıp oynamak için çevrimiçi oyun kaynaklarına (`owner/repo`, GitHub depo URL'si veya GitHub Pages URL'si) abone olabilirsiniz. **Export wall**, yerel oyunlarınızı arkadaşlarınıza gönderebileceğiniz tek bir çevrimdışı sayfada toplar. |
 
 ## Onunla yapılan oyunlar
 
@@ -83,11 +84,12 @@ Gerçek bir DSH içinde DeepSeek-V4.1-Flash ile ölçüldü; her oyun yeni bir o
 | `game_studio_versions` | Kaydedilen sürümleri en yeniden başlayarak listeler. |
 | `game_studio_restore_version` | Tüm oyunun daha önceki bir sürümünü geri yükler. |
 | `game_studio_export` | Tek bir bağımsız, çevrimdışı HTML dosyası dışa aktarır. |
-| `game_studio_share` | Bir telefonun oyunu oynayabilmesi için yerel ağda geçici, salt okunur bir bağlantı açar (veya kapatır). |
+| `game_studio_share` | Yerel ağda geçici, salt okunur bir bağlantı açar (veya kapatır) ya da bağlantıya sahip herkesin oynayabilmesi için `cloudflared` üzerinden geçici bir herkese açık bağlantı oluşturmak üzere `public: true` alır. |
 | `game_studio_list` | Çalışma alanındaki oyunları başlık, 2D/3D, derleme durumu ve sürüm sayısıyla listeler; agent "o penguen oyununu" adından bulur. |
 | `game_studio_export_wall` | Oyun duvarını dışa aktarır: derlenmiş her oyun için bir kutucuk içeren çevrimdışı bir HTML sayfası; kutucuğa tıklayınca oyun açılır. |
+| `game_studio_publish` | Derlenmiş oyunu (veya oyun duvarı için `wall: true`) yerel oturum açılmış `gh` CLI üzerinden GitHub Pages'te yayınlar ya da silmek için `remove: true` alır. Önce onay ister ve yalnızca kendi `.dsh-game-studio.json` işaretçisini taşıyan depolara yazar. |
 
-Kenar çubuğunun düğmeleri (uygula, geri al, derle, dışa aktar, geri yükle, paylaş) aynı işlemleri `/game-studio` komutu üzerinden çağırır.
+Kenar çubuğunun düğmeleri (uygula, geri al, derle, dışa aktar, geri yükle, paylaş, yayınla) aynı işlemleri `/game-studio` komutu üzerinden çağırır.
 
 ## Görsel hizmetleri ve harcama
 
@@ -102,7 +104,9 @@ Kenar çubuğunun düğmeleri (uygula, geri al, derle, dışa aktar, geri yükle
 
 - Oyunlar, ağ erişimini engelleyen bir içerik güvenlik politikasına sahip korumalı bir iframe içinde çalışır; dışa aktarılan dosyalar hiçbir ağ isteği yapmaz.
 - Makinenizin dışına gönderilen tek şey, seçtiğiniz görsel hizmetine gönderilen istemler — ve verirseniz referans resimdir.
-- Paylaşım bağlantısı salt okunurdur, yalnızca o oyunun derlemesini sunar, yalnızca yerel ağınızı dinler ve belirlediğiniz sürenin sonunda (varsayılan olarak 30 dakika) kapanır.
+- Paylaşım bağlantısı salt okunurdur, yalnızca o oyunun derlemesini sunar ve belirlediğiniz sürenin sonunda (varsayılan olarak 30 dakika) kapanır. Yerel bağlantılar yalnızca yerel ağınızı dinler; herkese açık bağlantılar yalnızca `127.0.0.1` adresini dinler ve onayınızdan sonra Cloudflare (`trycloudflare.com`) üzerinden tünellenir.
+- GitHub Pages'te yayınlama (`game_studio_publish`), yerel oturum açılmış `gh` CLI'nizi kullanır (eklenti GitHub belirtecinize asla dokunmaz), onayınızdan sonra yalnızca derlenmiş HTML'yi **herkese açık** bir depoya yükler ve kendi `.dsh-game-studio.json` işaretçisini taşımayan mevcut hiçbir depoya yazmayı kabul etmez.
+- Çevrimiçi oyun kaynakları, DSH'ye veya çalışma alanınıza erişimi olmadan korumalı bir iframe (`sandbox="allow-scripts"`) içinde sağlayıcının kendi sitesinde çalışır ve yerel oyun duvarınızı dışa aktarırken veya yayınlarken asla kopyalanmaz ya da iletilmez.
 - API anahtarları DSH kimlik bilgilerinden veya ortamdan okunur ve asla projelere, günlüklere veya araç sonuçlarına yazılmaz.
 
 ## Gereksinimler
@@ -110,6 +114,7 @@ Kenar çubuğunun düğmeleri (uygula, geri al, derle, dışa aktar, geri yükle
 - DeepSeek Harness `0.2.1` veya üzeri (web veya masaüstü), Node.js `24.11` veya üzeri.
 - Oynanış testleri için aynı bilgisayarda Google Chrome veya Microsoft Edge.
 - Yapay zeka görselleri için bir OpenAI API anahtarı veya oturum açılmış Codex CLI. İkisi de olmadan oyunlar kodla çizilmiş karakterleriyle çalışmaya devam eder.
+- İsteğe bağlı: geçici herkese açık paylaşım bağlantıları için `cloudflared` (macOS'te `brew install cloudflared`); GitHub Pages'te yayınlamak için `gh` (`brew install gh` ve `gh auth login`).
 
 ## DSH'ye kurulum
 
@@ -149,6 +154,9 @@ Bunları profilinizin `cordis.patch.yml` dosyasındaki `config` altında ayarlay
 | `codexReasoningEffort` | `low` | Codex görsel çalıştırmaları için akıl yürütme çabası. |
 | `codexTimeoutMinutes` | `15` | Bu sürenin sonunda bir Codex görselinden vazgeç. |
 | `confirmSpending` | `true` | Her üretimden önce onay iste. |
+| `cloudflaredPath` | `PATH` üzerinde veya Homebrew'da bulunur | Geçici herkese açık paylaşım bağlantıları için `cloudflared` çalıştırılabilir dosyası. |
+| `ghPath` | `PATH` üzerinde veya Homebrew'da bulunur | GitHub Pages'te yayınlamak için GitHub CLI (`gh`) çalıştırılabilir dosyası. |
+| `githubRepo` | `dsh-games` | GitHub Pages için herkese açık GitHub deposu adı (oturum açılmış hesabınızın altında). |
 
 ## Oyun projesi biçimi
 

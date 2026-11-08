@@ -40,8 +40,9 @@ Mintalah sebuah game kepada agen dengan kata-kata sederhana — "game 3D: seekor
 | 🤖 **Uji main otomatis** | `game_studio_playtest` memainkan kode terbaru di Chrome atau Edge tanpa antarmuka (headless) dan melaporkan fase, skor, laju bingkai (frame rate), kesalahan skrip, dan tangkapan layar. Game yang tidak dikendalikan dengan tombol panah (grid, kartu, membidik, ritme…) mendefinisikan `window.__autoplay`, sehingga uji main menjalankan alur permainan yang sebenarnya. |
 | 🕰️ **Riwayat versi** | Setiap build yang mengubah game akan disimpan; `game_studio_restore_version` mengembalikan kode, aturan, dan seni secara bersamaan. |
 | 📦 **Ekspor satu file** | `game_studio_export` menulis file HTML mandiri tanpa akses jaringan — buka di browser apa pun atau unggah ke layanan hosting statis mana pun. |
-| 📱 **Coba di ponsel Anda** | `game_studio_share` membuka tautan baca-saja sementara di jaringan lokal Anda, lengkap dengan kode QR di bilah sisi. |
-| 🗂️ **Game saya** | Buka **+** di bilah samping dan pilih **Game Studio · My games**: setiap game di ruang kerja tampil sebagai ubin dengan gambar uji main terakhir, bisa disaring 2D/3D dan diurutkan menurut waktu, jumlah versi, atau nama. Klik untuk bermain, tanpa agent dan tanpa token. **Export wall** mengemas game yang tampil menjadi satu halaman offline untuk dikirim ke teman. |
+| 📱 **Coba di ponsel Anda** | `game_studio_share` membuka tautan baca-saja sementara di jaringan lokal Anda — atau tautan publik sementara melalui Cloudflare Quick Tunnel (`cloudflared`) agar teman di jaringan mana pun dapat bermain — lengkap dengan kode QR di bilah sisi. |
+| 🌐 **Publikasikan ke GitHub Pages** | `game_studio_publish` mengunggah HTML hasil build (atau seluruh dinding game) ke repositori publik di akun `gh` Anda yang sudah masuk dan mengaktifkan GitHub Pages untuk tautan permanen yang tetap aktif setelah Anda menutup komputer. |
+| 🗂️ **Game saya** | Buka **+** di bilah samping dan pilih **Game Studio · My games**: setiap game di ruang kerja tampil sebagai ubin dengan gambar uji main terakhir, bisa disaring 2D/3D dan diurutkan menurut waktu, jumlah versi, atau nama. Klik untuk bermain, tanpa agent dan tanpa token. Anda juga dapat berlangganan sumber game online (`owner/repo`, URL repositori GitHub, atau URL GitHub Pages) untuk menjelajahi dan memainkan game yang telah dipublikasikan bersama game Anda sendiri. **Export wall** mengemas game lokal Anda menjadi satu halaman offline untuk dikirim ke teman. |
 
 ## Game yang dibuat dengannya
 
@@ -83,11 +84,12 @@ Diukur pada DSH nyata dengan DeepSeek-V4.1-Flash, setiap game dibuat dari satu k
 | `game_studio_versions` | Menampilkan daftar versi yang disimpan, dari yang terbaru. |
 | `game_studio_restore_version` | Memulihkan versi sebelumnya dari keseluruhan game. |
 | `game_studio_export` | Mengekspor satu file HTML mandiri yang dapat dijalankan secara offline. |
-| `game_studio_share` | Membuka (atau menutup) tautan baca-saja sementara di jaringan lokal agar ponsel dapat memainkan game tersebut. |
+| `game_studio_share` | Membuka (atau menutup) tautan baca-saja sementara di jaringan lokal, atau berikan `public: true` untuk tautan publik sementara melalui `cloudflared` agar siapa pun yang memiliki tautan dapat bermain. |
 | `game_studio_list` | Mendaftar game di ruang kerja beserta judul, 2D/3D, status build, dan jumlah versi, agar agent menemukan "game penguin itu" dari namanya. |
 | `game_studio_export_wall` | Mengekspor dinding game: satu halaman HTML offline dengan satu ubin per game yang sudah di-build; klik ubin untuk bermain. |
+| `game_studio_publish` | Mempublikasikan game hasil build (atau `wall: true` untuk dinding game) ke GitHub Pages melalui `gh` CLI lokal yang sudah masuk, atau berikan `remove: true` untuk menghapusnya. Meminta persetujuan terlebih dahulu dan hanya menulis ke repositori yang memiliki penanda `.dsh-game-studio.json`. |
 
-Tombol-tombol di bilah sisi (terapkan, kembalikan, bangun, ekspor, pulihkan, bagikan) memanggil operasi yang sama melalui perintah `/game-studio`.
+Tombol-tombol di bilah sisi (terapkan, kembalikan, bangun, ekspor, pulihkan, bagikan, publikasikan) memanggil operasi yang sama melalui perintah `/game-studio`.
 
 ## Layanan gambar dan pengeluaran biaya
 
@@ -102,7 +104,9 @@ Tombol-tombol di bilah sisi (terapkan, kembalikan, bangun, ekspor, pulihkan, bag
 
 - Game berjalan di dalam iframe ber-sandbox dengan kebijakan keamanan konten (CSP) yang memblokir akses jaringan; file yang diekspor tidak melakukan permintaan jaringan apa pun.
 - Satu-satunya hal yang dikirim keluar dari perangkat Anda adalah prompt — serta gambar referensi, jika Anda memberikannya — ke layanan gambar yang Anda pilih.
-- Tautan berbagi bersifat baca-saja, hanya menyajikan build game tersebut, hanya mendengarkan di jaringan lokal Anda, dan otomatis ditutup setelah batas waktu yang Anda tentukan (default 30 menit).
+- Tautan berbagi bersifat baca-saja, hanya menyajikan build game tersebut, dan otomatis ditutup setelah batas waktu yang Anda tentukan (default 30 menit). Tautan lokal hanya mendengarkan di jaringan lokal Anda; tautan publik hanya mendengarkan di `127.0.0.1` dan diteruskan melalui terowongan Cloudflare (`trycloudflare.com`) setelah Anda menyetujuinya.
+- Mempublikasikan ke GitHub Pages (`game_studio_publish`) menggunakan `gh` CLI lokal Anda yang sudah masuk (plugin tidak pernah menyentuh token GitHub Anda), hanya mengunggah HTML hasil build ke repositori **publik** setelah Anda menyetujuinya, dan menolak menulis ke repositori mana pun yang sudah ada yang tidak memiliki penanda `.dsh-game-studio.json`.
+- Sumber game online berjalan di situs milik penyedia itu sendiri di dalam iframe ber-sandbox (`sandbox="allow-scripts"`) tanpa akses ke DSH atau ruang kerja Anda, serta tidak pernah disalin atau diteruskan saat mengekspor atau mempublikasikan dinding game lokal Anda.
 - Kunci API dibaca dari kredensial DSH atau variabel lingkungan dan tidak pernah ditulis ke dalam proyek, log, atau hasil alat.
 
 ## Persyaratan
@@ -110,6 +114,7 @@ Tombol-tombol di bilah sisi (terapkan, kembalikan, bangun, ekspor, pulihkan, bag
 - DeepSeek Harness `0.2.1` atau versi lebih baru (web atau desktop), Node.js `24.11` atau versi lebih baru.
 - Google Chrome atau Microsoft Edge di komputer yang sama untuk uji main.
 - Untuk seni AI, diperlukan kunci API OpenAI atau Codex CLI yang sudah masuk. Tanpa keduanya, game tetap berfungsi dengan karakter yang digambar melalui kode.
+- Opsional: `cloudflared` (`brew install cloudflared` di macOS) untuk tautan berbagi publik sementara; `gh` (`brew install gh` dan `gh auth login`) untuk mempublikasikan ke GitHub Pages.
 
 ## Instal ke DSH
 
@@ -149,6 +154,9 @@ Atur opsi berikut di bawah `config` dalam file `cordis.patch.yml` profil Anda:
 | `codexReasoningEffort` | `low` | Tingkat upaya penalaran untuk pembuatan gambar Codex. |
 | `codexTimeoutMinutes` | `15` | Batalkan pembuatan satu gambar Codex setelah durasi ini. |
 | `confirmSpending` | `true` | Meminta persetujuan sebelum setiap pembuatan gambar. |
+| `cloudflaredPath` | ditemukan di `PATH` atau Homebrew | File eksekusi `cloudflared` untuk tautan berbagi publik sementara. |
+| `ghPath` | ditemukan di `PATH` atau Homebrew | File eksekusi GitHub CLI (`gh`) untuk mempublikasikan ke GitHub Pages. |
+| `githubRepo` | `dsh-games` | Nama repositori GitHub publik (di bawah akun Anda yang sudah masuk) untuk GitHub Pages. |
 
 ## Format proyek game
 

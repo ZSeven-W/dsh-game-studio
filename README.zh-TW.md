@@ -40,8 +40,9 @@
 | 🤖 **自動試玩測試** | `game_studio_playtest` 會在無頭模式的 Chrome 或 Edge 中遊玩最新程式碼，並回報階段、分數、幀率、腳本錯誤與截圖。不用方向鍵操作的遊戲（網格、卡牌、瞄準、節奏等）會定義 `window.__autoplay`，讓試玩測試真正去玩它的核心迴圈。 |
 | 🕰️ **版本歷史** | 每個改變遊戲的建置都會被保存；`game_studio_restore_version` 會把程式碼、規則與美術圖一起帶回來。 |
 | 📦 **單檔匯出** | `game_studio_export` 會寫出一個自包含、不需網路的 HTML 檔案——用任何瀏覽器開啟，或放到任何靜態網頁空間。 |
-| 📱 **在手機上試玩** | `game_studio_share` 會在你的區域網路上開啟一條臨時的唯讀連結，並在側邊欄顯示 QR Code。 |
-| 🗂️ **遊戲牆** | 點右欄的 **+**，選 **游戏工坊 · 游戏墙**（介面為簡體中文或英文 **Game Studio · My games**）：工作區裡做過的遊戲鋪滿一面牆，封面是最近一次試玩的畫面，可按 2D/3D 篩選，按最近修改、版本數或名稱排序。點一下就能玩，不經過 agent，也不花 token。**导出游戏墙**（Export wall）會把牆上的遊戲打包成一個離線網頁，傳給朋友就能玩。 |
+| 📱 **在手機上試玩** | `game_studio_share` 會在你的區域網路上開啟一條臨時的唯讀連結——或透過 Cloudflare Quick Tunnel（`cloudflared`）開啟一條臨時的公開連結，讓任何網路上的朋友都能玩——並在側邊欄顯示 QR Code。 |
+| 🌐 **發佈到 GitHub Pages** | `game_studio_publish` 會把建置好的 HTML（或整面遊戲牆）推送到你已登入的 `gh` 帳號下的公開儲存庫，並啟用 GitHub Pages，產生一條在你關掉電腦後仍持續有效的永久連結。 |
+| 🗂️ **遊戲牆** | 點右欄的 **+**，選 **游戏工坊 · 游戏墙**（介面為簡體中文或英文 **Game Studio · My games**）：工作區裡做過的遊戲鋪滿一面牆，封面是最近一次試玩的畫面，可按 2D/3D 篩選，按最近修改、版本數或名稱排序。點一下就能玩，不經過 agent，也不花 token。你也可以訂閱線上遊戲來源（`owner/repo`、GitHub 儲存庫網址或 GitHub Pages 網址），與你自己的遊戲一起瀏覽並遊玩已發佈的遊戲。**导出游戏墙**（Export wall）會把你的本機遊戲打包成一個離線網頁，傳給朋友就能玩。 |
 
 ## 用它做出來的遊戲
 
@@ -83,11 +84,12 @@
 | `game_studio_versions` | 列出已儲存的版本，最新在前。 |
 | `game_studio_restore_version` | 回復整個遊戲的較早版本。 |
 | `game_studio_export` | 匯出一個自包含的離線 HTML 檔案。 |
-| `game_studio_share` | 在區域網路上開啟（或關閉）一條臨時的唯讀連結，讓手機可以遊玩這款遊戲。 |
+| `game_studio_share` | 在區域網路上開啟（或關閉）一條臨時的唯讀連結；或傳入 `public: true`，透過 `cloudflared` 開啟一條臨時的公開連結，讓任何拿到連結的人都能玩。 |
 | `game_studio_list` | 列出工作區裡的遊戲（標題、2D/3D、是否已建置、版本數），agent 能按名字找到「那個企鵝遊戲」。 |
 | `game_studio_export_wall` | 匯出遊戲牆：一個離線 HTML 頁面，每個已建置的遊戲一格，點格子就能玩。 |
+| `game_studio_publish` | 透過本機已登入的 `gh` CLI，把建置好的遊戲（或以 `wall: true` 發佈整面遊戲牆）發佈到 GitHub Pages，或傳入 `remove: true` 將其刪除。會先徵求核准，且只寫入帶有 `.dsh-game-studio.json` 標記的儲存庫。 |
 
-側邊欄的按鈕（套用、還原、建置、匯出、回復、分享）透過 `/game-studio` 指令呼叫相同的操作。
+側邊欄的按鈕（套用、還原、建置、匯出、回復、分享、發佈）透過 `/game-studio` 指令呼叫相同的操作。
 
 ## 圖像服務與費用
 
@@ -102,7 +104,9 @@
 
 - 遊戲在沙箱化的 iframe 中執行，並以內容安全政策阻擋網路存取；匯出的檔案不會發出任何網路請求。
 - 唯一會送出你機器的內容是提示詞——以及參考圖片（如果你提供的話）——傳給你選擇的圖像服務。
-- 分享連結為唯讀，只提供該遊戲的建置，只監聽你的區域網路，並會在你設定的時間後關閉（預設 30 分鐘）。
+- 分享連結為唯讀，只提供該遊戲的建置，並會在你設定的時間後關閉（預設 30 分鐘）。本機連結只監聽你的區域網路；公開連結只監聽 `127.0.0.1`，並在你核准後透過 Cloudflare 隧道（`trycloudflare.com`）對外提供。
+- 發佈到 GitHub Pages（`game_studio_publish`）使用你本機已登入的 `gh` CLI（外掛絕不會接觸你的 GitHub 權杖），在你核准後只把建置好的 HTML 上傳到**公開**儲存庫，並拒絕寫入任何未帶有 `.dsh-game-studio.json` 標記的現有儲存庫。
+- 線上遊戲來源是在提供者自己的網站上、於沙箱化的 iframe（`sandbox="allow-scripts"`）中執行，無法存取 DSH 或你的工作區，而且在匯出或發佈你的本機遊戲牆時，絕不會被複製或轉發。
 - API 金鑰從 DSH 憑證或環境讀取，絕不會寫入專案、日誌或工具結果。
 
 ## 需求
@@ -110,6 +114,7 @@
 - DeepSeek Harness `0.2.1` 或更新版本（網頁版或桌面版）、Node.js `24.11` 或更新版本。
 - 同一臺電腦上的 Google Chrome 或 Microsoft Edge，供試玩測試使用。
 - 若要 AI 美術圖，需要 OpenAI API 金鑰或已登入的 Codex CLI。兩者皆無時，遊戲仍可使用程式繪製的角色正常運作。
+- 選用：`cloudflared`（macOS 上 `brew install cloudflared`）用於臨時的公開分享連結；`gh`（`brew install gh` 並執行 `gh auth login`）用於發佈到 GitHub Pages。
 
 ## 安裝到 DSH
 
@@ -149,6 +154,9 @@ dsh web
 | `codexReasoningEffort` | `low` | Codex 產生影像時的推理程度。 |
 | `codexTimeoutMinutes` | `15` | 超過這段時間即放棄一張 Codex 影像。 |
 | `confirmSpending` | `true` | 每次產生前先徵求核准。 |
+| `cloudflaredPath` | 從 `PATH` 或 Homebrew 找到 | 用於臨時公開分享連結的 `cloudflared` 執行檔。 |
+| `ghPath` | 從 `PATH` 或 Homebrew 找到 | 用於發佈到 GitHub Pages 的 GitHub CLI（`gh`）執行檔。 |
+| `githubRepo` | `dsh-games` | 供 GitHub Pages 使用的公開 GitHub 儲存庫名稱（位於你登入的帳號下）。 |
 
 ## 遊戲專案格式
 
