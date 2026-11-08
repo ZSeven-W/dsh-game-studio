@@ -10,9 +10,35 @@ export const zh = {
   'tab.rebuild': '重新构建',
   'tab.export': '导出 HTML',
   'tab.share': '手机扫码',
+  'tab.sharePublic': '公网链接（30 分钟）',
+  'tab.shareOpening': '正在建立…',
   'tab.shareHint': '用同一 Wi-Fi 下的手机扫码就能玩；重新构建后在手机上刷新即可看到最新版。',
+  'tab.sharePublicHint': '任何网络都能打开，拿到链接的人都能玩。到 {time} 自动关闭。',
+  'tab.shareCopy': '复制链接',
   'tab.shareUntil': '{time} 自动关闭',
   'tab.unshare': '停止分享',
+  'tab.noTunnelMac': '公网链接需要先安装 cloudflared。macOS 上运行：{install}',
+  'tab.noTunnelWin': '公网链接需要先安装 cloudflared。Windows 上运行：{install}',
+  'tab.noTunnelLinux': '公网链接需要先安装 cloudflared。Linux 请从官方页面下载安装：{install}',
+  'tab.publish': '发布到 GitHub',
+  'tab.publishUpdate': '更新发布',
+  'tab.publishing': '正在发布…',
+  'tab.publishConfirmHint': '将上传到你的公开仓库，任何人都能看到',
+  'tab.publishConfirmYes': '确认发布',
+  'tab.publishCancel': '取消',
+  'tab.publishedHint': '已发布到 GitHub Pages（{repo}）',
+  'tab.publishDeploying': 'GitHub 正在部署，一两分钟后可以打开',
+  'tab.publishOutdated': '有新的构建还没发布',
+  'tab.unpublish': '从 GitHub 删除',
+  'tab.unpublishing': '正在删除…',
+  'tab.unpublishConfirmHint': '将从你的公开仓库删除这个游戏，已发布的链接将失效',
+  'tab.unpublishConfirmYes': '确认删除',
+  'tab.noGhMac': '发布到 GitHub 需要先安装 GitHub CLI（gh）。macOS 上运行：{install}，然后运行 gh auth login 登录。',
+  'tab.noGhWin': '发布到 GitHub 需要先安装 GitHub CLI（gh）。Windows 上运行：{install}，然后运行 gh auth login 登录。',
+  'tab.noGhLinux': '发布到 GitHub 需要先安装 GitHub CLI（gh）。请从官方页面安装：{install}，然后运行 gh auth login 登录。',
+  'tab.ghNotLoggedIn': 'GitHub CLI 还没有登录。请在终端运行 gh auth login 登录你的 GitHub 账号。',
+  'tab.ghFailed': '连接 GitHub 失败，检查网络或代理后重试',
+  'tab.repoNotOurs': '仓库 {repo} 已存在且不是本插件创建的，不会往里写入。请在配置中把 githubRepo 改成别的仓库名。',
   'tab.versions': '版本',
   'tab.restore': '回到这版',
   'tab.exported': '已导出：{file}',
@@ -49,6 +75,7 @@ export const zh = {
   'row.apply': '已换上新素材',
   'row.revert': '已撤回素材',
   'row.export': '已导出',
+  'row.publish': '已发布到 GitHub Pages',
   'guide.title': '游戏工坊 · 游戏墙',
   'guide.description': '这个工作区里做过的游戏，点开就能玩',
   'shelf.title': '游戏墙',
@@ -62,15 +89,37 @@ export const zh = {
   'shelf.versions': '{count} 个版本',
   'shelf.play': '打开《{title}》',
   'shelf.all': '全部',
+  'shelf.online': '在线',
+  'shelf.onlineBadge': '在线 · {source}',
+  'shelf.sources': '在线源',
+  'shelf.sourcesCount': '在线源 ({count})',
+  'shelf.sourcePlaceholder': 'finiking/dsh-games 或 https://…',
+  'shelf.sourceAdd': '添加',
+  'shelf.sourceAdding': '正在添加…',
+  'shelf.sourceAdded': '已订阅 {name}（共 {count} 款）',
+  'shelf.sourceEmpty': '还没有订阅在线游戏源。输入仓库（如 finiking/dsh-games）或游戏链接即可添加。',
+  'shelf.sourceStatusOk': '正常',
+  'shelf.sourceStatusLoading': '加载中…',
+  'shelf.sourceStatusError': '失败：{reason}',
+  'shelf.sourceUpdated': '上次更新 {time}',
+  'shelf.sourceRemove': '移除',
+  'shelf.sourceFromWorkspace': '工作区',
+  'shelf.backToWall': '← 返回游戏墙',
+  'shelf.onlineFrom': '来自 {host} · 内容由对方提供',
+  'shelf.openExternal': '在新窗口打开',
   'shelf.sortRecent': '最近修改',
   'shelf.sortVersions': '版本最多',
   'shelf.sortName': '名称',
   'shelf.export': '导出游戏墙',
-  'shelf.exportHint': '把墙上现在显示的游戏打包成一个离线网页，点哪个玩哪个，可以发给朋友',
+  'shelf.exportHint': '把墙上现在显示的本地游戏打包成一个离线网页（不含在线游戏），点哪个玩哪个，可以发给朋友',
   'shelf.exporting': '正在导出…',
   'shelf.exported': '已导出：{file}（{count} 款 · {size}）',
   'shelf.exportSkipped': '另有 {count} 款还没构建，没放进去。',
   'shelf.exportFailed': '导出失败：{message}',
+  'shelf.publish': '发布游戏墙',
+  'shelf.publishHint': '把墙上当前显示的本地游戏发布到你的 GitHub Pages 公开仓库（不含在线游戏）',
+  'shelf.publishing': '正在发布…',
+  'shelf.published': '游戏墙已发布：{url}',
 }
 
 export const en: typeof zh = {
@@ -82,9 +131,35 @@ export const en: typeof zh = {
   'tab.rebuild': 'Rebuild',
   'tab.export': 'Export HTML',
   'tab.share': 'Play on phone',
+  'tab.sharePublic': 'Public link (30 min)',
+  'tab.shareOpening': 'Opening…',
   'tab.shareHint': 'Scan with a phone on the same Wi-Fi to play; after a rebuild, refresh on the phone.',
+  'tab.sharePublicHint': 'Anyone on any network with this link can play. Closes at {time}.',
+  'tab.shareCopy': 'Copy link',
   'tab.shareUntil': 'Closes at {time}',
   'tab.unshare': 'Stop sharing',
+  'tab.noTunnelMac': 'A public link requires cloudflared. On macOS, run: {install}',
+  'tab.noTunnelWin': 'A public link requires cloudflared. On Windows, run: {install}',
+  'tab.noTunnelLinux': 'A public link requires cloudflared. On Linux, install from: {install}',
+  'tab.publish': 'Publish to GitHub',
+  'tab.publishUpdate': 'Update published',
+  'tab.publishing': 'Publishing…',
+  'tab.publishConfirmHint': 'Will upload to your public repository; anyone can view the files',
+  'tab.publishConfirmYes': 'Confirm publish',
+  'tab.publishCancel': 'Cancel',
+  'tab.publishedHint': 'Published on GitHub Pages ({repo})',
+  'tab.publishDeploying': 'GitHub is deploying; it should be ready in a minute or two',
+  'tab.publishOutdated': 'A newer build has not been published yet',
+  'tab.unpublish': 'Remove from GitHub',
+  'tab.unpublishing': 'Removing…',
+  'tab.unpublishConfirmHint': 'Will remove this game from your public repository; its link will stop working',
+  'tab.unpublishConfirmYes': 'Confirm remove',
+  'tab.noGhMac': 'Publishing to GitHub requires GitHub CLI (gh). On macOS, run: {install}, then sign in with gh auth login.',
+  'tab.noGhWin': 'Publishing to GitHub requires GitHub CLI (gh). On Windows, run: {install}, then sign in with gh auth login.',
+  'tab.noGhLinux': 'Publishing to GitHub requires GitHub CLI (gh). Install from: {install}, then sign in with gh auth login.',
+  'tab.ghNotLoggedIn': 'GitHub CLI is not signed in. Run gh auth login in your terminal to sign in to your GitHub account.',
+  'tab.ghFailed': 'Could not connect to GitHub; check your network or proxy and try again',
+  'tab.repoNotOurs': 'Repository {repo} already exists and was not created by this plugin. Set githubRepo in config to a different repository name.',
   'tab.versions': 'Versions',
   'tab.restore': 'Go back',
   'tab.exported': 'Exported: {file}',
@@ -121,6 +196,7 @@ export const en: typeof zh = {
   'row.apply': 'New asset applied',
   'row.revert': 'Asset reverted',
   'row.export': 'Exported',
+  'row.publish': 'Published to GitHub Pages',
   'guide.title': 'Game Studio · My games',
   'guide.description': 'Games made in this workspace, ready to play',
   'shelf.title': 'My games',
@@ -134,15 +210,159 @@ export const en: typeof zh = {
   'shelf.versions': '{count} versions',
   'shelf.play': 'Open "{title}"',
   'shelf.all': 'All',
+  'shelf.online': 'Online',
+  'shelf.onlineBadge': 'Online · {source}',
+  'shelf.sources': 'Online sources',
+  'shelf.sourcesCount': 'Online sources ({count})',
+  'shelf.sourcePlaceholder': 'finiking/dsh-games or https://…',
+  'shelf.sourceAdd': 'Add',
+  'shelf.sourceAdding': 'Adding…',
+  'shelf.sourceAdded': 'Subscribed to {name} ({count} games)',
+  'shelf.sourceEmpty': 'No online game sources yet. Enter a repo (e.g. finiking/dsh-games) or game link to add one.',
+  'shelf.sourceStatusOk': 'OK',
+  'shelf.sourceStatusLoading': 'Loading…',
+  'shelf.sourceStatusError': 'Failed: {reason}',
+  'shelf.sourceUpdated': 'Updated {time}',
+  'shelf.sourceRemove': 'Remove',
+  'shelf.sourceFromWorkspace': 'Workspace',
+  'shelf.backToWall': '← Back to wall',
+  'shelf.onlineFrom': 'From {host} · provided by third party',
+  'shelf.openExternal': 'Open in new window',
   'shelf.sortRecent': 'Recent',
   'shelf.sortVersions': 'Most versions',
   'shelf.sortName': 'Name',
   'shelf.export': 'Export wall',
-  'shelf.exportHint': 'Pack the games shown here into one offline web page where any tile can be played; send it to friends',
+  'shelf.exportHint': 'Pack the local games shown here into one offline web page (online games are not included); send it to friends',
   'shelf.exporting': 'Exporting…',
   'shelf.exported': 'Exported: {file} ({count} games · {size})',
   'shelf.exportSkipped': '{count} more were never built and were left out.',
   'shelf.exportFailed': 'Export failed: {message}',
+  'shelf.publish': 'Publish wall',
+  'shelf.publishHint': 'Publish the local games shown here to your public GitHub Pages repository (online games are not included)',
+  'shelf.publishing': 'Publishing…',
+  'shelf.published': 'Game wall published: {url}',
 }
 
 export type Key = keyof typeof zh
+
+export interface PublishedInfo {
+  url: string
+  siteUrl?: string
+  repo: string
+  slug: string
+  publishedAt: string
+  buildId: string
+  status?: 'built' | 'building'
+}
+
+export function publishState(
+  published: PublishedInfo | null | undefined,
+  currentBuildId: string | null | undefined,
+  t: (key: Key, params?: Record<string, string>) => string,
+): {
+  status: 'unpublished' | 'published' | 'outdated'
+  hasUpdate: boolean
+  deploying: boolean
+  buttonLabel: string
+  hint: string | null
+  outdatedHint: string | null
+} {
+  if (!published || typeof published.url !== 'string' || !published.url) {
+    return {
+      status: 'unpublished',
+      hasUpdate: false,
+      deploying: false,
+      buttonLabel: t('tab.publish'),
+      hint: null,
+      outdatedHint: null,
+    }
+  }
+  const hasUpdate = Boolean(currentBuildId && published.buildId && published.buildId !== currentBuildId)
+  const deploying = published.status === 'building'
+  return {
+    status: hasUpdate ? 'outdated' : 'published',
+    hasUpdate,
+    deploying,
+    buttonLabel: hasUpdate ? t('tab.publishUpdate') : t('tab.publish'),
+    hint: deploying ? t('tab.publishDeploying') : t('tab.publishedHint', { repo: published.repo }),
+    outdatedHint: hasUpdate ? t('tab.publishOutdated') : null,
+  }
+}
+
+export function shareCopy(
+  share: { expiresAt: string; scope?: 'lan' | 'public' },
+  t: (key: Key, params?: Record<string, string>) => string,
+  time: string,
+): { hint: string; until: string | null; isPublic: boolean } {
+  if (share.scope === 'public') {
+    return { hint: t('tab.sharePublicHint', { time }), until: null, isPublic: true }
+  }
+  return { hint: t('tab.shareHint'), until: t('tab.shareUntil', { time }), isPublic: false }
+}
+
+export function commandErrorCopy(
+  text: string,
+  t: (key: Key, params?: Record<string, string>) => string,
+): string {
+  try {
+    const parsed = JSON.parse(text) as { code?: unknown; platform?: unknown; install?: unknown; repo?: unknown }
+    if (parsed && typeof parsed === 'object') {
+      if (parsed.code === 'NO_TUNNEL') {
+        const platform = parsed.platform === 'win32' || parsed.platform === 'linux' ? parsed.platform : 'darwin'
+        const defaultInstall = platform === 'win32'
+          ? 'winget install --id Cloudflare.cloudflared'
+          : platform === 'linux'
+            ? 'https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/'
+            : 'brew install cloudflared'
+        const install = typeof parsed.install === 'string' && parsed.install ? parsed.install : defaultInstall
+        const key: Key = platform === 'win32' ? 'tab.noTunnelWin' : platform === 'linux' ? 'tab.noTunnelLinux' : 'tab.noTunnelMac'
+        return t(key, { install })
+      }
+      if (parsed.code === 'NO_GH') {
+        const platform = parsed.platform === 'win32' || parsed.platform === 'linux' ? parsed.platform : 'darwin'
+        const defaultInstall = platform === 'win32'
+          ? 'winget install --id GitHub.cli'
+          : platform === 'linux'
+            ? 'https://cli.github.com'
+            : 'brew install gh'
+        const install = typeof parsed.install === 'string' && parsed.install ? parsed.install : defaultInstall
+        const key: Key = platform === 'win32' ? 'tab.noGhWin' : platform === 'linux' ? 'tab.noGhLinux' : 'tab.noGhMac'
+        return t(key, { install })
+      }
+      if (parsed.code === 'GH_NOT_LOGGED_IN') {
+        return t('tab.ghNotLoggedIn')
+      }
+      if (parsed.code === 'GH_FAILED') {
+        return t('tab.ghFailed')
+      }
+      if (parsed.code === 'REPO_NOT_OURS') {
+        const repo = typeof parsed.repo === 'string' && parsed.repo ? parsed.repo : 'dsh-games'
+        return t('tab.repoNotOurs', { repo })
+      }
+    }
+  } catch {
+    // Plain error string from other actions; show as-is.
+  }
+  return text
+}
+
+export const SHARE_HEARTBEAT_MAX_AGE_MS = 60_000
+
+export interface ShareHeartbeat {
+  url: string
+  at: string
+}
+
+export function liveShare<S extends { url: string; expiresAt: string }>(
+  share: S | null | undefined,
+  heartbeat: ShareHeartbeat | null | undefined,
+  now = Date.now(),
+): S | undefined {
+  if (!share || !heartbeat) return undefined
+  if (typeof share.url !== 'string' || !share.url || heartbeat.url !== share.url) return undefined
+  const expiresAt = Date.parse(share.expiresAt)
+  if (!Number.isFinite(expiresAt) || expiresAt <= now) return undefined
+  const beatAt = Date.parse(heartbeat.at)
+  if (!Number.isFinite(beatAt) || now - beatAt > SHARE_HEARTBEAT_MAX_AGE_MS) return undefined
+  return share
+}

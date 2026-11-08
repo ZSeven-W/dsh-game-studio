@@ -9,7 +9,7 @@
  */
 import { lstat, mkdir, readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
-import { scanShelf, type ListDir, type ReadText, type ShelfGame } from './client/shelf.ts'
+import { describeGame, scanShelf, type ListDir, type ReadText, type ShelfGame } from './client/shelf.ts'
 import { runtimeTag } from './build.ts'
 import { decodePng, encodePng, shrinkToWidth } from './png.ts'
 import { RUNTIMES, type RuntimeId } from './project.ts'
@@ -24,6 +24,10 @@ export const fsRead: ReadText = async (path) => readFile(path, 'utf8')
 
 export function listGames(root: string, signal: AbortSignal = new AbortController().signal) {
   return scanShelf(fsList, fsRead, root, signal)
+}
+
+export function describeProject(dir: string, signal: AbortSignal = new AbortController().signal) {
+  return describeGame(fsList, fsRead, dir, signal)
 }
 
 export type WallLang = 'zh' | 'en'
@@ -50,24 +54,38 @@ const MAX_WALL_BYTES = 64 * 1024 * 1024
 const COVER_WIDTH = 480
 const MAX_COVER_BYTES = 600 * 1024
 
-async function isPlainFile(path: string): Promise<boolean> {
+export async function isPlainFile(path: string): Promise<boolean> {
   try { return (await lstat(path)).isFile() } catch { return false }
 }
 
-/** A small data URL for the tile, or undefined when the cover is missing, a link, or too big to embed. */
-async function coverData(path: string | undefined): Promise<string | undefined> {
+export interface CoverAsset {
+  ext: 'jpg' | 'png' | 'webp' | 'svg'
+  mime: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/svg+xml'
+  bytes: Buffer
+}
+
+/** Read and shrink (if PNG) a project's cover picture for embedding or uploading. */
+export async function readCoverAsset(path: string | undefined): Promise<CoverAsset | undefined> {
   if (!path || !(await isPlainFile(path))) return undefined
   const bytes = await readFile(path)
   const lower = path.toLowerCase()
   if (lower.endsWith('.png')) {
     try {
       const small = encodePng(shrinkToWidth(decodePng(bytes), COVER_WIDTH))
-      return `data:image/png;base64,${Buffer.from(small).toString('base64')}`
+      return { ext: 'png', mime: 'image/png', bytes: Buffer.from(small) }
     } catch { return undefined }
   }
   if (bytes.byteLength > MAX_COVER_BYTES) return undefined
-  const type = lower.endsWith('.svg') ? 'image/svg+xml' : lower.endsWith('.webp') ? 'image/webp' : /\.jpe?g$/u.test(lower) ? 'image/jpeg' : undefined
-  return type ? `data:${type};base64,${bytes.toString('base64')}` : undefined
+  if (lower.endsWith('.svg')) return { ext: 'svg', mime: 'image/svg+xml', bytes }
+  if (lower.endsWith('.webp')) return { ext: 'webp', mime: 'image/webp', bytes }
+  if (/\.jpe?g$/u.test(lower)) return { ext: 'jpg', mime: 'image/jpeg', bytes }
+  return undefined
+}
+
+/** A small data URL for the tile, or undefined when the cover is missing, a link, or too big to embed. */
+async function coverData(path: string | undefined): Promise<string | undefined> {
+  const asset = await readCoverAsset(path)
+  return asset ? `data:${asset.mime};base64,${asset.bytes.toString('base64')}` : undefined
 }
 
 function slugOf(name: string): string {
@@ -142,22 +160,54 @@ export async function exportWall(options: WallOptions): Promise<WallResult> {
 }
 
 const COPY: Record<WallLang, Record<string, string>> = {
-  zh: { title: '游戏墙', count: '{n} 款', all: '全部', made: '用 DSH 游戏工坊做的 · 导出于 {date}', back: '← 返回游戏墙', versions: '{n} 个版本', hint: 'Esc 返回' },
-  en: { title: 'Game wall', count: '{n} games', all: 'All', made: 'Made with DSH Game Studio · exported {date}', back: '← Back to the wall', versions: '{n} versions', hint: 'Esc to go back' },
+  zh: { title: '游戏墙', count: '{n} 款', all: '全部', made: '用 DSH 游戏工坊做的 · 导出于 {date}', madeOnline: '用 DSH 游戏工坊做的 · 更新于 {date}', back: '← 返回游戏墙', versions: '{n} 个版本', hint: 'Esc 返回' },
+  en: { title: 'Game wall', count: '{n} games', all: 'All', made: 'Made with DSH Game Studio · exported {date}', madeOnline: 'Made with DSH Game Studio · updated {date}', back: '← Back to the wall', versions: '{n} versions', hint: 'Esc to go back' },
 }
 
-const CSP = [
+export const OFFLINE_WALL_CSP = [
   "default-src 'none'", 'img-src data: blob:', 'media-src data: blob:', 'font-src data:',
   "style-src 'unsafe-inline'", "script-src 'unsafe-inline'", "connect-src 'none'", "form-action 'none'",
 ].join('; ')
 
-/** The page: tiles like the sidebar's wall, 2D/3D filters, and a full-window player. */
-export function renderWallPage(lang: WallLang, json: string): string {
+export const ONLINE_WALL_CSP = [
+  "default-src 'none'", "img-src 'self' data: blob:", "style-src 'unsafe-inline'",
+  "script-src 'unsafe-inline'", "connect-src 'self'", "frame-src 'self'", "form-action 'none'",
+].join('; ')
+
+function renderWallShell(
+  lang: WallLang,
+  opts: { mode: 'offline'; json: string } | { mode: 'online'; feedUrl: string },
+): string {
   const copy = COPY[lang]
+  const csp = opts.mode === 'online' ? ONLINE_WALL_CSP : OFFLINE_WALL_CSP
+  const dataTag = opts.mode === 'offline' ? `<script type="application/json" id="data">${opts.json}</script>\n` : ''
+  const bootScript = opts.mode === 'offline'
+    ? `var data = JSON.parse(document.getElementById('data').textContent);
+  init(data, COPY.made);`
+    : `var feedUrl = ${JSON.stringify(opts.feedUrl)};
+  fetch(feedUrl).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (feed) {
+    var games = (feed.games || []).map(function (g) {
+      var u = typeof g.url === 'string' ? g.url.replace(/^\\/+/, '') : '';
+      var c = typeof g.cover === 'string' && g.cover ? g.cover.replace(/^\\/+/, '') : '';
+      return {
+        title: g.title || g.slug || '',
+        dimension: g.dimension || '',
+        orientation: g.orientation || 'portrait',
+        versions: g.versions || 0,
+        updatedAt: g.publishedAt || '',
+        url: u ? ('../' + u) : '',
+        cover: c ? ('../' + c) : ''
+      };
+    });
+    init({ exportedAt: feed.updatedAt || '', runtimes: {}, games: games }, COPY.madeOnline);
+  }).catch(function () {
+    init({ exportedAt: '', runtimes: {}, games: [] }, COPY.madeOnline);
+  });`
+
   return `<!doctype html>
 <html lang="${lang === 'zh' ? 'zh-CN' : 'en'}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="${CSP}">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
 <title>${copy.title}</title>
 <style>
 :root{color-scheme:dark;--bg:#111317;--fg:#f2f3f5;--muted:#9aa0aa;--chip:#23262d;--chip-on:#f2f3f5;--chip-on-fg:#111317}
@@ -188,18 +238,19 @@ main{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:
 <header><h1>${copy.title} <small id="count"></small></h1><p class="made" id="made"></p><div class="chips" id="chips"></div></header>
 <main id="wall"></main>
 <div id="player" role="dialog" aria-modal="true"><div id="bar"><button id="back" type="button">${copy.back}<small>${copy.hint}</small></button><strong id="playing"></strong></div></div>
-<script type="application/json" id="data">${json}</script>
-<script>
+${dataTag}<script>
 (function () {
   var COPY = ${JSON.stringify(copy)};
-  var data = JSON.parse(document.getElementById('data').textContent);
   var wall = document.getElementById('wall'), chips = document.getElementById('chips'), player = document.getElementById('player');
+  var data = { exportedAt: '', runtimes: {}, games: [] };
   var filter = 'all', frame = null;
   function fill(text, n) { return text.replace('{n}', String(n)).replace('{date}', n); }
-  var made = document.getElementById('made');
-  made.appendChild(document.createTextNode(fill(COPY.made, data.exportedAt.slice(0, 10)) + ' · '));
-  var link = document.createElement('a'); link.href = 'https://github.com/ZSeven-W/dsh-game-studio'; link.target = '_blank'; link.rel = 'noopener';
-  link.textContent = 'github.com/ZSeven-W/dsh-game-studio'; made.appendChild(link);
+  function renderMade(template, dateStr) {
+    var made = document.getElementById('made'); made.innerHTML = '';
+    made.appendChild(document.createTextNode(fill(template, (dateStr || '').slice(0, 10)) + ' · '));
+    var link = document.createElement('a'); link.href = 'https://github.com/ZSeven-W/dsh-game-studio'; link.target = '_blank'; link.rel = 'noopener';
+    link.textContent = 'github.com/ZSeven-W/dsh-game-studio'; made.appendChild(link);
+  }
   function counts() { var c = { all: data.games.length, '2d': 0, '3d': 0 }; data.games.forEach(function (g) { if (c[g.dimension] !== undefined) c[g.dimension]++; }); return c; }
   function renderChips() {
     var c = counts(); chips.innerHTML = '';
@@ -214,9 +265,9 @@ main{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:
     wall.innerHTML = ''; var shown = 0;
     data.games.forEach(function (g, i) {
       if (filter !== 'all' && g.dimension !== filter) return; shown++;
-      var shot = g.cover && g.cover.indexOf('data:image/jpeg') === 0;
+      var shot = g.cover && (g.cover.indexOf('data:image/jpeg') === 0 || /\\.jpe?g(\\?|$)/i.test(g.cover));
       var t = document.createElement('button'); t.type = 'button'; t.className = 'tile' + (shot ? '' : ' art-bg'); t.title = g.title;
-      if (g.cover) { var img = document.createElement('img'); img.src = g.cover; img.alt = ''; img.className = shot ? 'shot' : 'art'; t.appendChild(img); }
+      if (g.cover) { var img = document.createElement('img'); img.loading = 'lazy'; img.src = g.cover; img.alt = ''; img.className = shot ? 'shot' : 'art'; t.appendChild(img); }
       var cap = document.createElement('span'); cap.className = 'cap';
       var name = document.createElement('span'); name.className = 'name'; name.textContent = g.title;
       var meta = document.createElement('span'); meta.className = 'meta';
@@ -228,12 +279,18 @@ main{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:
   }
   function play(i) {
     var g = data.games[i];
-    var html = g.html.replace(/<!--dsh-runtime:([a-z0-9]+)-->/g, function (all, id) { return data.runtimes[id] || all; });
     close();
     frame = document.createElement('iframe');
-    frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-pointer-lock');
     frame.setAttribute('allow', 'fullscreen; gamepad; autoplay');
-    frame.title = g.title; frame.srcdoc = html;
+    frame.title = g.title;
+    if (g.url) {
+      frame.setAttribute('sandbox', 'allow-scripts allow-pointer-lock');
+      frame.src = g.url;
+    } else {
+      var html = (g.html || '').replace(/<!--dsh-runtime:([a-z0-9]+)-->/g, function (all, id) { return data.runtimes[id] || all; });
+      frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-pointer-lock');
+      frame.srcdoc = html;
+    }
     frame.onload = function () {
       try {
         frame.contentWindow.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
@@ -247,11 +304,27 @@ main{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:
     if (frame) { frame.remove(); frame = null; }
     player.classList.remove('open'); document.title = COPY.title;
   }
+  function init(nextData, madeTemplate) {
+    data = nextData;
+    renderMade(madeTemplate, data.exportedAt);
+    renderChips(); renderWall();
+  }
   document.getElementById('back').onclick = close;
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-  renderChips(); renderWall();
+  window.addEventListener('message', function (e) { if (frame && e.source === frame.contentWindow && e.data && e.data.type === 'dsh-wall-escape') close(); });
+  ${bootScript}
 })();
 </script>
 </body></html>
 `
+}
+
+/** The offline wall page: tiles like the sidebar's wall, 2D/3D filters, and a full-window player. */
+export function renderWallPage(lang: WallLang, json: string): string {
+  return renderWallShell(lang, { mode: 'offline', json })
+}
+
+/** The lightweight online wall page for GitHub Pages: reads `../games.json` and loads games on demand in an iframe. */
+export function renderOnlineWallPage(lang: WallLang, feedUrl = '../games.json'): string {
+  return renderWallShell(lang, { mode: 'online', feedUrl })
 }

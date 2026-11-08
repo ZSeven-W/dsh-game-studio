@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <sub>包名：<code>@zseven-w/dsh-game-studio</code> &middot; 当前插件版本：<code>0.1.0-rc.3</code> &middot; 已在 DSH <code>0.2.1-rc.5</code> 上测试</sub>
+  <sub>包名：<code>@zseven-w/dsh-game-studio</code> &middot; 当前插件版本：<code>0.1.0-rc.4</code> &middot; 已在 DSH <code>0.2.1-rc.5</code> 上测试</sub>
 </p>
 
 <br />
@@ -40,8 +40,9 @@
 | 🤖 **自动试玩** | `game_studio_playtest` 在无界面的 Chrome 或 Edge 里玩最新代码，报告阶段、得分、帧率、脚本错误并附截图。不靠方向键操作的游戏（格子、卡牌、瞄准、节奏……）定义 `window.__autoplay`，试玩就能玩到真正的玩法。 |
 | 🕰️ **版本历史** | 每次让游戏发生变化的构建都会保存；`game_studio_restore_version` 把代码、规则和美术一起恢复。 |
 | 📦 **单文件导出** | `game_studio_export` 生成一个不联网、自包含的 HTML 文件，用任何浏览器打开，或放到任意静态托管上。 |
-| 📱 **在手机上试玩** | `game_studio_share` 在本地网络上开一个临时只读链接，侧栏里会显示二维码。 |
-| 🗂️ **游戏墙** | 点右栏的 **+**，选 **游戏工坊 · 游戏墙**：工作区里做过的游戏铺满一面墙，封面是最近一次试玩的画面，可按 2D/3D 筛选，按最近修改、版本数或名称排序。点一下就能玩，不经过 agent，也不花 token。**导出游戏墙**会把墙上的游戏打包成一个离线网页，发给朋友就能玩。 |
+| 📱 **在手机上试玩** | `game_studio_share` 在本地网络上开一个临时只读链接（或通过 `cloudflared` 开启 Cloudflare 临时公网链接，发给任何网络下的朋友都能玩），侧栏里会显示二维码。 |
+| 🌐 **发布到 GitHub Pages** | `game_studio_publish` 用本机已登录的 `gh` 把构建好的 HTML（或整面游戏墙）推到你名下的公开仓库并开启 GitHub Pages，生成关掉电脑也能长期游玩的网址。 |
+| 🗂️ **游戏墙** | 点右栏的 **+**，选 **游戏工坊 · 游戏墙**：工作区里做过的游戏铺满一面墙，封面是最近一次试玩的画面，可按 2D/3D 筛选，按最近修改、版本数或名称排序。点一下就能玩，不经过 agent，也不花 token。你还可以订阅在线游戏源（`owner/repo`、GitHub 仓库地址或 GitHub Pages 网址），把别人发布的游戏合入墙内直接游玩。**导出游戏墙**会把本地游戏打包成一个离线网页，发给朋友就能玩。 |
 
 ## 用它做出来的游戏
 
@@ -83,11 +84,12 @@
 | `game_studio_versions` | 列出已保存的版本，最新的在前。 |
 | `game_studio_restore_version` | 把整个游戏恢复到较早的版本。 |
 | `game_studio_export` | 导出一个自包含、可离线游玩的 HTML 文件。 |
-| `game_studio_share` | 在本地网络开启（或关闭）一个临时只读链接，让手机也能玩。 |
+| `game_studio_share` | 在本地网络开启（或关闭）一个临时只读链接让手机试玩；传 `public: true` 则通过 `cloudflared` 生成任何网络都能打开的临时公网链接。 |
 | `game_studio_list` | 列出工作区里的游戏（标题、2D/3D、是否已构建、版本数），agent 能按名字找到「那个企鹅游戏」。 |
 | `game_studio_export_wall` | 导出游戏墙：一个离线 HTML 页面，每个已构建的游戏一个格子，点格子就能玩。 |
+| `game_studio_publish` | 通过本机已登录的 `gh` CLI 把已构建的游戏（或传 `wall: true` 把整面游戏墙）发布到 GitHub Pages，传 `remove: true` 则从仓库删除。操作前先经你批准，且只写入带有 `.dsh-game-studio.json` 标记的仓库。 |
 
-侧栏上的按钮（应用、撤回、构建、导出、恢复、分享）通过 `/game-studio` 命令调用同样的操作。
+侧栏上的按钮（应用、撤回、构建、导出、恢复、分享、发布）通过 `/game-studio` 命令调用同样的操作。
 
 ## 生图服务与费用
 
@@ -102,7 +104,9 @@
 
 - 游戏在沙箱 iframe 里运行，内容安全策略禁止联网；导出的文件不发出任何网络请求。
 - 离开你电脑的只有提示词，以及你提供的参考图，发往你选择的生图服务。
-- 分享链接只读，只提供这个游戏的构建产物，只在本地网络上监听，到你设定的时间（默认 30 分钟）自动关闭。
+- 分享链接只读，只提供这个游戏的构建产物，到你设定的时间（默认 30 分钟）自动关闭。局域网链接只在本地网络上监听；公网链接在本地只监听 `127.0.0.1`，经你确认后通过 Cloudflare 隧道（`trycloudflare.com`）转发。
+- 发布到 GitHub Pages（`game_studio_publish`）通过本机已登录的 `gh` CLI 完成（插件不接触你的 GitHub token），经你批准后只把构建产物 HTML 上传到**公开仓库**（任何人都能查看文件），且绝不写入没有 `.dsh-game-studio.json` 标记的现有仓库。
+- 订阅的在线游戏在提供者自己的网站上以沙箱 iframe（`sandbox="allow-scripts"`）运行，无法访问 DSH 或你的工作区，且在导出或发布本地游戏墙时绝不复制或转发第三方在线游戏。
 - API key 从 DSH 凭据或环境变量读取，不会写进项目、日志或工具结果。
 
 ## 环境要求
@@ -110,6 +114,7 @@
 - DeepSeek Harness `0.2.1` 或更新（网页版或桌面版），Node.js `24.11` 或更新。
 - 同一台电脑上装有 Google Chrome 或 Microsoft Edge，用于自动试玩。
 - 生成 AI 美术需要 OpenAI API key 或已登录的 Codex CLI。都没有时，游戏仍可用代码画的角色正常运行。
+- 可选：安装 `cloudflared`（macOS 可用 `brew install cloudflared`）以使用公网临时分享链接；安装并登录 `gh`（`brew install gh` 并运行 `gh auth login`）以发布到 GitHub Pages。
 
 ## 安装到 DSH
 
@@ -149,6 +154,9 @@ dsh web
 | `codexReasoningEffort` | `low` | Codex 生图的推理强度。 |
 | `codexTimeoutMinutes` | `15` | 单张 Codex 图超过这个时间就放弃。 |
 | `confirmSpending` | `true` | 每次生成前都请求批准。 |
+| `cloudflaredPath` | 从 `PATH` 或 Homebrew 目录查找 | 公网临时分享链接使用的 `cloudflared` 可执行文件。 |
+| `ghPath` | 从 `PATH` 或 Homebrew 目录查找 | 发布到 GitHub Pages 使用的 GitHub CLI（`gh`）可执行文件。 |
+| `githubRepo` | `dsh-games` | 发布到 GitHub Pages 时在你账号下使用的公开仓库名。 |
 
 ## 游戏项目格式
 

@@ -5,15 +5,25 @@
  * open the tab when a call finishes.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { en, NS, zh, type Key } from './locales.ts'
-import { dimensionCounts, scanShelf, viewGames, type Listing, type ShelfFilter, type ShelfGame, type ShelfSort } from './shelf.ts'
+import {
+  AUTO_REFRESH_INTERVAL_MS, discoverAndFetchSource, loadFeedCache, loadStoredSources, MAX_SOURCES,
+  mergeSources, onlineGameToShelfGame, parseWorkspaceSources, refreshSubscribedSource, saveFeedCache,
+  saveStoredSources, shouldAutoRefresh, WORKSPACE_SOURCES_FILE, type SourceFetchState, type SubscribedSource,
+} from './feed.ts'
+import { commandErrorCopy, en, liveShare, NS, publishState, shareCopy, zh, type Key, type PublishedInfo, type ShareHeartbeat } from './locales.ts'
+import {
+  builtLocalGamesCount, dimensionCounts, localWallProjects, mergeShelfGames, scanShelf, viewGames,
+  type Listing, type ShelfFilter, type ShelfGame, type ShelfSort,
+} from './shelf.ts'
+
+export { liveShare, publishState }
 
 const ID = '@zseven-w/dsh-game-studio'
 const KIND = 'game-studio'
 const SHELF_ID = '@zseven-w/dsh-game-studio/shelf'
 const SHELF_KIND = 'game-studio-shelf'
 const ADDRESS_PREFIX = 'dsh-resource://game-studio/session/'
-const TOOLS = ['game_studio_create', 'game_studio_build', 'game_studio_generate_asset', 'game_studio_apply_asset', 'game_studio_revert_asset', 'game_studio_export']
+const TOOLS = ['game_studio_create', 'game_studio_build', 'game_studio_generate_asset', 'game_studio_apply_asset', 'game_studio_revert_asset', 'game_studio_export', 'game_studio_publish']
 
 type T = (key: Key, params?: Record<string, string>) => string
 
@@ -92,7 +102,7 @@ interface StudioState {
   spend?: { openaiImages: number; openaiUsd: number; codexImages: number; codexTokens: number }
   jobs?: JobRecord[]
   versions?: Array<{ number: number; note: string; createdAt: string; buildId: string }>
-  share?: { url: string; qrSvg: string; expiresAt: string } | null
+  share?: { url: string; qrSvg: string; expiresAt: string; scope?: 'lan' | 'public' } | null
 }
 
 function clock(iso: string): string {
@@ -113,8 +123,9 @@ interface JobRecord {
   recovered?: number
 }
 
-/** How often the tab re-reads the studio state while background generation runs. */
+/** How often the tab re-reads the studio state while background generation runs, or otherwise checks share heartbeat. */
 const POLL_MS = 3000
+const SHARE_POLL_MS = 25_000
 
 function elapsed(since: string): string {
   const seconds = Math.max(0, Math.round((Date.now() - Date.parse(since)) / 1000))
@@ -196,7 +207,12 @@ function StudioTab(props: any): ReactNode {
   // State-only refreshes while background jobs run; they must not restart the game.
   const [tick, setTick] = useState(0)
   const [state, setState] = useState<StudioState | null>()
+  const [heartbeat, setHeartbeat] = useState<ShareHeartbeat | null>(null)
+  const [published, setPublished] = useState<PublishedInfo | null>(null)
   const [busy, setBusy] = useState(false)
+  const [openingPublic, setOpeningPublic] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<'publish' | 'unpublish' | null>(null)
   const [notice, setNotice] = useState<{ kind: 'error' | 'info'; text: string }>()
   const [game, setGame] = useState<{ phase: string; score: number }>()
   // Close-ups the running build drew of its code-drawn characters, by slot.
@@ -213,16 +229,26 @@ function StudioTab(props: any): ReactNode {
 
   useEffect(() => {
     const controller = new AbortController()
-    readBytes(sessionId, join(project, '.studio/state.json'), controller.signal)
-      .then(file => { if (!controller.signal.aborted) setState(JSON.parse(new TextDecoder().decode(file.data)) as StudioState) })
-      .catch(() => { if (!controller.signal.aborted) setState(null) })
+    const decode = <V,>(res: PromiseSettledResult<{ data: Uint8Array }>): V | null => {
+      if (res.status !== 'fulfilled') return null
+      try { return JSON.parse(new TextDecoder().decode(res.value.data)) as V } catch { return null }
+    }
+    void Promise.allSettled([
+      readBytes(sessionId, join(project, '.studio/state.json'), controller.signal),
+      readBytes(sessionId, join(project, '.studio/share-alive.json'), controller.signal),
+      readBytes(sessionId, join(project, '.studio/published.json'), controller.signal),
+    ]).then(([stateRes, beatRes, pubRes]) => {
+      if (controller.signal.aborted) return
+      setState(decode<StudioState>(stateRes))
+      setHeartbeat(decode<ShareHeartbeat>(beatRes))
+      setPublished(decode<PublishedInfo>(pubRes))
+    })
     return () => { controller.abort() }
   }, [readBytes, sessionId, project, version, tick])
 
   const running = state?.jobs?.some(job => job.status === 'running') ?? false
   useEffect(() => {
-    if (!running) return
-    const timer = setInterval(() => { setTick(value => value + 1) }, POLL_MS)
+    const timer = setInterval(() => { setTick(value => value + 1) }, running ? POLL_MS : SHARE_POLL_MS)
     return () => { clearInterval(timer) }
   }, [running])
 
@@ -252,23 +278,31 @@ function StudioTab(props: any): ReactNode {
     return () => { window.removeEventListener('message', onMessage) }
   }, [t])
 
-  const run = useCallback(async (action: string, payload: Record<string, string>) => {
+  const run = useCallback(async (action: string, payload: Record<string, unknown>) => {
     setBusy(true)
+    if (action === 'share' && payload.scope === 'public') setOpeningPublic(true)
+    if (action === 'publish' || action === 'unpublish') setPublishing(true)
     setNotice(undefined)
     try {
       const result = await runCommand(sessionId, `${action} ${JSON.stringify({ project, ...payload })}`)
-      if (!result.ok) { setNotice({ kind: 'error', text: result.text }); return }
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
       if (action === 'export') {
         const file = (JSON.parse(result.text) as { file?: string }).file ?? ''
         setNotice({ kind: 'info', text: t('tab.exported', { file }) })
       }
       reload()
     } finally {
+      setOpeningPublic(false)
+      setPublishing(false)
       setBusy(false)
     }
   }, [runCommand, sessionId, project, reload, t])
 
   const title = state?.title ?? baseName(project)
+  const activeShare = liveShare(state?.share, heartbeat)
+  const activeShareCopy = activeShare ? shareCopy(activeShare, t, clock(activeShare.expiresAt)) : undefined
+  const pubInfo = publishState(published, state?.build?.buildId, t)
+  const lang = t('tab.reload') === '重新载入' ? 'zh' : 'en'
   return <div style={s.root} data-plugin="dsh-game-studio">
     <div style={s.bar}>
       <span style={s.title} title={project}>{title}</span>
@@ -277,15 +311,49 @@ function StudioTab(props: any): ReactNode {
       <button type="button" style={s.button} onClick={() => { void run('build', {}) }} disabled={busy}>{t('tab.rebuild')}</button>
       <button type="button" style={s.button} onClick={() => { void run('export', {}) }} disabled={busy}>{t('tab.export')}</button>
       <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30' }) }} disabled={busy}>{t('tab.share')}</button>
+      <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30', scope: 'public' }) }} disabled={busy}>
+        {openingPublic ? t('tab.shareOpening') : t('tab.sharePublic')}
+      </button>
+      <button type="button" style={s.button} onClick={() => { setConfirmAction(v => v === 'publish' ? null : 'publish') }} disabled={busy}>
+        {publishing ? t('tab.publishing') : pubInfo.buttonLabel}
+      </button>
     </div>
-    {state?.share && Date.parse(state.share.expiresAt) > Date.now() && <div style={{ ...s.hint, display: 'flex', gap: 10, alignItems: 'center' }}>
+    {confirmAction === 'publish' && <div style={{ ...s.hint, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ color: tok.text }}>{t('tab.publishConfirmHint')}</span>
+      <button type="button" style={s.button} disabled={busy} onClick={() => { setConfirmAction(null); void run('publish', { lang }) }}>{t('tab.publishConfirmYes')}</button>
+      <button type="button" style={s.button} disabled={busy} onClick={() => { setConfirmAction(null) }}>{t('tab.publishCancel')}</button>
+    </div>}
+    {published && <div style={{ ...s.hint, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ color: tok.text }}>{pubInfo.hint}</span>
+        {pubInfo.outdatedHint && <span style={{ color: tok.muted }}>· {pubInfo.outdatedHint}</span>}
+      </div>
+      <code style={{ fontSize: 11, wordBreak: 'break-all', userSelect: 'text' }}>{published.url}</code>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button type="button" style={s.button}
+          onClick={() => { void navigator.clipboard?.writeText(published.url).catch(() => undefined) }}>{t('tab.shareCopy')}</button>
+        <button type="button" style={s.button} disabled={busy}
+          onClick={() => { setConfirmAction(v => v === 'unpublish' ? null : 'unpublish') }}>{t('tab.unpublish')}</button>
+      </div>
+      {confirmAction === 'unpublish' && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 2 }}>
+        <span style={{ color: tok.text }}>{t('tab.unpublishConfirmHint')}</span>
+        <button type="button" style={s.button} disabled={busy}
+          onClick={() => { setConfirmAction(null); void run('publish', { remove: true, lang }) }}>{t('tab.unpublishConfirmYes')}</button>
+        <button type="button" style={s.button} disabled={busy} onClick={() => { setConfirmAction(null) }}>{t('tab.publishCancel')}</button>
+      </div>}
+    </div>}
+    {activeShare && activeShareCopy && <div style={{ ...s.hint, display: 'flex', gap: 10, alignItems: 'center' }}>
       <img alt="" style={{ width: 112, height: 112, background: '#fff', borderRadius: 6, padding: 4, flex: 'none' }}
-        src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(state.share.qrSvg)}`} />
+        src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(activeShare.qrSvg)}`} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-        <span style={{ color: tok.text }}>{t('tab.shareHint')}</span>
-        <code style={{ fontSize: 11, wordBreak: 'break-all' }}>{state.share.url}</code>
-        <span>{t('tab.shareUntil', { time: clock(state.share.expiresAt) })}</span>
-        <button type="button" style={{ ...s.button, alignSelf: 'flex-start' }} disabled={busy} onClick={() => { void run('unshare', {}) }}>{t('tab.unshare')}</button>
+        <span style={{ color: tok.text }}>{activeShareCopy.hint}</span>
+        <code style={{ fontSize: 11, wordBreak: 'break-all', userSelect: 'text' }}>{activeShare.url}</code>
+        {activeShareCopy.until && <span>{activeShareCopy.until}</span>}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {activeShareCopy.isPublic && <button type="button" style={s.button}
+            onClick={() => { void navigator.clipboard?.writeText(activeShare.url).catch(() => undefined) }}>{t('tab.shareCopy')}</button>}
+          <button type="button" style={s.button} disabled={busy} onClick={() => { void run('unshare', {}) }}>{t('tab.unshare')}</button>
+        </div>
       </div>
     </div>}
     {notice && <div style={notice.kind === 'error' ? s.error : s.hint}>{notice.text}</div>}
@@ -373,11 +441,14 @@ const shelfStyle: Record<string, CSSProperties> = {
   artBackdrop: { position: 'absolute', inset: 0, background: 'radial-gradient(circle at 50% 40%, #3a3f4b 0%, #1d1f24 75%)' },
   shot: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' },
   caption: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: '28px 10px 8px', background: 'linear-gradient(to top, rgba(0,0,0,.82) 0%, rgba(0,0,0,.55) 55%, rgba(0,0,0,0) 100%)', display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 },
+  badge: { position: 'absolute', top: 8, left: 8, maxWidth: 'calc(100% - 16px)', padding: '2px 7px', borderRadius: 999, background: 'rgba(17,19,23,.78)', color: '#fff', fontSize: 11, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   name: { fontWeight: 600, fontSize: 14, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textShadow: '0 1px 2px rgba(0,0,0,.5)' },
   meta: { fontSize: 11, lineHeight: 1.3, color: 'rgba(255,255,255,.72)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   controls: { display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px 0', flexWrap: 'wrap' },
   chip: { font: 'inherit', fontSize: 12, padding: '3px 11px', borderRadius: 999, border: 0, cursor: 'pointer' },
   sort: { font: 'inherit', fontSize: 12, padding: '2px 4px', border: 0, background: 'transparent', cursor: 'pointer' },
+  sourcesPanel: { padding: '8px 10px', borderBottom: `1px solid ${tok.border}`, display: 'flex', flexDirection: 'column', gap: 6 },
+  sourceInput: { flex: 1, minWidth: 160, font: 'inherit', fontSize: 12, padding: '4px 8px', borderRadius: 6, border: `1px solid ${tok.border}`, background: 'transparent', color: 'inherit' },
 }
 
 /** Hover and focus feedback the inline styles cannot express. */
@@ -398,16 +469,18 @@ function when(iso: string): string {
 }
 
 function ShelfCard({ game, sessionId, readBytes, t, open }: { game: ShelfGame; sessionId: string; readBytes: ReadBytes; t: T; open: (game: ShelfGame) => void }) {
-  const url = useFileUrl(readBytes, sessionId, game.cover, game.updatedAt)
+  const fileUrl = useFileUrl(readBytes, sessionId, game.online ? undefined : game.cover, game.updatedAt)
+  const url = game.online ? game.cover : fileUrl
   // Playtest pictures fill the tile; a character picture is shown whole.
-  const screenshot = game.cover !== undefined && /\.jpe?g$/iu.test(game.cover)
+  const screenshot = game.cover !== undefined && /\.jpe?g(\?|$)/iu.test(game.cover)
   const meta = [game.dimension === '3d' ? '3D' : game.dimension === '2d' ? '2D' : '',
     game.built ? '' : t('shelf.notBuilt'),
     game.versions > 0 ? t('shelf.versions', { count: String(game.versions) }) : '',
     when(game.updatedAt)].filter(Boolean).join(' · ')
   return <button type="button" className="dgs-tile" style={shelfStyle.tile} onClick={() => { open(game) }} title={t('shelf.play', { title: game.title })} aria-label={t('shelf.play', { title: game.title })} data-project={game.project}>
     {!screenshot && <div style={shelfStyle.artBackdrop} />}
-    {url && <img src={url} alt="" style={screenshot ? shelfStyle.shot : shelfStyle.art} />}
+    {url && <img src={url} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" style={screenshot ? shelfStyle.shot : shelfStyle.art} />}
+    {game.online && <span style={shelfStyle.badge}>{t('shelf.onlineBadge', { source: game.online.sourceName })}</span>}
     <div style={shelfStyle.caption}>
       <span style={shelfStyle.name}>{game.title}</span>
       <span style={shelfStyle.meta}>{meta}</span>
@@ -424,9 +497,31 @@ function ShelfTab(props: any): ReactNode {
   const [scan, setScan] = useState<{ games: ShelfGame[]; partial: boolean }>()
   const visible = tab?.visible !== false
   const [filter, setFilter] = useState<ShelfFilter>('all')
+  const [onlineOnly, setOnlineOnly] = useState(false)
   const [sort, setSort] = useState<ShelfSort>('recent')
   const [busy, setBusy] = useState(false)
+  const [exportingWall, setExportingWall] = useState(false)
+  const [publishingWall, setPublishingWall] = useState(false)
+  const [confirmPublishWall, setConfirmPublishWall] = useState(false)
+  const [wallPublished, setWallPublished] = useState<{ url: string; status?: string } | null>(null)
   const [notice, setNotice] = useState<{ kind: 'error' | 'info'; text: string }>()
+
+  const [showSources, setShowSources] = useState(false)
+  const [sourceInput, setSourceInput] = useState('')
+  const [addingSource, setAddingSource] = useState(false)
+  const [localSources, setLocalSources] = useState<SubscribedSource[]>(() => loadStoredSources())
+  const [workspaceSources, setWorkspaceSources] = useState<SubscribedSource[]>([])
+  const [feedStates, setFeedStates] = useState<Record<string, SourceFetchState>>(() => loadFeedCache())
+  const [loadingSourceIds, setLoadingSourceIds] = useState<Record<string, boolean>>({})
+  const [playingOnline, setPlayingOnline] = useState<ShelfGame | null>(null)
+  const lastRefreshRef = useRef<number | undefined>(undefined)
+
+  const sources = useMemo(() => mergeSources(localSources, workspaceSources), [localSources, workspaceSources])
+
+  // Unmount the online game iframe immediately when the tab becomes hidden.
+  useEffect(() => {
+    if (!visible) setPlayingOnline(null)
+  }, [visible])
 
   useEffect(() => {
     const listener = () => { setVersion(value => value + 1) }
@@ -441,57 +536,255 @@ function ShelfTab(props: any): ReactNode {
     scanShelf((path, signal) => listDir(sessionId, path, signal), read, cwd, controller.signal)
       .then(result => { if (!controller.signal.aborted) setScan(result) })
       .catch(() => { if (!controller.signal.aborted) setScan({ games: [], partial: true }) })
+    read(join(cwd, WORKSPACE_SOURCES_FILE), controller.signal)
+      .then(text => { if (!controller.signal.aborted) setWorkspaceSources(parseWorkspaceSources(text)) })
+      .catch(() => { if (!controller.signal.aborted) setWorkspaceSources([]) })
     return () => { controller.abort() }
   }, [sessionId, cwd, visible, version, readBytes, listDir])
 
+  const refreshFeeds = useCallback(async (targetSources: SubscribedSource[]) => {
+    if (targetSources.length === 0) return
+    lastRefreshRef.current = Date.now()
+    const loadingFlags: Record<string, boolean> = {}
+    for (const s of targetSources) loadingFlags[s.id] = true
+    setLoadingSourceIds(prev => ({ ...prev, ...loadingFlags }))
+    const results = await Promise.all(targetSources.map(source => refreshSubscribedSource(source, feedStates[source.id])))
+    setFeedStates((prev) => {
+      const next = { ...prev }
+      for (const res of results) next[res.sourceId] = res
+      saveFeedCache(next)
+      return next
+    })
+    setLoadingSourceIds((prev) => {
+      const next = { ...prev }
+      for (const s of targetSources) delete next[s.id]
+      return next
+    })
+  }, [feedStates])
+
+  // Auto-refresh on wall open (with 2-minute cooldown) and every 30 minutes while open.
+  useEffect(() => {
+    if (!visible || sources.length === 0) return
+    if (shouldAutoRefresh(lastRefreshRef.current)) {
+      void refreshFeeds(sources)
+    }
+    const timer = setInterval(() => {
+      void refreshFeeds(sources)
+    }, AUTO_REFRESH_INTERVAL_MS)
+    return () => { clearInterval(timer) }
+  }, [visible, sources, refreshFeeds])
+
+  const addSource = useCallback(async () => {
+    const raw = sourceInput.trim()
+    if (!raw) return
+    if (sources.length >= MAX_SOURCES) {
+      setNotice({ kind: 'error', text: `Maximum of ${MAX_SOURCES} sources reached.` })
+      return
+    }
+    setAddingSource(true)
+    setNotice(undefined)
+    try {
+      const { source, feed } = await discoverAndFetchSource(raw)
+      setLocalSources((prev) => {
+        const filtered = prev.filter(item => item.id !== source.id)
+        const next = [source, ...filtered].slice(0, MAX_SOURCES)
+        saveStoredSources(next)
+        return next
+      })
+      const now = new Date().toISOString()
+      setFeedStates((prev) => {
+        const next: Record<string, SourceFetchState> = {
+          ...prev,
+          [source.id]: {
+            sourceId: source.id,
+            name: feed.name,
+            ...(feed.author ? { author: feed.author } : {}),
+            updatedAt: feed.updatedAt,
+            fetchedAt: now,
+            games: feed.games,
+            droppedCrossOrigin: feed.droppedCrossOrigin,
+            status: 'ok',
+          },
+        }
+        saveFeedCache(next)
+        return next
+      })
+      setSourceInput('')
+      setNotice({ kind: 'info', text: t('shelf.sourceAdded', { name: feed.name, count: String(feed.games.length) }) })
+    } catch (error) {
+      setNotice({ kind: 'error', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setAddingSource(false)
+    }
+  }, [sourceInput, sources.length, t])
+
+  const removeSource = useCallback((sourceId: string) => {
+    setLocalSources((prev) => {
+      const next = prev.filter(item => item.id !== sourceId)
+      saveStoredSources(next)
+      return next
+    })
+    setFeedStates((prev) => {
+      const next = { ...prev }
+      delete next[sourceId]
+      saveFeedCache(next)
+      return next
+    })
+  }, [])
+
+  const onlineShelfGames = useMemo(() => {
+    const out: ShelfGame[] = []
+    for (const source of sources) {
+      const state = feedStates[source.id]
+      if (!state) continue
+      for (const game of state.games) {
+        out.push(onlineGameToShelfGame(game))
+      }
+    }
+    return out
+  }, [sources, feedStates])
+
+  const allGames = useMemo(() => mergeShelfGames(scan?.games ?? [], onlineShelfGames), [scan, onlineShelfGames])
+  const shown = useMemo(() => viewGames(allGames, filter, sort, onlineOnly), [allGames, filter, sort, onlineOnly])
+  const counts = useMemo(() => dimensionCounts(allGames, onlineOnly), [allGames, onlineOnly])
+  const localProjects = useMemo(() => localWallProjects(shown), [shown])
+  const builtLocalCount = useMemo(() => builtLocalGamesCount(shown), [shown])
+
   const open = useCallback((game: ShelfGame) => {
+    if (game.online) {
+      setPlayingOnline(game)
+      return
+    }
     tab.actions.openResource(studioAddress(sessionId, game.project))
   }, [tab, sessionId])
 
-  const shown = useMemo(() => scan ? viewGames(scan.games, filter, sort) : [], [scan, filter, sort])
-  const counts = useMemo(() => dimensionCounts(scan?.games ?? []), [scan])
-
   const exportWall = useCallback(async () => {
     setBusy(true)
+    setExportingWall(true)
     setNotice(undefined)
     try {
       // The page is written in the language the sidebar is shown in.
       const lang = t('shelf.refresh') === '刷新' ? 'zh' : 'en'
-      const result = await runCommand(sessionId, `wall ${JSON.stringify({ projects: shown.map(game => game.project), lang })}`)
+      const result = await runCommand(sessionId, `wall ${JSON.stringify({ projects: localProjects, lang })}`)
       if (!result.ok) { setNotice({ kind: 'error', text: t('shelf.exportFailed', { message: result.text }) }); return }
       const wall = JSON.parse(result.text) as { file: string; bytes: number; games: number; skipped: unknown[] }
       const text = t('shelf.exported', { file: wall.file, count: String(wall.games), size: `${(wall.bytes / 1048576).toFixed(1)} MB` })
       setNotice({ kind: 'info', text: wall.skipped.length > 0 ? `${text} ${t('shelf.exportSkipped', { count: String(wall.skipped.length) })}` : text })
     } finally {
+      setExportingWall(false)
       setBusy(false)
     }
-  }, [runCommand, sessionId, shown, t])
+  }, [runCommand, sessionId, localProjects, t])
+
+  const publishWall = useCallback(async () => {
+    setBusy(true)
+    setPublishingWall(true)
+    setNotice(undefined)
+    try {
+      const lang = t('shelf.refresh') === '刷新' ? 'zh' : 'en'
+      const result = await runCommand(sessionId, `publish ${JSON.stringify({ wall: true, projects: localProjects, lang })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      const published = JSON.parse(result.text) as { url: string; status?: string }
+      setWallPublished(published)
+    } finally {
+      setPublishingWall(false)
+      setBusy(false)
+    }
+  }, [runCommand, sessionId, localProjects, t])
 
   const chip = (value: ShelfFilter, label: string) => <button key={value} type="button" className="dgs-chip" aria-pressed={filter === value}
     style={shelfStyle.chip} onClick={() => { setFilter(value) }}>{label} {counts[value]}</button>
   const order = (value: ShelfSort, label: string) => <button key={value} type="button" className="dgs-sort" aria-pressed={sort === value}
     style={shelfStyle.sort} onClick={() => { setSort(value) }}>{label}</button>
 
+  if (playingOnline && playingOnline.online && visible) {
+    return <div style={s.root} data-plugin="dsh-game-studio" data-view="shelf">
+      <div style={s.bar}>
+        <button type="button" style={s.button} onClick={() => { setPlayingOnline(null) }}>{t('shelf.backToWall')}</button>
+        <span style={s.title} title={playingOnline.title}>{playingOnline.title}</span>
+        <span style={s.small}>{t('shelf.onlineFrom', { host: playingOnline.online.sourceHost })}</span>
+        <a href={playingOnline.online.url} target="_blank" rel="noopener noreferrer" style={{ ...s.button, textDecoration: 'none' }}>{t('shelf.openExternal')}</a>
+      </div>
+      <div style={playingOnline.orientation === 'landscape' ? { ...s.stage, flex: 'none', aspectRatio: '16 / 9', minHeight: 0 } : s.stage}>
+        <iframe key={playingOnline.online.url} src={playingOnline.online.url} title={playingOnline.title} style={s.frame}
+          sandbox="allow-scripts" referrerPolicy="no-referrer" />
+      </div>
+    </div>
+  }
+
   return <div style={s.root} data-plugin="dsh-game-studio" data-view="shelf">
     <style>{SHELF_CSS}</style>
     <div style={s.bar}>
       <span style={s.title}>{t('shelf.title')}</span>
-      {scan && <span style={s.small}>{t('shelf.count', { count: String(shown.length) })}</span>}
-      <button type="button" style={s.button} onClick={() => { setVersion(value => value + 1) }}>{t('shelf.refresh')}</button>
-      {scan && scan.games.length > 0 && <button type="button" style={s.button} disabled={busy || shown.length === 0} title={t('shelf.exportHint')}
-        onClick={() => { void exportWall() }}>{busy ? t('shelf.exporting') : t('shelf.export')}</button>}
+      {(scan || onlineShelfGames.length > 0) && <span style={s.small}>{t('shelf.count', { count: String(shown.length) })}</span>}
+      <button type="button" style={s.button} aria-pressed={showSources} onClick={() => { setShowSources(v => !v) }}>
+        {sources.length > 0 ? t('shelf.sourcesCount', { count: String(sources.length) }) : t('shelf.sources')}
+      </button>
+      <button type="button" style={s.button} onClick={() => { setVersion(value => value + 1); void refreshFeeds(sources) }}>{t('shelf.refresh')}</button>
+      {scan && scan.games.length > 0 && <>
+        <button type="button" style={s.button} disabled={busy || builtLocalCount === 0} title={t('shelf.exportHint')}
+          onClick={() => { void exportWall() }}>{exportingWall ? t('shelf.exporting') : t('shelf.export')}</button>
+        <button type="button" style={s.button} disabled={busy || builtLocalCount === 0} title={t('shelf.publishHint')}
+          onClick={() => { setConfirmPublishWall(v => !v) }}>{publishingWall ? t('shelf.publishing') : t('shelf.publish')}</button>
+      </>}
     </div>
+    {showSources && <div style={shelfStyle.sourcesPanel}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input type="text" value={sourceInput} onChange={e => { setSourceInput(e.target.value) }}
+          onKeyDown={e => { if (e.key === 'Enter') void addSource() }}
+          placeholder={t('shelf.sourcePlaceholder')} style={shelfStyle.sourceInput} disabled={addingSource} />
+        <button type="button" style={s.button} disabled={addingSource || !sourceInput.trim()} onClick={() => { void addSource() }}>
+          {addingSource ? t('shelf.sourceAdding') : t('shelf.sourceAdd')}
+        </button>
+      </div>
+      {sources.length === 0 ? <div style={s.small}>{t('shelf.sourceEmpty')}</div>
+        : sources.map((source) => {
+          const st = feedStates[source.id]
+          const isLoading = Boolean(loadingSourceIds[source.id])
+          const count = st?.games.length ?? 0
+          const updated = st?.fetchedAt ? clock(st.fetchedAt) : ''
+          const statusText = isLoading
+            ? t('shelf.sourceStatusLoading')
+            : st?.status === 'error'
+              ? t('shelf.sourceStatusError', { reason: st.error ?? '' })
+              : t('shelf.sourceStatusOk')
+          return <div key={source.id} style={{ ...s.row, fontSize: 12, flexWrap: 'wrap' }}>
+            <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st?.name ?? source.label}</strong>
+            <span style={s.small}>{t('shelf.count', { count: String(count) })}</span>
+            {updated && <span style={s.small}>{t('shelf.sourceUpdated', { time: updated })}</span>}
+            <span style={{ ...s.small, color: st?.status === 'error' ? tok.danger : tok.muted }}>{statusText}</span>
+            {source.fromWorkspace && <span style={s.small}>{t('shelf.sourceFromWorkspace')}</span>}
+            <span style={{ flex: 1 }} />
+            {!source.fromWorkspace && <button type="button" style={s.button} onClick={() => { removeSource(source.id) }}>{t('shelf.sourceRemove')}</button>}
+          </div>
+        })}
+    </div>}
+    {confirmPublishWall && <div style={{ ...s.hint, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ color: tok.text }}>{t('tab.publishConfirmHint')}</span>
+      <button type="button" style={s.button} disabled={busy}
+        onClick={() => { setConfirmPublishWall(false); void publishWall() }}>{t('tab.publishConfirmYes')}</button>
+      <button type="button" style={s.button} disabled={busy}
+        onClick={() => { setConfirmPublishWall(false) }}>{t('tab.publishCancel')}</button>
+    </div>}
+    {wallPublished && <div style={{ ...s.hint, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ color: tok.text }}>{t('shelf.published', { url: wallPublished.url })}</span>
+      {wallPublished.status === 'building' && <span>{t('tab.publishDeploying')}</span>}
+      <button type="button" style={s.button}
+        onClick={() => { void navigator.clipboard?.writeText(wallPublished.url).catch(() => undefined) }}>{t('tab.shareCopy')}</button>
+    </div>}
     {notice && <div style={notice.kind === 'error' ? s.error : s.hint}>{notice.text}</div>}
-    {!sessionId || !cwd ? <div style={s.hint}>{t('shelf.noSession')}</div>
-      : scan === undefined ? <div style={s.hint}>{t('shelf.scanning')}</div>
+    {(!sessionId || !cwd) && allGames.length === 0 ? <div style={s.hint}>{t('shelf.noSession')}</div>
+      : scan === undefined && sessionId && cwd && allGames.length === 0 ? <div style={s.hint}>{t('shelf.scanning')}</div>
         : <>
-          {scan.partial && <div style={s.hint}>{t('shelf.partial')}</div>}
-          {scan.games.length === 0 ? <div style={{ ...s.hint, borderBottom: 0 }}>{t('shelf.empty')}</div>
+          {scan?.partial && <div style={s.hint}>{t('shelf.partial')}</div>}
+          {allGames.length === 0 ? <div style={{ ...s.hint, borderBottom: 0 }}>{t('shelf.empty')}</div>
             : <>
               <div style={shelfStyle.controls}>
                 {chip('all', t('shelf.all'))}
                 {counts['2d'] > 0 && chip('2d', '2D')}
                 {counts['3d'] > 0 && chip('3d', '3D')}
+                {onlineShelfGames.length > 0 && <button type="button" className="dgs-chip" aria-pressed={onlineOnly}
+                  style={shelfStyle.chip} onClick={() => { setOnlineOnly(v => !v) }}>{t('shelf.online')} {onlineShelfGames.length}</button>}
                 <span style={{ flex: 1 }} />
                 {order('recent', t('shelf.sortRecent'))}
                 {order('versions', t('shelf.sortVersions'))}
@@ -539,7 +832,8 @@ function StudioRow(props: any): ReactNode {
             ? t('row.background', { provider: providerName(meta.provider ?? ''), count: String(meta.count ?? 0) })
             : t('row.candidates', { count: String(meta?.candidates?.length ?? 0) }))
             : toolName === 'game_studio_apply_asset' ? t('row.apply')
-              : toolName === 'game_studio_revert_asset' ? t('row.revert') : t('row.export')
+              : toolName === 'game_studio_revert_asset' ? t('row.revert')
+                : toolName === 'game_studio_publish' ? t('row.publish') : t('row.export')
   const detail = failed ? (block.content ?? []).map((item: any) => item.type === 'text' ? item.text : '').join(' ').slice(0, 240) : ''
   return <div style={s.row} data-tool={toolName}>
     <span aria-hidden>🎮</span>

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.3</code> &middot; Tested with DSH <code>0.2.1-rc.5</code></sub>
+  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.4</code> &middot; Tested with DSH <code>0.2.1-rc.5</code></sub>
 </p>
 
 <br />
@@ -40,8 +40,9 @@ Ask the agent for a game in plain words — "a 3D game: a red panda collects bam
 | 🤖 **Self-playing playtests** | `game_studio_playtest` plays the latest code in a headless Chrome or Edge and reports phases, score, frame rate, script errors and screenshots. Games that are not steered with arrow keys (grids, cards, aiming, rhythm…) define `window.__autoplay`, so the playtest plays their real loop. |
 | 🕰️ **Version history** | Every build that changed the game is saved; `game_studio_restore_version` brings back code, rules and art together. |
 | 📦 **One-file export** | `game_studio_export` writes a self-contained HTML file with no network access — open it in any browser or put it on any static host. |
-| 📱 **Try it on your phone** | `game_studio_share` opens a temporary read-only link on your local network, with a QR code in the sidebar. |
-| 🗂️ **My games** | Open the sidebar's **+** and pick **Game Studio · My games**: every game in the workspace as a tile with its latest playtest picture, filtered by 2D/3D and sorted by recency, versions or name. Click one to play it — no agent, no tokens. **Export wall** packs the games shown into one offline page to send to friends. |
+| 📱 **Try it on your phone** | `game_studio_share` opens a temporary read-only link on your local network — or a temporary public link via a Cloudflare Quick Tunnel (`cloudflared`) so friends on any network can play — with a QR code in the sidebar. |
+| 🌐 **Publish to GitHub Pages** | `game_studio_publish` pushes the built HTML (or the whole game wall) to a public repository under your signed-in `gh` account and enables GitHub Pages for a permanent link that stays live after you close your computer. |
+| 🗂️ **My games** | Open the sidebar's **+** and pick **Game Studio · My games**: every game in the workspace as a tile with its latest playtest picture, filtered by 2D/3D and sorted by recency, versions or name. Click one to play it — no agent, no tokens. You can also subscribe to online game sources (`owner/repo`, GitHub repository URL, or GitHub Pages URL) to browse and play published games alongside your own. **Export wall** packs your local games into one offline page to send to friends. |
 
 ## Games made with it
 
@@ -83,11 +84,12 @@ Measured in a real DSH with DeepSeek-V4.1-Flash, each game made from one sentenc
 | `game_studio_versions` | List saved versions, newest first. |
 | `game_studio_restore_version` | Restore an earlier version of the whole game. |
 | `game_studio_export` | Export one self-contained, offline HTML file. |
-| `game_studio_share` | Open (or close) a temporary read-only link on the local network so a phone can play the game. |
+| `game_studio_share` | Open (or close) a temporary read-only link on the local network, or pass `public: true` for a temporary public link via `cloudflared` so anyone with the link can play. |
 | `game_studio_list` | List the games in the working directory with title, 2D/3D, build state and versions, so the agent finds "the penguin game" by name. |
 | `game_studio_export_wall` | Export the game wall: one offline HTML page with a tile per built game; click a tile to play it. |
+| `game_studio_publish` | Publish the built game (or `wall: true` for the game wall) to GitHub Pages via the local signed-in `gh` CLI, or pass `remove: true` to delete it. Asks for approval first and only writes to repositories carrying its `.dsh-game-studio.json` marker. |
 
-The sidebar's buttons (apply, revert, build, export, restore, share) call the same operations through the `/game-studio` command.
+The sidebar's buttons (apply, revert, build, export, restore, share, publish) call the same operations through the `/game-studio` command.
 
 ## Image services and spending
 
@@ -102,7 +104,9 @@ The sidebar's buttons (apply, revert, build, export, restore, share) call the sa
 
 - Games run in a sandboxed iframe with a content security policy that blocks network access; exported files make no network requests.
 - The only things sent off your machine are the prompts — and the reference picture, if you give one — to the image service you choose.
-- The share link is read-only, serves just that game's build, listens on your local network only and closes after the time you set (30 minutes by default).
+- The share link is read-only, serves just that game's build, and closes after the time you set (30 minutes by default). Local links listen on your local network only; public links listen on `127.0.0.1` only and tunnel through Cloudflare (`trycloudflare.com`) after you approve.
+- Publishing to GitHub Pages (`game_studio_publish`) uses your local signed-in `gh` CLI (the plugin never touches your GitHub token), uploads only the built HTML to a **public** repository after you approve, and refuses to write to any existing repository that does not carry its `.dsh-game-studio.json` marker.
+- Online game sources run on the provider's own site inside a sandboxed iframe (`sandbox="allow-scripts"`) without access to DSH or your workspace, and are never copied or forwarded when exporting or publishing your local game wall.
 - API keys are read from DSH credentials or the environment and are never written into projects, logs or tool results.
 
 ## Requirements
@@ -110,6 +114,7 @@ The sidebar's buttons (apply, revert, build, export, restore, share) call the sa
 - DeepSeek Harness `0.2.1` or later (web or desktop), Node.js `24.11` or later.
 - Google Chrome or Microsoft Edge on the same computer for playtests.
 - For AI art, either an OpenAI API key or the Codex CLI signed in. Without either, games still work with their code-drawn characters.
+- Optional: `cloudflared` (`brew install cloudflared` on macOS) for temporary public share links; `gh` (`brew install gh` and `gh auth login`) for publishing to GitHub Pages.
 
 ## Install into DSH
 
@@ -149,6 +154,9 @@ Set these under `config` in your profile's `cordis.patch.yml`:
 | `codexReasoningEffort` | `low` | Reasoning effort for Codex image runs. |
 | `codexTimeoutMinutes` | `15` | Give up on one Codex image after this long. |
 | `confirmSpending` | `true` | Ask for approval before every generation. |
+| `cloudflaredPath` | found on `PATH` or Homebrew | `cloudflared` executable for temporary public share links. |
+| `ghPath` | found on `PATH` or Homebrew | GitHub CLI (`gh`) executable for publishing to GitHub Pages. |
+| `githubRepo` | `dsh-games` | Public GitHub repository name (under your signed-in account) for GitHub Pages. |
 
 ## Game project format
 

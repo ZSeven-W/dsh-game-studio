@@ -94,6 +94,7 @@ export const paths = {
   /** The shelf's cover picture: the mid-game screenshot of the latest full playtest. */
   cover: (dir: string) => join(dir, '.studio', 'cover.jpg'),
   artifact: (dir: string) => join(dir, 'dist', 'index.html'),
+  published: (dir: string) => join(dir, '.studio', 'published.json'),
   exportDir: (dir: string) => join(dir, 'export'),
 }
 

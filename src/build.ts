@@ -101,7 +101,7 @@ export async function renderHtml(dir: string, manifest: GameManifest): Promise<s
     `<title>${escapeHtml(manifest.title)}</title>`,
     `<style>${STYLE}</style></head><body><canvas id="game" tabindex="0"></canvas>`,
     ...runtimes.map(script => `<script>${inlineSafe(script)}</script>`),
-    `<script>window.GAME=${inlineSafe(JSON.stringify(game))};</script>`,
+    `<script>window.addEventListener("keydown",function(e){if(e.key==="Escape")try{parent.postMessage({type:"dsh-wall-escape"},"*")}catch(_){}});window.GAME=${inlineSafe(JSON.stringify(game))};</script>`,
     `<script>${inlineSafe(code)}</script>`,
     '</body></html>',
     '',

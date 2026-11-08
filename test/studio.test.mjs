@@ -1,21 +1,24 @@
 // Project, build and asset-slot flow against the real template, with a fake
 // image generator standing in for the paid provider.
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { PNG } from 'pngjs'
 import { applyCandidate, composePrompt, generateCandidates, reserveNumbers, revertSlot, withProjectLock, writeState } from '../src/assets.ts'
 import { buildProject } from '../src/build.ts'
+import { commandErrorCopy, en as localeEn, liveShare, publishState, shareCopy, zh as localeZh } from '../src/client/locales.ts'
+import { findGh, ghInstallHint, requireGh } from '../src/github.ts'
 import { checkSprite, decodePng, fitSprite } from '../src/png.ts'
 import { estimateOpenaiCost } from '../src/pricing.ts'
 import { createProject, loadLedger, loadManifest, paths, templateDir } from '../src/project.ts'
 import { askToSpend, spendNotice } from '../src/spend.ts'
 import { loadReference } from '../src/reference.ts'
-import { startShare, stopShare } from '../src/share.ts'
+import { shareAddress, shareHeartbeatPath, shareInfo, startShare, stopAllShares, stopShare } from '../src/share.ts'
+import { cloudflaredInstallHint, findCloudflared, requireCloudflared } from '../src/tunnel.ts'
 import { listVersions, restoreFiles } from '../src/versions.ts'
-import { mkdir, symlink } from 'node:fs/promises'
 import { resolveInside, writeJson } from '../src/util.ts'
 
 /** A size×size PNG with an opaque disc of the given radius, transparent elsewhere (or fully opaque). */
@@ -349,6 +352,7 @@ test('a phone link serves only the latest build behind its token and stops when 
   await buildProject(dir)
   const info = await startShare(dir, 5, '127.0.0.1')
   t.after(() => stopShare(dir))
+  assert.equal(info.scope, 'lan')
   assert.match(info.qrSvg, /^<svg/u)
   const page = await fetch(info.url)
   assert.equal(page.status, 200)
@@ -359,4 +363,524 @@ test('a phone link serves only the latest build behind its token and stops when 
   assert.equal((await fetch(`${base.origin}${base.pathname.slice(0, -1)}`, { redirect: 'manual' })).status, 302)
   assert.equal(stopShare(dir), true)
   await assert.rejects(fetch(info.url), 'closed after stop')
+})
+
+const FAKE_CLOUDFLARED = `#!/usr/bin/env node
+const { appendFileSync } = require('node:fs')
+const args = process.argv.slice(2)
+if (args[0] === '--version') process.exit(0)
+if (process.env.FAKE_CLOUDFLARED_LOG) {
+  appendFileSync(process.env.FAKE_CLOUDFLARED_LOG, JSON.stringify({
+    pid: process.pid, args, forceColor: process.env.FORCE_COLOR ?? null,
+  }) + '\\n')
+}
+process.on('SIGTERM', () => process.exit(0))
+const mode = process.env.FAKE_CLOUDFLARED_MODE || 'ok'
+if (mode === 'hang') {
+  console.error('INF Requesting new quick Tunnel on trycloudflare.com...')
+  setTimeout(() => {}, 10_000)
+} else if (mode === 'fail') {
+  console.error('ERR failed to request quick Tunnel: edge connection refused')
+  process.exit(1)
+} else if (mode === 'drop') {
+  console.error('INF |  https://\\u001b[1mfake-abc\\u001b[22m.trycloudflare.com  |')
+  setTimeout(() => process.exit(1), 300)
+} else if (mode.startsWith('delay:')) {
+  const delayMs = Number(mode.slice('delay:'.length)) || 400
+  setTimeout(() => {
+    console.error('INF |  https://\\u001b[1mfake-abc\\u001b[22m.trycloudflare.com  |')
+  }, delayMs)
+  setTimeout(() => {}, 10_000)
+} else {
+  console.error('INF |  https://\\u001b[1mfake-abc\\u001b[22m.trycloudflare.com  |')
+  setTimeout(() => {}, 10_000)
+}
+`
+
+let sharedCloudflared
+
+async function ensureFakeCloudflared() {
+  if (sharedCloudflared) return sharedCloudflared
+  const binDir = await mkdtemp(join(tmpdir(), 'game-studio-cf-bin-'))
+  const command = join(binDir, 'cloudflared')
+  await writeFile(command, FAKE_CLOUDFLARED)
+  await chmod(command, 0o755)
+  spawnSync(command, ['--version'])
+  process.once('exit', () => { spawnSync('rm', ['-rf', binDir]) })
+  sharedCloudflared = command
+  return command
+}
+
+async function fakeCloudflared(t, mode = 'ok') {
+  const root = await mkdtemp(join(tmpdir(), 'game-studio-'))
+  const dir = join(root, 'my-game')
+  await createProject(dir, { title: 'Moon Garden', style: 'watercolor storybook' })
+  await buildProject(dir)
+  const command = await ensureFakeCloudflared()
+  const logFile = join(root, 'cloudflared.jsonl')
+  await writeFile(logFile, '')
+  process.env.FAKE_CLOUDFLARED_MODE = mode
+  process.env.FAKE_CLOUDFLARED_LOG = logFile
+  const readLog = async () => (await readFile(logFile, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
+  t.after(async () => {
+    stopShare(dir)
+    delete process.env.FAKE_CLOUDFLARED_MODE
+    delete process.env.FAKE_CLOUDFLARED_LOG
+    const entries = await readLog().catch(() => [])
+    for (const entry of entries) {
+      try { process.kill(entry.pid, 'SIGKILL') } catch { /* already gone */ }
+    }
+    await rm(root, { recursive: true, force: true })
+  })
+  return { root, dir, command, readLog }
+}
+
+async function assertProcessDead(pid, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try { process.kill(pid, 0) } catch { break }
+    await new Promise(r => setTimeout(r, 15))
+  }
+  assert.throws(() => process.kill(pid, 0))
+}
+
+async function waitForLog(readLog, count = 1, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const entries = await readLog().catch(() => [])
+    if (entries.length >= count) return entries
+    await new Promise(r => setTimeout(r, 15))
+  }
+  return readLog()
+}
+
+async function waitForCondition(predicate, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (await predicate()) return
+    await new Promise(r => setTimeout(r, 20))
+  }
+}
+
+test('findCloudflared and requireCloudflared locate a configured binary or throw NO_TUNNEL with platform install hints', async (t) => {
+  const { root, command } = await fakeCloudflared(t)
+  assert.equal(findCloudflared(command), command)
+  const missing = join(root, 'no-such-cloudflared')
+  assert.equal(findCloudflared(missing), undefined)
+  assert.throws(() => requireCloudflared(missing), (err) => err.code === 'NO_TUNNEL' && /brew install cloudflared/u.test(err.message))
+  assert.match(cloudflaredInstallHint('darwin'), /brew install cloudflared/u)
+  assert.match(cloudflaredInstallHint('win32'), /winget install --id Cloudflare\.cloudflared/u)
+  assert.match(cloudflaredInstallHint('linux'), /developers\.cloudflare\.com/u)
+})
+
+test('public share binds 127.0.0.1 only, strips ANSI from cloudflared stderr, and serves behind the token with x-robots-tag', async (t) => {
+  const { dir, command, readLog } = await fakeCloudflared(t, 'ok')
+  process.env.FORCE_COLOR = '1'
+  t.after(() => { delete process.env.FORCE_COLOR })
+  const info = await startShare(dir, 5, { scope: 'public', host: '0.0.0.0', cloudflaredPath: command, tunnelTimeoutMs: 2_000 })
+  assert.equal(info.scope, 'public')
+  assert.match(info.url, /^https:\/\/fake-abc\.trycloudflare\.com\/[A-Za-z0-9_-]{24}\/$/u)
+  assert.match(info.qrSvg, /^<svg/u)
+  const bound = shareAddress(dir)
+  assert.ok(bound)
+  assert.equal(bound.address, '127.0.0.1')
+
+  const tokenPath = new URL(info.url).pathname
+  const localBase = `http://127.0.0.1:${bound.port}`
+  const page = await fetch(`${localBase}${tokenPath}`)
+  assert.equal(page.status, 200)
+  assert.equal(page.headers.get('x-robots-tag'), 'noindex, nofollow')
+  assert.match(await page.text(), /<title>Moon Garden<\/title>/u)
+  assert.equal((await fetch(`${localBase}/`)).status, 404)
+  assert.equal((await fetch(`${localBase}/wrong-token/`)).status, 404)
+
+  const [entry] = await readLog()
+  assert.deepEqual(entry.args, ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${bound.port}`])
+  assert.equal(entry.forceColor, null, 'FORCE_COLOR is removed before spawning cloudflared')
+})
+
+test('stopShare kills the cloudflared process and closes the local HTTP server', async (t) => {
+  const { dir, command, readLog } = await fakeCloudflared(t, 'ok')
+  const info = await startShare(dir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 2_000 })
+  const bound = shareAddress(dir)
+  const [entry] = await readLog()
+  const tokenPath = new URL(info.url).pathname
+
+  assert.equal(stopShare(dir), true)
+  assert.equal(shareInfo(dir), null)
+  await assertProcessDead(entry.pid)
+  await assert.rejects(fetch(`http://127.0.0.1:${bound.port}${tokenPath}`))
+})
+
+test('public share expiry stops both the HTTP server and the cloudflared process', async (t) => {
+  const { dir, command, readLog } = await fakeCloudflared(t, 'ok')
+  await startShare(dir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 2_000, ttlMs: 150 })
+  const [entry] = await readLog()
+  await waitForCondition(() => shareInfo(dir) === null)
+  assert.equal(shareInfo(dir), null)
+  await assertProcessDead(entry.pid)
+})
+
+test('tunnel timeout throws TUNNEL_TIMEOUT with stderr tail and kills the hanging cloudflared process', async (t) => {
+  const { dir, command, readLog } = await fakeCloudflared(t, 'hang')
+  await assert.rejects(
+    startShare(dir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 1_500 }),
+    (err) => err.code === 'TUNNEL_TIMEOUT' && /Requesting new quick Tunnel/u.test(err.message),
+  )
+  assert.equal(shareInfo(dir), null)
+  const [entry] = await readLog()
+  assert.ok(entry?.pid, 'cloudflared was started')
+  await assertProcessDead(entry.pid)
+})
+
+test('early cloudflared exit before printing a URL throws TUNNEL_FAILED with stderr output', async (t) => {
+  const { dir, command } = await fakeCloudflared(t, 'fail')
+  await assert.rejects(
+    startShare(dir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 2_000 }),
+    (err) => err.code === 'TUNNEL_FAILED' && /edge connection refused/u.test(err.message),
+  )
+  assert.equal(shareInfo(dir), null)
+})
+
+test('unexpected cloudflared exit while sharing automatically cleans up the share and notifies onStopped', async (t) => {
+  const { dir, command } = await fakeCloudflared(t, 'drop')
+  let notified = false
+  const info = await startShare(dir, 5, {
+    scope: 'public',
+    cloudflaredPath: command,
+    tunnelTimeoutMs: 2_000,
+    onStopped: () => { notified = true },
+  })
+  assert.equal(info.scope, 'public')
+  assert.ok(shareInfo(dir) !== null)
+  await waitForCondition(() => shareInfo(dir) === null && notified)
+  assert.equal(shareInfo(dir), null)
+  assert.equal(notified, true)
+})
+
+test('starting a new share replaces the previous share and kills its tunnel process', async (t) => {
+  const { dir, command, readLog } = await fakeCloudflared(t, 'ok')
+  await startShare(dir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 2_000 })
+  const [first] = await readLog()
+  const lan = await startShare(dir, 5, '127.0.0.1')
+  assert.equal(lan.scope, 'lan')
+  assert.equal(shareInfo(dir)?.scope, 'lan')
+  await assertProcessDead(first.pid)
+})
+
+test('stopShare while tunnel is opening returns true, rejects startShare with CANCELLED, and kills cloudflared', async (t) => {
+  const { dir, command, readLog } = await fakeCloudflared(t, 'delay:350')
+  const pendingShare = startShare(dir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 2_000 })
+  const [entry] = await waitForLog(readLog, 1)
+  assert.ok(entry?.pid)
+  assert.equal(stopShare(dir), true)
+  assert.equal(stopShare(dir), false)
+  await assert.rejects(pendingShare, (err) => err.code === 'CANCELLED')
+  assert.equal(shareInfo(dir), null)
+  await assertProcessDead(entry.pid)
+})
+
+test('stopAllShares while tunnel is opening rejects startShare with CANCELLED and kills cloudflared', async (t) => {
+  const { dir, command, readLog } = await fakeCloudflared(t, 'delay:350')
+  const pendingShare = startShare(dir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 2_000 })
+  const [entry] = await waitForLog(readLog, 1)
+  assert.ok(entry?.pid)
+  stopAllShares()
+  await assert.rejects(pendingShare, (err) => err.code === 'CANCELLED')
+  assert.equal(shareInfo(dir), null)
+  await assertProcessDead(entry.pid)
+})
+
+test('concurrent startShare calls on the same dir leave at most one active share and no orphan cloudflared processes after stopAllShares', async (t) => {
+  const { dir, command, readLog } = await fakeCloudflared(t, 'delay:350')
+  const first = startShare(dir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 2_000 })
+  await waitForLog(readLog, 1)
+  const second = startShare(dir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 2_000 })
+  const results = await Promise.allSettled([first, second])
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1)
+  assert.equal(results.filter(r => r.status === 'rejected' && r.reason?.code === 'CANCELLED').length, 1)
+
+  const sameTick = await Promise.allSettled([
+    startShare(dir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 2_000 }),
+    startShare(dir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 2_000 }),
+  ])
+  assert.equal(sameTick.filter(r => r.status === 'fulfilled').length, 1)
+  assert.equal(sameTick.filter(r => r.status === 'rejected' && r.reason?.code === 'CANCELLED').length, 1)
+
+  stopAllShares()
+  assert.equal(shareInfo(dir), null)
+  const entries = await readLog()
+  assert.ok(entries.length >= 2)
+  for (const entry of entries) {
+    await assertProcessDead(entry.pid)
+  }
+})
+
+test('aborting signal while tunnel is opening rejects startShare with CANCELLED and kills cloudflared', async (t) => {
+  const { dir, command, readLog } = await fakeCloudflared(t, 'delay:500')
+  const controller = new AbortController()
+  const pendingShare = startShare(dir, 5, {
+    scope: 'public',
+    cloudflaredPath: command,
+    tunnelTimeoutMs: 2_000,
+    signal: controller.signal,
+  })
+  const [entry] = await waitForLog(readLog, 1)
+  assert.ok(entry?.pid)
+  controller.abort()
+  await assert.rejects(pendingShare, (err) => err.code === 'CANCELLED')
+  assert.equal(shareInfo(dir), null)
+  await assertProcessDead(entry.pid)
+})
+
+test('failed public startShare with NO_TUNNEL keeps an existing LAN share running', async (t) => {
+  const { root, dir } = await tempProject(t)
+  await buildProject(dir)
+  const lan = await startShare(dir, 5, '127.0.0.1')
+  t.after(() => stopShare(dir))
+  await assert.rejects(
+    startShare(dir, 5, { scope: 'public', cloudflaredPath: join(root, 'missing-cloudflared') }),
+    (err) => err.code === 'NO_TUNNEL',
+  )
+  assert.deepEqual(shareInfo(dir), lan)
+  const page = await fetch(lan.url)
+  assert.equal(page.status, 200)
+  assert.match(await page.text(), /<title>Moon Garden<\/title>/u)
+})
+
+test('failed startShare with NO_BUILD keeps an existing share running', async (t) => {
+  const { dir } = await tempProject(t)
+  await buildProject(dir)
+  const lan = await startShare(dir, 5, '127.0.0.1')
+  t.after(() => stopShare(dir))
+  await rm(paths.artifact(dir), { force: true })
+  await assert.rejects(
+    startShare(dir, 5, '127.0.0.1'),
+    (err) => err.code === 'NO_BUILD',
+  )
+  assert.deepEqual(shareInfo(dir), lan)
+  assert.ok(shareAddress(dir) !== null)
+})
+
+test('sidebar shareCopy selects LAN or public copy by scope', () => {
+  const bind = (dict) => (key, params = {}) => dict[key].replace(/\{(\w+)\}/gu, (_, k) => params[k] ?? '')
+  const zhT = bind(localeZh)
+  const enT = bind(localeEn)
+
+  const lanZh = shareCopy({ expiresAt: '2026-11-07T12:30:00.000Z', scope: 'lan' }, zhT, '20:30')
+  assert.equal(lanZh.isPublic, false)
+  assert.match(lanZh.hint, /同一 Wi-Fi/u)
+  assert.equal(lanZh.until, '20:30 自动关闭')
+
+  const pubZh = shareCopy({ expiresAt: '2026-11-07T12:30:00.000Z', scope: 'public' }, zhT, '20:30')
+  assert.equal(pubZh.isPublic, true)
+  assert.equal(pubZh.hint, '任何网络都能打开，拿到链接的人都能玩。到 20:30 自动关闭。')
+  assert.equal(pubZh.until, null)
+
+  const pubEn = shareCopy({ expiresAt: '2026-11-07T12:30:00.000Z', scope: 'public' }, enT, '20:30')
+  assert.equal(pubEn.isPublic, true)
+  assert.match(pubEn.hint, /Anyone on any network.*20:30/u)
+})
+
+test('sidebar commandErrorCopy localizes NO_TUNNEL by language and platform and keeps other errors unchanged', () => {
+  const bind = (dict) => (key, params = {}) => dict[key].replace(/\{(\w+)\}/gu, (_, k) => params[k] ?? '')
+  const zhT = bind(localeZh)
+  const enT = bind(localeEn)
+
+  const macErr = JSON.stringify({ code: 'NO_TUNNEL', platform: 'darwin', install: 'brew install cloudflared' })
+  assert.equal(commandErrorCopy(macErr, zhT), '公网链接需要先安装 cloudflared。macOS 上运行：brew install cloudflared')
+  assert.equal(commandErrorCopy(macErr, enT), 'A public link requires cloudflared. On macOS, run: brew install cloudflared')
+
+  const winErr = JSON.stringify({ code: 'NO_TUNNEL', platform: 'win32', install: 'winget install --id Cloudflare.cloudflared' })
+  assert.equal(commandErrorCopy(winErr, zhT), '公网链接需要先安装 cloudflared。Windows 上运行：winget install --id Cloudflare.cloudflared')
+  assert.equal(commandErrorCopy(winErr, enT), 'A public link requires cloudflared. On Windows, run: winget install --id Cloudflare.cloudflared')
+
+  const linuxErr = JSON.stringify({
+    code: 'NO_TUNNEL',
+    platform: 'linux',
+    install: 'https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/',
+  })
+  assert.match(commandErrorCopy(linuxErr, zhT), /公网链接需要先安装 cloudflared.*developers\.cloudflare\.com/u)
+  assert.match(commandErrorCopy(linuxErr, enT), /A public link requires cloudflared.*developers\.cloudflare\.com/u)
+
+  assert.equal(commandErrorCopy('Build the game before sharing it.', zhT), 'Build the game before sharing it.')
+  assert.equal(commandErrorCopy('Build the game before sharing it.', enT), 'Build the game before sharing it.')
+})
+
+test('share heartbeat file is written immediately on startShare, refreshed on interval, and removed with timer cleared on stopShare', async (t) => {
+  const { dir } = await tempProject(t)
+  await buildProject(dir)
+  const info = await startShare(dir, 5, { host: '127.0.0.1', heartbeatMs: 40 })
+  t.after(() => stopShare(dir))
+
+  const hbPath = shareHeartbeatPath(dir)
+  const beat1 = JSON.parse(await readFile(hbPath, 'utf8'))
+  assert.equal(beat1.url, info.url)
+  assert.ok(Number.isFinite(Date.parse(beat1.at)))
+
+  let beat2
+  await waitForCondition(async () => {
+    try {
+      const current = JSON.parse(await readFile(hbPath, 'utf8'))
+      if (Date.parse(current.at) > Date.parse(beat1.at)) {
+        beat2 = current
+        return true
+      }
+    } catch { /* retry */ }
+    return false
+  })
+  assert.equal(beat2.url, info.url)
+  assert.ok(Date.parse(beat2.at) > Date.parse(beat1.at), 'heartbeat timestamp advances on interval')
+
+  assert.equal(stopShare(dir), true)
+  await assert.rejects(readFile(hbPath, 'utf8'), { code: 'ENOENT' })
+
+  // Wait more than two heartbeat periods to verify the interval timer was cleared and does not recreate the file.
+  await new Promise(r => setTimeout(r, 100))
+  await assert.rejects(readFile(hbPath, 'utf8'), { code: 'ENOENT' })
+})
+
+test('share heartbeat file is removed on TTL expiry and on unexpected tunnel exit', async (t) => {
+  const { dir: lanDir } = await tempProject(t)
+  await buildProject(lanDir)
+  const lan = await startShare(lanDir, 5, { host: '127.0.0.1', ttlMs: 120, heartbeatMs: 40 })
+  assert.equal(JSON.parse(await readFile(shareHeartbeatPath(lanDir), 'utf8')).url, lan.url)
+  await waitForCondition(async () => {
+    if (shareInfo(lanDir) !== null) return false
+    try { await readFile(shareHeartbeatPath(lanDir), 'utf8'); return false } catch { return true }
+  })
+  assert.equal(shareInfo(lanDir), null)
+  await assert.rejects(readFile(shareHeartbeatPath(lanDir), 'utf8'), { code: 'ENOENT' })
+
+  const { dir: pubDir, command } = await fakeCloudflared(t, 'drop')
+  const pub = await startShare(pubDir, 5, { scope: 'public', cloudflaredPath: command, tunnelTimeoutMs: 2_000, heartbeatMs: 40 })
+  assert.equal(JSON.parse(await readFile(shareHeartbeatPath(pubDir), 'utf8')).url, pub.url)
+  await waitForCondition(async () => {
+    if (shareInfo(pubDir) !== null) return false
+    try { await readFile(shareHeartbeatPath(pubDir), 'utf8'); return false } catch { return true }
+  })
+  assert.equal(shareInfo(pubDir), null)
+  await assert.rejects(readFile(shareHeartbeatPath(pubDir), 'utf8'), { code: 'ENOENT' })
+})
+
+test('sidebar liveShare requires a matching, fresh heartbeat and an unexpired share', () => {
+  const now = Date.parse('2026-11-08T12:00:00.000Z')
+  const share = {
+    url: 'http://192.168.1.5:8123/tok/',
+    qrSvg: '<svg/>',
+    expiresAt: '2026-11-08T12:30:00.000Z',
+    scope: 'lan',
+  }
+  const freshBeat = { url: share.url, at: '2026-11-08T11:59:45.000Z' }
+
+  // 1. Missing heartbeat
+  assert.equal(liveShare(share, null, now), undefined)
+  assert.equal(liveShare(share, undefined, now), undefined)
+  // 2. Stale heartbeat (> 60s old)
+  assert.equal(liveShare(share, { url: share.url, at: '2026-11-08T11:58:59.000Z' }, now), undefined)
+  // 3. Mismatched URL
+  assert.equal(liveShare(share, { url: 'http://192.168.1.5:8123/other/', at: freshBeat.at }, now), undefined)
+  // 4. Expired state.share (or null state.share)
+  assert.equal(liveShare({ ...share, expiresAt: '2026-11-08T11:59:59.000Z' }, freshBeat, now), undefined)
+  assert.equal(liveShare(null, freshBeat, now), undefined)
+  // 5. Healthy live share
+  assert.equal(liveShare(share, freshBeat, now), share)
+})
+
+test('findGh and requireGh locate a configured binary or throw NO_GH with platform install hints', async (t) => {
+  const { root, command } = await fakeCloudflared(t)
+  assert.equal(findGh(command), command)
+  const missing = join(root, 'no-such-gh')
+  assert.equal(findGh(missing), undefined)
+  assert.throws(() => requireGh(missing), (err) => err.code === 'NO_GH' && /brew install gh/u.test(err.message))
+  assert.match(ghInstallHint('darwin'), /brew install gh/u)
+  assert.match(ghInstallHint('win32'), /winget install --id GitHub\.cli/u)
+  assert.match(ghInstallHint('linux'), /https:\/\/cli\.github\.com/u)
+})
+
+test('sidebar commandErrorCopy localizes NO_GH, GH_NOT_LOGGED_IN, GH_FAILED and REPO_NOT_OURS in zh and en without agent instructions', () => {
+  const bind = (dict) => (key, params = {}) => dict[key].replace(/\{(\w+)\}/gu, (_, k) => params[k] ?? '')
+  const zhT = bind(localeZh)
+  const enT = bind(localeEn)
+
+  const noGhMac = JSON.stringify({ code: 'NO_GH', platform: 'darwin', install: 'brew install gh' })
+  assert.match(commandErrorCopy(noGhMac, zhT), /发布到 GitHub 需要先安装 GitHub CLI（gh）。macOS 上运行：brew install gh/u)
+  assert.match(commandErrorCopy(noGhMac, enT), /Publishing to GitHub requires GitHub CLI \(gh\)\. On macOS, run: brew install gh/u)
+  assert.doesNotMatch(commandErrorCopy(noGhMac, zhT) + commandErrorCopy(noGhMac, enT), /do not download|Tell the user/iu)
+
+  const noGhWin = JSON.stringify({ code: 'NO_GH', platform: 'win32', install: 'winget install --id GitHub.cli' })
+  assert.match(commandErrorCopy(noGhWin, zhT), /Windows 上运行：winget install --id GitHub\.cli/u)
+  assert.match(commandErrorCopy(noGhWin, enT), /On Windows, run: winget install --id GitHub\.cli/u)
+
+  const noGhLinux = JSON.stringify({ code: 'NO_GH', platform: 'linux', install: 'https://cli.github.com' })
+  assert.match(commandErrorCopy(noGhLinux, zhT), /https:\/\/cli\.github\.com/u)
+  assert.match(commandErrorCopy(noGhLinux, enT), /https:\/\/cli\.github\.com/u)
+
+  const notLoggedIn = JSON.stringify({ code: 'GH_NOT_LOGGED_IN' })
+  assert.equal(commandErrorCopy(notLoggedIn, zhT), 'GitHub CLI 还没有登录。请在终端运行 gh auth login 登录你的 GitHub 账号。')
+  assert.equal(commandErrorCopy(notLoggedIn, enT), 'GitHub CLI is not signed in. Run gh auth login in your terminal to sign in to your GitHub account.')
+  assert.doesNotMatch(commandErrorCopy(notLoggedIn, zhT) + commandErrorCopy(notLoggedIn, enT), /Tell the user|do not run/iu)
+
+  const ghFailed = JSON.stringify({ code: 'GH_FAILED', message: 'Could not connect to GitHub via gh: read: connection reset by peer' })
+  assert.equal(commandErrorCopy(ghFailed, zhT), '连接 GitHub 失败，检查网络或代理后重试')
+  assert.equal(commandErrorCopy(ghFailed, enT), 'Could not connect to GitHub; check your network or proxy and try again')
+
+  const repoNotOurs = JSON.stringify({ code: 'REPO_NOT_OURS', repo: 'octocat/dsh-games' })
+  assert.match(commandErrorCopy(repoNotOurs, zhT), /仓库 octocat\/dsh-games 已存在且不是本插件创建的.*githubRepo/u)
+  assert.match(commandErrorCopy(repoNotOurs, enT), /Repository octocat\/dsh-games already exists and was not created by this plugin.*githubRepo/u)
+})
+
+test('sidebar publishState pure function distinguishes unpublished, published, outdated buildId, and deploying status', () => {
+  const bind = (dict) => (key, params = {}) => dict[key].replace(/\{(\w+)\}/gu, (_, k) => params[k] ?? '')
+  const zhT = bind(localeZh)
+  const enT = bind(localeEn)
+
+  // 1. Unpublished
+  const unpub = publishState(null, 'build-1', zhT)
+  assert.equal(unpub.status, 'unpublished')
+  assert.equal(unpub.hasUpdate, false)
+  assert.equal(unpub.deploying, false)
+  assert.equal(unpub.buttonLabel, '发布到 GitHub')
+  assert.equal(unpub.hint, null)
+  assert.equal(unpub.outdatedHint, null)
+  assert.equal(publishState(undefined, 'build-1', enT).buttonLabel, 'Publish to GitHub')
+
+  const record = {
+    url: 'https://octocat.github.io/dsh-games/moon-garden/',
+    repo: 'octocat/dsh-games',
+    slug: 'moon-garden',
+    publishedAt: '2026-11-08T06:00:00.000Z',
+    buildId: 'build-1',
+    status: 'built',
+  }
+
+  // 2. Published and up-to-date with current buildId
+  const currentZh = publishState(record, 'build-1', zhT)
+  assert.equal(currentZh.status, 'published')
+  assert.equal(currentZh.hasUpdate, false)
+  assert.equal(currentZh.deploying, false)
+  assert.equal(currentZh.buttonLabel, '发布到 GitHub')
+  assert.equal(currentZh.hint, '已发布到 GitHub Pages（octocat/dsh-games）')
+  assert.equal(currentZh.outdatedHint, null)
+
+  // 3. Local build is newer than published buildId
+  const outdatedZh = publishState(record, 'build-2', zhT)
+  assert.equal(outdatedZh.status, 'outdated')
+  assert.equal(outdatedZh.hasUpdate, true)
+  assert.equal(outdatedZh.buttonLabel, '更新发布')
+  assert.equal(outdatedZh.outdatedHint, '有新的构建还没发布')
+
+  const outdatedEn = publishState(record, 'build-2', enT)
+  assert.equal(outdatedEn.status, 'outdated')
+  assert.equal(outdatedEn.hasUpdate, true)
+  assert.equal(outdatedEn.buttonLabel, 'Update published')
+  assert.equal(outdatedEn.outdatedHint, 'A newer build has not been published yet')
+
+  // 4. Pages still deploying (status === 'building')
+  const deployingZh = publishState({ ...record, status: 'building' }, 'build-1', zhT)
+  assert.equal(deployingZh.deploying, true)
+  assert.equal(deployingZh.hint, 'GitHub 正在部署，一两分钟后可以打开')
+  const deployingEn = publishState({ ...record, status: 'building' }, 'build-1', enT)
+  assert.equal(deployingEn.deploying, true)
+  assert.match(deployingEn.hint, /GitHub is deploying/u)
 })

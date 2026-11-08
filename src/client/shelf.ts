@@ -13,8 +13,16 @@ export interface Listing { entries: DirEntry[]; truncated: boolean }
 export type ListDir = (path: string, signal: AbortSignal) => Promise<Listing>
 export type ReadText = (path: string, signal: AbortSignal) => Promise<string>
 
+export interface OnlineShelfMeta {
+  url: string
+  sourceId: string
+  sourceName: string
+  sourceHost: string
+  slug: string
+}
+
 export interface ShelfGame {
-  /** Absolute project folder. */
+  /** Absolute project folder (or unique online identifier for online games). */
   project: string
   title: string
   /** `2d`, `3d`, or undefined when the manifest names no known template. */
@@ -24,8 +32,10 @@ export interface ShelfGame {
   versions: number
   /** ISO time of the last studio change; empty when unknown. */
   updatedAt: string
-  /** Workspace path of the cover picture, if the project has one. */
+  /** Workspace path (or https URL for online games) of the cover picture, if the project has one. */
   cover: string | undefined
+  /** Present when the tile comes from a subscribed online game source. */
+  online?: OnlineShelfMeta
 }
 
 export interface ShelfScan { games: ShelfGame[]; partial: boolean }
@@ -148,18 +158,35 @@ export type ShelfSort = 'recent' | 'versions' | 'name'
 
 const collator = new Intl.Collator(['zh-Hans-CN', 'en'], { numeric: true, sensitivity: 'base' })
 
+/** Merge workspace games and subscribed online games, most recent first when online games are present. */
+export function mergeShelfGames(localGames: ShelfGame[], onlineGames: ShelfGame[]): ShelfGame[] {
+  if (onlineGames.length === 0) return localGames
+  return [...localGames, ...onlineGames].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || collator.compare(a.title, b.title))
+}
+
 /** The games the wall shows for a filter and an order; the scan already gives most recent first. */
-export function viewGames(games: ShelfGame[], filter: ShelfFilter, sort: ShelfSort): ShelfGame[] {
-  const shown = games.filter(game => filter === 'all' || game.dimension === filter)
+export function viewGames(games: ShelfGame[], filter: ShelfFilter, sort: ShelfSort, onlineOnly = false): ShelfGame[] {
+  const shown = games.filter(game => (!onlineOnly || Boolean(game.online)) && (filter === 'all' || game.dimension === filter))
   if (sort === 'versions') return [...shown].sort((a, b) => b.versions - a.versions || b.updatedAt.localeCompare(a.updatedAt))
   if (sort === 'name') return [...shown].sort((a, b) => collator.compare(a.title, b.title))
   return shown
 }
 
-export function dimensionCounts(games: ShelfGame[]): Record<ShelfFilter, number> {
+export function dimensionCounts(games: ShelfGame[], onlineOnly = false): Record<ShelfFilter, number> {
+  const pool = onlineOnly ? games.filter(game => Boolean(game.online)) : games
   return {
-    all: games.length,
-    '2d': games.filter(game => game.dimension === '2d').length,
-    '3d': games.filter(game => game.dimension === '3d').length,
+    all: pool.length,
+    '2d': pool.filter(game => game.dimension === '2d').length,
+    '3d': pool.filter(game => game.dimension === '3d').length,
   }
+}
+
+/** Local project folders to pass to exportWall or publishWall (online games are never copied or republished). */
+export function localWallProjects(games: ShelfGame[]): string[] {
+  return games.filter(game => !game.online).map(game => game.project)
+}
+
+/** Number of built local games in the list; determines whether Export wall / Publish wall buttons are enabled. */
+export function builtLocalGamesCount(games: ShelfGame[]): number {
+  return games.filter(game => !game.online && game.built).length
 }
