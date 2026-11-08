@@ -457,6 +457,10 @@
   var timerEl = el('div', pillCss + ';right:2.2vmin;font-variant-numeric:tabular-nums', hud);
   var shieldEl = el('div', 'position:absolute;left:2.2vmin;top:calc(2.2vmin + 2.6em);padding:.3em .8em;border-radius:999px;'
     + 'background:rgba(120,220,255,.25);border:1px solid rgba(160,235,255,.5);font-size:.8em;font-weight:700;display:none', hud);
+  var joyBase = el('div', 'position:absolute;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;'
+    + 'border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);display:none;pointer-events:none', hud);
+  var joyKnob = el('div', 'position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;'
+    + 'border-radius:50%;background:rgba(255,255,255,.55);box-shadow:0 2px 8px rgba(0,0,0,.35)', joyBase);
   var card = el('div', 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;width:min(86vw,560px);'
     + 'padding:1.4em 1.2em;border-radius:22px;background:rgba(14,16,38,.5);border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(8px)', hud);
   var cardTitle = el('div', 'font-size:2.3em;font-weight:800;letter-spacing:.02em;color:#ffe2a8;line-height:1.15', card);
@@ -508,6 +512,7 @@
   function setPhase(next) {
     phase = next;
     endedAt = performance.now();
+    if (next !== 'playing' && drag) { drag = null; joyBase.style.display = 'none'; }
     if (next === 'title') showCard(TITLE, 'Collect the lanterns, dodge the thorn creatures!', 'Press any key / tap to start');
     else if (next === 'playing') card.style.display = 'none';
     else if (next === 'won') showCard('Night falls safely', 'You collected ' + score + ' lantern' + (score === 1 ? '' : 's') + '. Best: ' + best, 'Press any key / tap to play again');
@@ -550,15 +555,30 @@
   canvas.addEventListener('pointerdown', function (event) {
     canvas.focus();
     if (phase !== 'playing') { if (canRestart()) start(); return; }
-    drag = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, dy: 0 };
-    try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* not captured */ }
+    if (!drag) {
+      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, dy: 0 };
+      joyBase.style.display = 'block';
+      joyBase.style.left = event.clientX + 'px';
+      joyBase.style.top = event.clientY + 'px';
+      joyKnob.style.transform = 'translate(0px,0px)';
+      try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* not captured */ }
+    }
   });
   canvas.addEventListener('pointermove', function (event) {
     if (!drag || event.pointerId !== drag.id) return;
     drag.dx = event.clientX - drag.x;
     drag.dy = event.clientY - drag.y;
+    var r = 42, d = Math.hypot(drag.dx, drag.dy);
+    var kx = d > r ? drag.dx / d * r : drag.dx;
+    var ky = d > r ? drag.dy / d * r : drag.dy;
+    joyKnob.style.transform = 'translate(' + kx.toFixed(1) + 'px,' + ky.toFixed(1) + 'px)';
   });
-  function endDrag(event) { if (drag && event.pointerId === drag.id) drag = null; }
+  function endDrag(event) {
+    if (drag && event.pointerId === drag.id) {
+      drag = null;
+      joyBase.style.display = 'none';
+    }
+  }
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
 

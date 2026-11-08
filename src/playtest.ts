@@ -28,7 +28,8 @@ export const GAME_STATE_CONTRACT = 'The playtest autopilot reads window.__gameSt
   + 'A game not played by steering one hero with the arrow keys (grid, cards, aiming, rhythm, building, management) should also define '
   + 'window.__autoplay(state): during a playtest it is called about 10 times a second with the current __gameState() and makes one sensible move '
   + 'through the game\'s own functions (a valid swap, the first playable card, a shot at the hoop), so the playtest can play the real loop; '
-  + 'players never trigger it, so it needs no rule or menu switch. Without it the autopilot only holds arrow keys toward the nearest pickup.'
+  + 'players never trigger it, so it needs no rule or menu switch. Without it the autopilot only holds arrow keys toward the nearest pickup. '
+  + 'Every keyboard action (steering, jump, dash, skills, cards) must also work by touch on phones: give active skills or jump/dash on-screen touch buttons bound to pointerdown (with stopPropagation), and track virtual joystick / button pointers by pointerId so one thumb can steer while the other taps a skill.'
 
 export interface PlaytestOptions {
   /** How long the autopilot plays, in seconds (1–60). */

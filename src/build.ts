@@ -30,8 +30,8 @@ const CSP = [
   "form-action 'none'",
 ].join('; ')
 
-const STYLE = 'html,body{margin:0;height:100%;overflow:hidden;background:#000}'
-  + 'canvas{display:block;width:100vw;height:100vh;touch-action:none;outline:none}'
+const STYLE = 'html,body{margin:0;width:100%;height:100%;height:100dvh;overflow:hidden;background:#000;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}'
+  + 'canvas{display:block;width:100vw;height:100vh;height:100dvh;touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}'
 
 const RUNTIME_FILES: Record<RuntimeId, URL> = {
   // Built by scripts/build.mjs; resolves to <package>/lib/vendor from both src/ and lib/.
@@ -96,7 +96,7 @@ export async function renderHtml(dir: string, manifest: GameManifest): Promise<s
   return [
     '<!doctype html>',
     '<html lang="en"><head><meta charset="utf-8">',
-    '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">',
+    '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">',
     `<meta http-equiv="Content-Security-Policy" content="${CSP}">`,
     `<title>${escapeHtml(manifest.title)}</title>`,
     `<style>${STYLE}</style></head><body><canvas id="game" tabindex="0"></canvas>`,

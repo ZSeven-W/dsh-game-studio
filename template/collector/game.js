@@ -920,7 +920,10 @@
     if (phase === 'title') { startGame(); return; }
     if (phase === 'won' || phase === 'lost') { if (restartGuard <= 0) startGame(); return; }
     if (phase === 'playing') {
-      joystick = { id: e.pointerId, ox: e.clientX, oy: e.clientY, dx: 0, dy: 0 };
+      if (!joystick) {
+        joystick = { id: e.pointerId, ox: e.clientX, oy: e.clientY, dx: 0, dy: 0 };
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      }
       e.preventDefault();
     }
   });

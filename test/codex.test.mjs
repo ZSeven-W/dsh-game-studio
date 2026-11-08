@@ -143,7 +143,13 @@ test('a picture Codex already saved is kept when the run is stopped before Codex
   const { dir, command } = await setup(t, { mode: 'save-hang' })
   const generation = await prepareGeneration(dir, 'hero', 'a fox', 'auto')
   const controller = new AbortController()
-  setTimeout(() => { controller.abort() }, 500)
+  const savedFile = join(paths.codexRun(dir, 'game-studio-test5-1'), 'image.png')
+  ;(async () => {
+    for (let i = 0; i < 100; i++) {
+      try { await stat(savedFile); break } catch { await new Promise(r => setTimeout(r, 40)) }
+    }
+    controller.abort()
+  })()
   const result = await runCodexBatch(dir, generation, batch(command, 1), 'game-studio-test5', controller.signal)
   assert.equal(result.status, 'killed')
   assert.equal(result.candidates.length, 1)
