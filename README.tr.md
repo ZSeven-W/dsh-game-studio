@@ -14,7 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>Paket: <code>@zseven-w/dsh-game-studio</code> &middot; Güncel eklenti sürümü: <code>0.1.0-rc.5</code> &middot; DSH <code>0.2.1-rc.5</code> ile test edildi</sub>
+  <sub>Paket: <code>@zseven-w/dsh-game-studio</code> &middot; Güncel eklenti sürümü: <code>0.1.0-rc.5</code> &middot; DSH <code>0.2.1-rc.5</code> ile test edildi</sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>Canlı Demo Oyun Duvarı (10 oynanabilir 2D ve 3D oyun)</strong></a> &middot; <sub>Çevrimiçi kaynaklarda abone olun: <code>finiking/dsh-games</code></sub>
 </p>
 
 <br />
@@ -45,6 +46,8 @@ Ajandan günlük dille bir oyun isteyin — "3D bir oyun: kırmızı bir panda o
 | 🗂️ **Oyunlarım** | Kenar çubuğundaki **+** ile **Game Studio · My games**'i seçin: çalışma alanındaki her oyun son test görüntüsüyle bir kutucuk olarak listelenir; 2D/3D süzgeci ve tarih, sürüm ya da ada göre sıralama vardır. Tıklayıp oynayın; agent da token da gerekmez. Ayrıca yayınlanmış oyunlara kendi oyunlarınızın yanında göz atıp oynamak için çevrimiçi oyun kaynaklarına (`owner/repo`, GitHub depo URL'si veya GitHub Pages URL'si) abone olabilirsiniz. **Export wall**, yerel oyunlarınızı arkadaşlarınıza gönderebileceğiniz tek bir çevrimdışı sayfada toplar. |
 
 ## Onunla yapılan oyunlar
+
+> 🎮 **Tarayıcınızda (masaüstü veya mobil) 10 test oyununu canlı deneyin:** **[finiking.github.io/dsh-games/wall](https://finiking.github.io/dsh-games/wall/)** — veya kenar çubuğunuzda abone olup oynamak için yerel Oyun Duvarınızdaki **Çevrimiçi kaynaklar** altına `finiking/dsh-games` yazın.
 
 Testlerimizden dört oyun. Her biri yeni bir oturumda, altındaki tek cümleyle başladı (istemler Çinceden çevrildi); bazıları sonradan aynı oturumdaki isteklerle düzeltildi, belirtildiği gibi. Oynanış, her oyunun kendi otomatik oynatıcısıyla kaydedildi.
 

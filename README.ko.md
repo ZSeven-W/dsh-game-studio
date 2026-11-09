@@ -14,7 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>패키지: <code>@zseven-w/dsh-game-studio</code> &middot; 현재 플러그인 릴리스: <code>0.1.0-rc.5</code> &middot; DSH <code>0.2.1-rc.5</code>로 테스트됨</sub>
+  <sub>패키지: <code>@zseven-w/dsh-game-studio</code> &middot; 현재 플러그인 릴리스: <code>0.1.0-rc.5</code> &middot; DSH <code>0.2.1-rc.5</code>로 테스트됨</sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>라이브 데모 게임 월 (10종의 2D/3D 게임 바로 플레이)</strong></a> &middot; <sub>온라인 소스 구독: <code>finiking/dsh-games</code></sub>
 </p>
 
 <br />
@@ -45,6 +46,8 @@
 | 🗂️ **내 게임** | 오른쪽 사이드바의 **+** 에서 **Game Studio · My games**를 고르면, 워크스페이스의 게임이 최근 플레이테스트 화면을 표지로 한 타일로 펼쳐집니다. 2D/3D로 거르고 최근순·버전 수·이름순으로 정렬할 수 있으며, 클릭하면 바로 플레이합니다(agent·토큰 사용 없음). 온라인 게임 소스(`owner/repo`, GitHub 저장소 URL 또는 GitHub Pages URL)를 구독하면 게시된 게임을 내 게임과 함께 둘러보고 플레이할 수도 있습니다. **Export wall**은 로컬 게임을 오프라인 페이지 하나로 묶어 친구에게 보낼 수 있게 합니다. |
 
 ## 이걸로 만든 게임
+
+> 🎮 **브라우저에서 10종의 테스트 게임을 바로 플레이해 보세요(PC·모바일 지원):** **[finiking.github.io/dsh-games/wall](https://finiking.github.io/dsh-games/wall/)** — 또는 로컬 게임 월의 온라인 소스에 `finiking/dsh-games`를 입력해 사이드바에서 구독하고 플레이할 수 있습니다.
 
 테스트하며 만든 게임 네 개입니다. 모두 새 세션에서 그림 아래 한 문장으로 시작했습니다(프롬프트는 중국어 번역). 일부는 같은 세션에서 나중에 수정을 요청했고, 표시해 두었습니다. 플레이 영상은 각 게임의 자체 오토플레이로 녹화했습니다.
 

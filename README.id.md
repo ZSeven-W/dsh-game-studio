@@ -14,7 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>Paket: <code>@zseven-w/dsh-game-studio</code> &middot; Rilis plugin saat ini: <code>0.1.0-rc.5</code> &middot; Diuji dengan DSH <code>0.2.1-rc.5</code></sub>
+  <sub>Paket: <code>@zseven-w/dsh-game-studio</code> &middot; Rilis plugin saat ini: <code>0.1.0-rc.5</code> &middot; Diuji dengan DSH <code>0.2.1-rc.5</code></sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>Dinding Game Demo Langsung (10 game 2D &amp; 3D siap dimainkan)</strong></a> &middot; <sub>Berlangganan di Sumber online: <code>finiking/dsh-games</code></sub>
 </p>
 
 <br />
@@ -45,6 +46,8 @@ Mintalah sebuah game kepada agen dengan kata-kata sederhana — "game 3D: seekor
 | 🗂️ **Game saya** | Buka **+** di bilah samping dan pilih **Game Studio · My games**: setiap game di ruang kerja tampil sebagai ubin dengan gambar uji main terakhir, bisa disaring 2D/3D dan diurutkan menurut waktu, jumlah versi, atau nama. Klik untuk bermain, tanpa agent dan tanpa token. Anda juga dapat berlangganan sumber game online (`owner/repo`, URL repositori GitHub, atau URL GitHub Pages) untuk menjelajahi dan memainkan game yang telah dipublikasikan bersama game Anda sendiri. **Export wall** mengemas game lokal Anda menjadi satu halaman offline untuk dikirim ke teman. |
 
 ## Game yang dibuat dengannya
+
+> 🎮 **Coba langsung 10 game uji coba di browser Anda (desktop atau ponsel):** **[finiking.github.io/dsh-games/wall](https://finiking.github.io/dsh-games/wall/)** — atau masukkan `finiking/dsh-games` pada **Sumber online** di dinding game lokal Anda untuk berlangganan dan memainkannya di bilah sisi.
 
 Empat game dari uji coba kami. Masing-masing dimulai dari satu kalimat di bawahnya, dalam sesi baru (prompt diterjemahkan dari bahasa Mandarin); beberapa kemudian disempurnakan lewat permintaan lanjutan di sesi yang sama, seperti dicatat. Gameplay direkam dengan autoplay bawaan tiap game.
 

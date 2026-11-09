@@ -14,7 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>Paket: <code>@zseven-w/dsh-game-studio</code> &middot; Aktuelles Plugin-Release: <code>0.1.0-rc.5</code> &middot; Getestet mit DSH <code>0.2.1-rc.5</code></sub>
+  <sub>Paket: <code>@zseven-w/dsh-game-studio</code> &middot; Aktuelles Plugin-Release: <code>0.1.0-rc.5</code> &middot; Getestet mit DSH <code>0.2.1-rc.5</code></sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>Live-Demo-Spielewand (10 spielbare 2D- &amp; 3D-Spiele)</strong></a> &middot; <sub>In Online-Quellen abonnieren: <code>finiking/dsh-games</code></sub>
 </p>
 
 <br />
@@ -45,6 +46,8 @@ Bitte den Agenten in einfachen Worten um ein Spiel — „ein 3D-Spiel: ein rote
 | 🗂️ **Meine Spiele** | Über das **+** der Seitenleiste **Game Studio · My games** wählen: jedes Spiel im Arbeitsbereich als Kachel mit dem Bild des letzten Testlaufs, filterbar nach 2D/3D und sortierbar nach Datum, Versionen oder Name. Ein Klick zum Spielen – ohne Agent, ohne Tokens. Du kannst außerdem Online-Spielequellen abonnieren (`owner/repo`, eine GitHub-Repository-URL oder eine GitHub-Pages-URL), um veröffentlichte Spiele neben deinen eigenen zu durchstöbern und zu spielen. **Export wall** packt deine lokalen Spiele in eine Offline-Seite zum Weiterschicken. |
 
 ## Damit gebaute Spiele
+
+> 🎮 **10 Testspiele direkt im Browser ausprobieren (Desktop oder Mobil):** **[finiking.github.io/dsh-games/wall](https://finiking.github.io/dsh-games/wall/)** — oder `finiking/dsh-games` unter **Online-Quellen** in deiner lokalen Spielewand eintragen, um sie direkt in der Seitenleiste zu abonnieren und zu spielen.
 
 Vier Spiele aus unseren Testläufen. Jedes begann mit dem Satz darunter in einer neuen Sitzung (Prompts aus dem Chinesischen übersetzt); bei einigen haben spätere Anfragen in derselben Sitzung nachgebessert, wie vermerkt. Aufgenommen mit dem eingebauten Autoplay des jeweiligen Spiels.
 

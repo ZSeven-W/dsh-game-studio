@@ -14,7 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.5</code> &middot; Tested with DSH <code>0.2.1-rc.5</code></sub>
+  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.5</code> &middot; Tested with DSH <code>0.2.1-rc.5</code></sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>Live Demo Game Wall (10 playable 2D &amp; 3D games)</strong></a> &middot; <sub>Subscribe in Online Sources: <code>finiking/dsh-games</code></sub>
 </p>
 
 <br />
@@ -45,6 +46,8 @@ Ask the agent for a game in plain words — "a 3D game: a red panda collects bam
 | 🗂️ **My games** | Open the sidebar's **+** and pick **Game Studio · My games**: every game in the workspace as a tile with its latest playtest picture, filtered by 2D/3D and sorted by recency, versions or name. Click one to play it — no agent, no tokens. You can also subscribe to online game sources (`owner/repo`, GitHub repository URL, or GitHub Pages URL) to browse and play published games alongside your own. **Export wall** packs your local games into one offline page to send to friends. |
 
 ## Games made with it
+
+> 🎮 **Try 10 test games live in your browser (desktop or mobile):** **[finiking.github.io/dsh-games/wall](https://finiking.github.io/dsh-games/wall/)** — or enter `finiking/dsh-games` under **Online sources** in your local Game Wall to subscribe and play them in your sidebar.
 
 Four games from our test runs. Each started from the one sentence under it, in a fresh session (prompts translated from Chinese); later requests in the same session tweaked some of them, as noted. Gameplay is recorded with each game's own autoplay.
 

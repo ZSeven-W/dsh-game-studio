@@ -1,7 +1,7 @@
 {
   "name": "@zseven-w/dsh-game-studio",
   "version": "0.1.0-rc.5",
-  "description": "Game studio for DeepSeek Harness: describe a small game, play it in the right sidebar, and swap its art for your own generated assets.",
+  "description": "Describe a small game in one sentence, play it in the DeepSeek Harness sidebar, swap in AI art, and publish to GitHub Pages or Cloudflare in one click.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -38,7 +38,11 @@
     "dsh-plugin",
     "deepseek-harness",
     "game",
-    "gamedev"
+    "gamedev",
+    "ai-game-generator",
+    "html5-games",
+    "threejs",
+    "github-pages"
   ],
   "engines": {
     "node": ">=24.11.0"

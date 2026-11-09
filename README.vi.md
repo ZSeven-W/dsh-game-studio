@@ -14,7 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>Gói: <code>@zseven-w/dsh-game-studio</code> &middot; Bản phát hành plugin hiện tại: <code>0.1.0-rc.5</code> &middot; Đã thử nghiệm với DSH <code>0.2.1-rc.5</code></sub>
+  <sub>Gói: <code>@zseven-w/dsh-game-studio</code> &middot; Bản phát hành plugin hiện tại: <code>0.1.0-rc.5</code> &middot; Đã thử nghiệm với DSH <code>0.2.1-rc.5</code></sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>Tường Trò Chơi Demo Trực Tuyến (10 trò chơi 2D &amp; 3D chơi ngay)</strong></a> &middot; <sub>Đăng ký trong Nguồn trực tuyến: <code>finiking/dsh-games</code></sub>
 </p>
 
 <br />
@@ -45,6 +46,8 @@ Yêu cầu agent tạo một trò chơi bằng lời lẽ tự nhiên — "một
 | 🗂️ **Trò chơi của tôi** | Mở nút **+** ở thanh bên và chọn **Game Studio · My games**: mỗi trò chơi trong không gian làm việc là một ô kèm ảnh lần chơi thử gần nhất, lọc theo 2D/3D và sắp xếp theo thời gian, số phiên bản hoặc tên. Bấm là chơi, không cần agent, không tốn token. Bạn cũng có thể đăng ký theo dõi các nguồn trò chơi trực tuyến (`owner/repo`, URL kho lưu trữ GitHub hoặc URL GitHub Pages) để duyệt và chơi các trò chơi đã xuất bản cùng với trò chơi của riêng mình. **Export wall** gói các trò chơi cục bộ của bạn thành một trang ngoại tuyến để gửi cho bạn bè. |
 
 ## Những trò chơi làm bằng nó
+
+> 🎮 **Chơi thử trực tiếp 10 trò chơi trên trình duyệt (máy tính hoặc điện thoại):** **[finiking.github.io/dsh-games/wall](https://finiking.github.io/dsh-games/wall/)** — hoặc nhập `finiking/dsh-games` vào mục **Nguồn trực tuyến** trong tường trò chơi cục bộ để đăng ký và chơi ngay ở thanh bên.
 
 Bốn trò chơi từ các lần thử nghiệm. Mỗi trò bắt đầu từ một câu ghi bên dưới, trong một phiên mới (lời nhắc dịch từ tiếng Trung); một vài trò sau đó được chỉnh thêm bằng yêu cầu khác trong cùng phiên, như đã ghi chú. Cảnh chơi được ghi bằng chế độ tự chơi có sẵn của từng trò.
 

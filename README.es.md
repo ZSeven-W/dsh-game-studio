@@ -14,7 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>Paquete: <code>@zseven-w/dsh-game-studio</code> &middot; Versión actual del plugin: <code>0.1.0-rc.5</code> &middot; Probado con DSH <code>0.2.1-rc.5</code></sub>
+  <sub>Paquete: <code>@zseven-w/dsh-game-studio</code> &middot; Versión actual del plugin: <code>0.1.0-rc.5</code> &middot; Probado con DSH <code>0.2.1-rc.5</code></sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>Muro de juegos de demostración en vivo (10 juegos 2D y 3D jugables)</strong></a> &middot; <sub>Suscribirse en Fuentes en línea: <code>finiking/dsh-games</code></sub>
 </p>
 
 <br />
@@ -45,6 +46,8 @@ Pídele al agente un juego en palabras sencillas — «un juego 3D: un panda roj
 | 🗂️ **Mis juegos** | Abre el **+** de la barra lateral y elige **Game Studio · My games**: cada juego del espacio de trabajo como una tarjeta con la imagen de su última prueba, con filtro 2D/3D y orden por fecha, versiones o nombre. Un clic para jugar, sin agente y sin tokens. También puedes suscribirte a fuentes de juegos en línea (`owner/repo`, URL de repositorio de GitHub o URL de GitHub Pages) para explorar y jugar juegos publicados junto a los tuyos. **Export wall** reúne tus juegos locales en una sola página sin conexión para enviarla a tus amigos. |
 
 ## Juegos hechos con él
+
+> 🎮 **Prueba 10 juegos en vivo desde tu navegador (escritorio o móvil):** **[finiking.github.io/dsh-games/wall](https://finiking.github.io/dsh-games/wall/)** — o introduce `finiking/dsh-games` en las **Fuentes en línea** de tu muro de juegos local para suscribirte y jugarlos en la barra lateral.
 
 Cuatro juegos de nuestras pruebas. Cada uno empezó con la frase que aparece debajo, en una sesión nueva (instrucciones traducidas del chino); en algunos, peticiones posteriores en la misma sesión hicieron retoques, como se indica. Las partidas se grabaron con el piloto automático de cada juego.
 

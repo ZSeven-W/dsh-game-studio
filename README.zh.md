@@ -14,7 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>包名：<code>@zseven-w/dsh-game-studio</code> &middot; 当前插件版本：<code>0.1.0-rc.5</code> &middot; 已在 DSH <code>0.2.1-rc.5</code> 上测试</sub>
+  <sub>包名：<code>@zseven-w/dsh-game-studio</code> &middot; 当前插件版本：<code>0.1.0-rc.5</code> &middot; 已在 DSH <code>0.2.1-rc.5</code> 上测试</sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>在线试玩游戏墙（10 款实测 2D/3D 小游戏，手机/电脑点开即玩）</strong></a> &middot; <sub>在线源订阅：<code>finiking/dsh-games</code></sub>
 </p>
 
 <br />
@@ -45,6 +46,8 @@
 | 🗂️ **游戏墙** | 点右栏的 **+**，选 **游戏工坊 · 游戏墙**：工作区里做过的游戏铺满一面墙，封面是最近一次试玩的画面，可按 2D/3D 筛选，按最近修改、版本数或名称排序。点一下就能玩，不经过 agent，也不花 token。你还可以订阅在线游戏源（`owner/repo`、GitHub 仓库地址或 GitHub Pages 网址），把别人发布的游戏合入墙内直接游玩。**导出游戏墙**会把本地游戏打包成一个离线网页，发给朋友就能玩。 |
 
 ## 用它做出来的游戏
+
+> 🎮 **在线试玩游戏墙（10 款 2D/3D 实测游戏，支持手机触屏与电脑直玩）：[finiking.github.io/dsh-games/wall](https://finiking.github.io/dsh-games/wall/)** —— 安装插件后也可以在本地游戏墙「在线源」填入 `finiking/dsh-games` 直接订阅进侧栏游玩。
 
 下面是实测中做出的四个游戏。每个都是新会话里用图下那一句话开始的；有几个后来在同一会话里又提了修改，已注明。游戏画面用游戏自带的自动驾驶录制。
 

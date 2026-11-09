@@ -14,7 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>套件：<code>@zseven-w/dsh-game-studio</code> &middot; 目前的外掛版本：<code>0.1.0-rc.5</code> &middot; 已在 DSH <code>0.2.1-rc.5</code> 下測試</sub>
+  <sub>套件：<code>@zseven-w/dsh-game-studio</code> &middot; 目前的外掛版本：<code>0.1.0-rc.5</code> &middot; 已在 DSH <code>0.2.1-rc.5</code> 下測試</sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>線上試玩遊戲牆（10 款實測 2D/3D 小遊戲，手機/電腦點開即玩）</strong></a> &middot; <sub>線上來源訂閱：<code>finiking/dsh-games</code></sub>
 </p>
 
 <br />
@@ -45,6 +46,8 @@
 | 🗂️ **遊戲牆** | 點右欄的 **+**，選 **游戏工坊 · 游戏墙**（介面為簡體中文或英文 **Game Studio · My games**）：工作區裡做過的遊戲鋪滿一面牆，封面是最近一次試玩的畫面，可按 2D/3D 篩選，按最近修改、版本數或名稱排序。點一下就能玩，不經過 agent，也不花 token。你也可以訂閱線上遊戲來源（`owner/repo`、GitHub 儲存庫網址或 GitHub Pages 網址），與你自己的遊戲一起瀏覽並遊玩已發佈的遊戲。**导出游戏墙**（Export wall）會把你的本機遊戲打包成一個離線網頁，傳給朋友就能玩。 |
 
 ## 用它做出來的遊戲
+
+> 🎮 **線上試玩遊戲牆（10 款 2D/3D 實測遊戲，支援手機觸控與電腦直玩）：[finiking.github.io/dsh-games/wall](https://finiking.github.io/dsh-games/wall/)** —— 安裝外掛後也可以在本機遊戲牆「線上來源」填入 `finiking/dsh-games` 直接訂閱進側邊欄遊玩。
 
 以下是實測中做出的四個遊戲。每個都是在新會話裡用圖下那一句話開始的；有幾個後來在同一會話裡又提了修改，已註明。遊戲畫面以遊戲內建的自動駕駛錄製。
 

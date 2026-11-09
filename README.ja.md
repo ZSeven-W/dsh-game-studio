@@ -14,7 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>パッケージ: <code>@zseven-w/dsh-game-studio</code> &middot; 現在のプラグインリリース: <code>0.1.0-rc.5</code> &middot; 動作確認: DSH <code>0.2.1-rc.5</code></sub>
+  <sub>パッケージ: <code>@zseven-w/dsh-game-studio</code> &middot; 現在のプラグインリリース: <code>0.1.0-rc.5</code> &middot; 動作確認: DSH <code>0.2.1-rc.5</code></sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>ライブデモ・ゲームウォール（10本の2D/3Dゲームをブラウザで試遊）</strong></a> &middot; <sub>オンラインソース購読: <code>finiking/dsh-games</code></sub>
 </p>
 
 <br />
@@ -45,6 +46,8 @@
 | 🗂️ **マイゲーム** | 右サイドバーの **+** から **Game Studio · My games** を選ぶと、ワークスペースのゲームが最新のプレイテスト画面を表紙にしたタイルで一面に並びます。2D/3D で絞り込み、更新順・バージョン数・名前で並べ替えでき、クリックするだけで遊べます（agent もトークンも使いません）。さらに、オンラインのゲームソース（`owner/repo`、GitHubリポジトリURL、GitHub PagesのURL）を購読して、公開済みのゲームを自分のゲームと並んで閲覧・プレイすることもできます。**Export wall** はローカルのゲームを1つのオフラインページにまとめて友だちに送れます。 |
 
 ## これで作ったゲーム
+
+> 🎮 **ブラウザで10本のテストゲームを今すぐ試遊（PC・スマホ対応）:** **[finiking.github.io/dsh-games/wall](https://finiking.github.io/dsh-games/wall/)** — ローカルのゲームウォールのオンラインソースに `finiking/dsh-games` を入力してサイドバーで購読・プレイすることもできます。
 
 テストで作った4本のゲームです。どれも新しいセッションで、画像の下の一文から始めました（プロンプトは中国語からの訳）。一部は同じセッションで後から修正を頼んでおり、その旨を記しています。プレイ映像は各ゲーム内蔵のオートプレイで録画しています。
 
