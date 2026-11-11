@@ -96,6 +96,12 @@ git format-patch 93459aa..HEAD -o ../artifacts/upstream-pr --no-signature
 Apply the series in a clean worktree at the base commit and compare tree hashes
 before opening the PR; `docs/upstream/wechat-minigame.md` is the PR body.
 
+## Upgrade notes
+
+See `docs/CHANGELOG.md` → "Upgrading from the plain Game Studio build" before rebuilding an
+export made by an earlier build: the purchase API, the `subpackages` schema, the age
+badge, the ten analytics events and the subpackage-aware package budget all changed.
+
 ## 6. Error codes on the WeChat path
 
 Every failure the WeChat tools raise carries a code, and each code names the fix in
