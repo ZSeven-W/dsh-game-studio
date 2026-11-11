@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Describe a small game in one sentence — play it in the sidebar of a <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> conversation, swap in AI art, export one HTML file.</strong><br />
-  <sub>14 agent tools &bull; live sidebar preview &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art with a cost check first &bull; self-playing playtests &bull; version history &bull; one-file HTML export &bull; WeChat mini-game export</sub>
+  <sub>15 agent tools &bull; live sidebar preview &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art with a cost check first &bull; self-playing playtests &bull; version history &bull; one-file HTML export &bull; WeChat mini-game export</sub>
 </p>
 
 <p align="center">
@@ -41,7 +41,7 @@ Ask the agent for a game in plain words — "a 3D game: a red panda collects bam
 | 🤖 **Self-playing playtests** | `game_studio_playtest` plays the latest code in a headless Chrome or Edge and reports phases, score, frame rate, script errors and screenshots. Games that are not steered with arrow keys (grids, cards, aiming, rhythm…) define `window.__autoplay`, so the playtest plays their real loop. |
 | 🕰️ **Version history** | Every build that changed the game is saved; `game_studio_restore_version` brings back code, rules and art together. |
 | 📦 **One-file export** | `game_studio_export` writes a self-contained HTML file with no network access — open it in any browser or put it on any static host. |
-| 🟢 **WeChat mini-game export** | `game_studio_export_wechat` writes an importable 微信小游戏 project (`game.js`, `game.json`, `project.config.json`, `assets/*.png`) under `export/wechat/<slug>/`. The game code is left untouched and boots on the bundled `wx.*` runtime adapter; SVG art is rasterised to PNG. 2D canvas and 3D three.js/voxel games both work: WebGL renders offscreen and is composited onto the screen canvas, and the HUD is redrawn from `__gameState`, since mini-games have no DOM. Each export carries a package report (largest files, 4 MB main package limit, what to cut) and the runtime caps the render scale by device benchmark: 1× on weak phones, 1.5× mid, 2× fast, with 30 fps on weak ones. `__wechatRuntime.metrics()` reports boot time, frames and fps, and crashes go to `wx.getRealtimeLogManager`. From there `game_studio_wechat_devtools` opens, previews or uploads the project through the IDE's own CLI. |
+| 🟢 **WeChat mini-game export** | `game_studio_export_wechat` writes an importable 微信小游戏 project (`game.js`, `game.json`, `project.config.json`, `assets/*.png`) under `export/wechat/<slug>/`. The game code is left untouched and boots on the bundled `wx.*` runtime adapter; SVG art is rasterised to PNG. 2D canvas and 3D three.js/voxel games both work: WebGL renders offscreen and is composited onto the screen canvas, and the HUD is redrawn from `__gameState`, since mini-games have no DOM. Each export carries a package report (largest files, 4 MB main package limit, what to cut) and the runtime caps the render scale by device benchmark: 1× on weak phones, 1.5× mid, 2× fast, with 30 fps on weak ones. `__wechatRuntime.metrics()` reports boot time, frames and fps, and crashes go to `wx.getRealtimeLogManager`. From there `game_studio_wechat_devtools` opens, previews or uploads the project through the IDE's own CLI, and `game_studio_wechat_ci` writes a workflow for uploading from CI with the console's upload key. |
 | 📱 **Try it on your phone** | `game_studio_share` opens a temporary read-only link on your local network — or a temporary public link via a Cloudflare Quick Tunnel (`cloudflared`) so friends on any network can play — with a QR code in the sidebar. |
 | 🌐 **Publish to GitHub Pages** | `game_studio_publish` pushes the built HTML (or the whole game wall) to a public repository under your signed-in `gh` account and enables GitHub Pages for a permanent link that stays live after you close your computer. |
 | 🚀 **Launch wizard** | The sidebar wizard and `game_studio_wechat_release` track every step from registering the mini-game and filing 小游戏备案 to review and release, says who does what (WeChat console / the plugin / you), marks the steps the plugin really ran, and writes `RELEASE.md` next to the export with copy-paste texts: intro, category, age-rating card, privacy draft, filing blurb and the review note. A second action, 审核自查, writes `REVIEW.md`: the 12 reasons mini-games actually get rejected plus which of them this project is heading for. |
@@ -88,6 +88,7 @@ Measured in a real DSH with DeepSeek-V4.1-Flash, each game made from one sentenc
 | `game_studio_apply_asset` | Put a candidate into the game by its number, rebuild and refresh. |
 | `game_studio_revert_asset` | Go back to a slot's previous art. |
 | `game_studio_wechat_devtools` | Drive WeChat DevTools for the exported mini-game: `open` imports the folder into the IDE, `preview` writes a device QR code next to the export, `upload` submits a version (`version`, `desc`). Needs the IDE's service port switched on (工具 → 设置 → 安全设置 → 服务端口); a closed port comes back as `DEVTOOLS_PORT_CLOSED` with the steps, and the plugin never changes that setting itself. |
+| `game_studio_wechat_ci` | Write a CI upload kit next to the export: `ci/upload.mjs` (miniprogram-ci), `.github/workflows/wechat-upload.yml` and `ci/README.md`. Needs the real AppID; the user adds `WECHAT_APPID` and `WECHAT_PRIVATE_KEY` as CI secrets. Uploads a version only — review submission still happens in the console. |
 | `game_studio_wechat_commerce` | Store the ad unit IDs (`interstitial`, `rewarded`) and the in-app purchase settings (`iapEnabled`, `licenseNumber`, `merchantId`, `payUrl`), switch ads/analytics on or off, and report what the export will embed. IAP needs a licence and a merchant ID; without `payUrl` it runs in demo mode through `__commerce.iap.buy()`. |
 | `game_studio_wechat_release` | The launch checklist and materials: `status` returns every step with its owner (WeChat console / plugin / user), blockers and the next 3 actions; `update` records a step plus the real AppID, name, category, age rating and monetization choice; `materials` writes `RELEASE.md` next to the export with the texts to paste into the console, and `review` writes `REVIEW.md` with the rejection risks this project still has. |
 | `game_studio_versions` | List saved versions, newest first. |
@@ -202,6 +203,7 @@ npm test        # node --test; browser tests are skipped when no Chrome or Edge 
 - See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for the full notices.
 
 **License**: MIT
+
 
 
 

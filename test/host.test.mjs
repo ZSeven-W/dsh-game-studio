@@ -3,7 +3,7 @@
 // spend-approval gate, candidate numbering and wiring are checked as shipped.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { registerHooks } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -392,6 +392,25 @@ test('/game-studio wechat-release review reports the risks and writes the guide'
   assert.ok(parsed.risks.some(risk => risk.id === 'appid'), 'a fresh game has no AppID')
   assert.ok(parsed.risks.some(risk => risk.id === 'record'), 'filing is not done yet')
   assert.match(await readFile(parsed.file, 'utf8'), /审核风险自查/u)
+})
+
+test('/game-studio wechat-ci writes the upload kit next to an exported project', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const gameDir = join(root, 'game')
+  const exportDir = join(gameDir, 'export', 'wechat', 'moon-garden')
+  await mkdir(exportDir, { recursive: true })
+  await writeFile(join(exportDir, 'game.js'), '// game\n')
+  await writeFile(join(exportDir, 'project.config.json'), JSON.stringify({ appid: 'wx1234567890abcdef', compileType: 'game' }))
+  const result = await runCommand(`wechat-ci ${JSON.stringify({ project: gameDir, version: '2.0.0' })}`)
+  assert.equal(result.kind, 'success', result.text)
+  const parsed = JSON.parse(result.text)
+  assert.ok(parsed.files.includes('.github/workflows/wechat-upload.yml'))
+  assert.match(await readFile(join(exportDir, 'ci', 'upload.mjs'), 'utf8'), /miniprogram-ci/u)
+
+  // Without an export the command must say so, not guess a path.
+  const missing = await runCommand(`wechat-ci ${JSON.stringify({ project: join(root, 'empty-game') })}`)
+  assert.equal(missing.kind, 'error')
+  assert.match(missing.text, /run the WeChat export first/u)
 })
 
 // ---------------------------------------------------------------- playtest
@@ -1468,4 +1487,5 @@ test('gh api retries transient network errors on GET and git object writes, does
   const failCalls = await noRetryCreate.readCalls()
   assert.equal(failCalls.filter(c => c.method === 'POST' && c.path === 'user/repos').length, 1, 'POST user/repos is never retried')
 })
+
 

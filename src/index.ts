@@ -12,6 +12,7 @@ import {
 } from './assets.ts'
 import { buildProject } from './build.ts'
 import { commerceCheck, embedCommerce, loadCommerce, updateCommerce } from './commerce.ts'
+import { writeWechatCi } from './ci.ts'
 import { findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
 import { loadRelease, markReleaseDone, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
 import { reviewGuide } from './review.ts'
@@ -891,6 +892,31 @@ export function apply(ctx: any, config: Config = {}): void {
   }))
 
   ctx.tools.register(defineTool({
+    name: 'game_studio_wechat_ci',
+    description: 'Write a CI upload kit for the exported mini-game into the export folder: ci/upload.mjs (miniprogram-ci), '
+      + '.github/workflows/wechat-upload.yml and ci/README.md. Needs the real AppID; the user adds WECHAT_APPID and '
+      + 'WECHAT_PRIVATE_KEY as CI secrets. This only uploads a version - submitting for review still happens in the '
+      + 'WeChat console.',
+    parameters: {
+      path: projectParam,
+      version: { type: 'string', description: 'Default version written into the workflow, e.g. 1.0.0.' },
+      desc: { type: 'string', description: 'Default version description.' },
+    },
+    output: {
+      schema: json,
+      render: (_args: any, value: any) => [{ type: 'text', text: JSON.stringify(value) }],
+      presentationMeta: (_args: any, value: any) => presentation('export', value.project, { file: value.dir, wechat: true }),
+    },
+    async execute(args: any, exec: any) {
+      const dir = await projectDir(exec, args.path)
+      const exportDir = findWechatExport(dir)
+      if (!exportDir) throw new StudioError('No WeChat mini-game export found; run the WeChat export first.', 'NO_WECHAT_EXPORT')
+      const result = await writeWechatCi(exportDir, { version: args.version, desc: args.desc })
+      return { project: dir, ...result }
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'game_studio_wechat_commerce',
     description: 'WeChat monetization: store the ad unit IDs from the mini-game console (流量主 → 广告位管理), switch ads '
       + 'and analytics on or off, and report what the next export will do. Ads are never forced: one interstitial between '
@@ -1204,8 +1230,8 @@ export function apply(ctx: any, config: Config = {}): void {
   ctx.inject(['commands'], (child: any) => {
     child.commands.register({
       name: 'game-studio',
-      description: 'Game Studio sidebar actions (apply, revert, build, export, export-wechat, wechat-devtools, wechat-release, wechat-commerce, restore, share, unshare, status, wall, publish, unpublish)',
-      input: { hint: '<apply|revert|build|export|export-wechat|wechat-devtools|wechat-release|wechat-commerce|restore|share|unshare|status|wall|publish|unpublish> {"project": "...", ...}' },
+      description: 'Game Studio sidebar actions (apply, revert, build, export, export-wechat, wechat-devtools, wechat-release, wechat-commerce, wechat-ci, restore, share, unshare, status, wall, publish, unpublish)',
+      input: { hint: '<apply|revert|build|export|export-wechat|wechat-devtools|wechat-release|wechat-commerce|wechat-ci|restore|share|unshare|status|wall|publish|unpublish> {"project": "...", ...}' },
       async handler({ agent, rawInput }: any) {
         try {
           // The Harness passes everything after `/game-studio`, leading whitespace included.
@@ -1257,6 +1283,14 @@ export function apply(ctx: any, config: Config = {}): void {
               result = await openInDevtools(dir)
               await markReleaseDone(dir, 'devtools', 'opened in WeChat DevTools').catch(() => undefined)
             }
+          }
+          else if (action === 'wechat-ci') {
+            const exportDir = findWechatExport(dir)
+            if (!exportDir) throw new StudioError('No WeChat mini-game export found; run the WeChat export first.', 'NO_WECHAT_EXPORT')
+            result = await writeWechatCi(exportDir, {
+              version: typeof payload.version === 'string' ? payload.version : undefined,
+              desc: typeof payload.desc === 'string' ? payload.desc : undefined,
+            })
           }
           else if (action === 'wechat-commerce') {
             const state = String(payload.op ?? 'status') === 'configure'
@@ -1362,6 +1396,8 @@ export function apply(ctx: any, config: Config = {}): void {
     })
   })
 }
+
+
 
 
 
