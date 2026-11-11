@@ -1057,7 +1057,13 @@ export function apply(ctx: any, config: Config = {}): void {
           step: args.step, status: args.status, note: args.note, appid: args.appid,
           gameName: args.gameName, category: args.category, ageRating: args.ageRating, monetization: args.monetization,
         })
-        return { project: dir, ...result.status }
+        const presence = await releaseFilePresence(dir)
+        const freshness = await releaseFreshness(dir, result.state)
+        return {
+          project: dir, ...result.status,
+          materialsPresent: presence.materials, reviewPresent: presence.review,
+          materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale,
+        }
       }
       const state = await loadRelease(dir)
       const presence = await releaseFilePresence(dir)
@@ -1399,7 +1405,13 @@ export function apply(ctx: any, config: Config = {}): void {
                 ageRating: typeof payload.ageRating === 'string' ? payload.ageRating as any : undefined,
                 monetization: typeof payload.monetization === 'string' ? payload.monetization as any : undefined,
               })
-              result = updated.status
+              const presence = await releaseFilePresence(dir)
+              const freshness = await releaseFreshness(dir, updated.state)
+              result = {
+                ...updated.status,
+                materialsPresent: presence.materials, reviewPresent: presence.review,
+                materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale,
+              }
             } else {
               const state = await loadRelease(dir)
               const presence = await releaseFilePresence(dir)

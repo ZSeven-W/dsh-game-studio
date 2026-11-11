@@ -80,6 +80,19 @@ test('a non-coder journey: create, export, wizard, materials, monetization, help
   const afterFiles = JSON.parse((await run(`wechat-release ${JSON.stringify({ project: game, op: 'status' })}`)).text)
   assert.ok(afterFiles.materialsAt, 'the status remembers the generated materials')
   assert.ok(afterFiles.reviewAt, 'the status remembers the generated review')
+  assert.equal(afterFiles.materialsStale, false)
+  assert.equal(afterFiles.reviewStale, false)
+
+  // 5b. Changing an answer marks both files stale; regenerating clears it.
+  const changed = JSON.parse((await run(`wechat-release ${JSON.stringify({ project: game, op: 'update', category: '休闲游戏', ageRating: '12+' })}`)).text)
+  assert.equal(changed.materialsStale, true, 'new answers make the materials stale')
+  assert.equal(changed.reviewStale, true, 'new answers make the review stale')
+  await run(`wechat-release ${JSON.stringify({ project: game, op: 'materials' })}`)
+  const refreshed = JSON.parse((await run(`wechat-release ${JSON.stringify({ project: game, op: 'review' })}`)).text)
+  assert.ok(refreshed.risks.length >= 0)
+  const afterRegenerate = JSON.parse((await run(`wechat-release ${JSON.stringify({ project: game, op: 'status' })}`)).text)
+  assert.equal(afterRegenerate.materialsStale, false, 'regenerating the materials clears the stale flag')
+  assert.equal(afterRegenerate.reviewStale, false, 'regenerating the review clears the stale flag')
 
   // 6. 侧栏「商业化」: off by default, a malformed ad unit names the format.
   const commerce = JSON.parse((await run(`wechat-commerce ${JSON.stringify({ project: game, op: 'status' })}`)).text)
