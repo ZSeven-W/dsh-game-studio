@@ -56,7 +56,8 @@
     "trace": "node scripts/trace-check.mjs",
     "installed": "node scripts/installed-check.mjs",
     "bench": "node scripts/bench.mjs",
-    "shots": "node scripts/sidebar-shot.mjs"
+    "shots": "node scripts/sidebar-shot.mjs",
+    "launch-verify": "node scripts/launch-verify.mjs"
   },
   "dsh": {
     "bundle": {
