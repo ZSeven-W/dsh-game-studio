@@ -97,4 +97,8 @@ test('upload runs the CLI it is pointed at and marks the wizard step done', asyn
   const step = view.steps.find((entry) => entry.id === 'upload')
   assert.equal(step.status, 'done')
   assert.ok(view.progress.done >= 1)
+  // The note records what was uploaded and what the IDE said, not just 'done'.
+  assert.match(step.note, /1\.2\.3/u)
+  assert.match(step.note, /主包 1 KB/u)
+  assert.match(step.note, /upload ok/u)
 })

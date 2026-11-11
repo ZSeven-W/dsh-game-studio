@@ -38,6 +38,16 @@ import { CODEX_EFFORTS, resolveCodex, type CodexEffort } from './providers/codex
 import { OPENAI_DEFAULT_MODEL, openaiGenerate } from './providers/openai.ts'
 import { readJson, resolveInside, sha256, shortId, StudioError, writeJson } from './util.ts'
 
+/** The wizard note for an upload: what was sent, and what the IDE said. */
+function uploadNote(version: string, result: { info?: unknown; output?: string }): string {
+  const parts = [`uploaded ${version}`]
+  const size = Number((result.info as { mainPackage?: unknown } | null | undefined)?.mainPackage)
+  if (Number.isFinite(size) && size > 0) parts.push(`主包 ${Math.round(size / 1024)} KB`)
+  const lastLine = String(result.output ?? '').trim().split('\n').filter(Boolean).pop()
+  if (lastLine) parts.push(lastLine.slice(0, 60))
+  return parts.join(' · ')
+}
+
 /** Told to the agent so it never goes looking for how the asset ledger works. */
 const EDIT_SLOT_FILES = 'You may draw a slot\'s picture yourself by overwriting its file in assets/ (e.g. write your own SVG); '
   + 'the studio notices on the next build and records it as your edit, so leave assets/ASSETS.json alone.'
@@ -923,7 +933,7 @@ export function apply(ctx: any, config: Config = {}): void {
       if (action === 'preview') return { project: dir, ...(await previewInDevtools(dir, { cli })) }
       if (action === 'upload') {
         const result = await uploadFromDevtools(dir, { version: args.version, desc: args.desc, cli })
-        await markReleaseDone(dir, 'upload', `uploaded ${args.version ?? '1.0.0'}`).catch(() => undefined)
+        await markReleaseDone(dir, 'upload', uploadNote(args.version ?? '1.0.0', result)).catch(() => undefined)
         return { project: dir, ...result }
       }
       throw new StudioError(`Unknown DevTools action "${action}"; use open, preview, upload or doctor.`, 'BAD_ACTION')
@@ -1331,7 +1341,7 @@ export function apply(ctx: any, config: Config = {}): void {
             else if (op === 'preview') result = await previewInDevtools(dir, { cli })
             else if (op === 'upload') {
               result = await uploadFromDevtools(dir, { version: typeof payload.version === 'string' ? payload.version : undefined, desc: typeof payload.desc === 'string' ? payload.desc : undefined, cli })
-              await markReleaseDone(dir, 'upload', `uploaded ${String(payload.version ?? '1.0.0')}`).catch(() => undefined)
+              await markReleaseDone(dir, 'upload', uploadNote(String(payload.version ?? '1.0.0'), result)).catch(() => undefined)
             } else {
               result = await openInDevtools(dir, { cli })
               await markReleaseDone(dir, 'devtools', 'opened in WeChat DevTools').catch(() => undefined)

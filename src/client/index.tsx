@@ -633,6 +633,7 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
         <span style={step.status === 'done'
           ? { ...s.small, ...s.doneTitle, flex: 1, minWidth: 0 }
           : { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{step.title}</span>
+        {step.note && <span style={{ ...s.small, maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={step.note}>{step.note}</span>}
         <span style={s.badge}>{ownerLabel(step.owner)}</span>
       </div>)}
     </div>}
