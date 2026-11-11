@@ -48,6 +48,14 @@ export function devtoolsInstallHint(platform: NodeJS.Platform = process.platform
 /** The IDE's service port, as shown in 工具 → 设置 → 安全设置 → 服务端口. */
 export const DEVTOOLS_DEFAULT_PORT = 9420
 
+export type DevtoolsProblemCode = 'cli_missing' | 'port_closed' | 'tourist_appid'
+
+export interface DevtoolsProblem {
+  /** Stable code so the sidebar can localise the fix; the hint stays for the CLI. */
+  code: DevtoolsProblemCode
+  hint: string
+}
+
 export interface DevtoolsDoctorReport {
   cli: string | null
   cliFound: boolean
@@ -56,6 +64,8 @@ export interface DevtoolsDoctorReport {
   appid: string | null
   tourist: boolean
   ready: boolean
+  /** One entry per finding, oldest blocker first. */
+  problems: DevtoolsProblem[]
   hints: string[]
 }
 
@@ -97,13 +107,17 @@ export async function devtoolsDoctor(
   const appid = readProjectAppid(exportDir)
   const tourist = appid === null || appid === '' || appid === 'touristappid'
   const portOpen = await probeDevtoolsPort(port)
-  const hints: string[] = []
-  if (cli === undefined) hints.push(`WeChat DevTools CLI was not found. ${devtoolsInstallHint()}`)
-  if (!portOpen) hints.push(DEVTOOLS_PORT_HINT)
-  if (tourist) hints.push('The project uses the tourist AppID: preview works, but uploading needs the real mini-game AppID (re-export with the appid).')
+  const problems: DevtoolsProblem[] = []
+  if (cli === undefined) problems.push({ code: 'cli_missing', hint: `WeChat DevTools CLI was not found. ${devtoolsInstallHint()}` })
+  if (!portOpen) problems.push({ code: 'port_closed', hint: DEVTOOLS_PORT_HINT })
+  if (tourist) problems.push({
+    code: 'tourist_appid',
+    hint: 'The project uses the tourist AppID: preview works, but uploading needs the real mini-game AppID (re-export with the appid).',
+  })
+  const hints = problems.map((problem) => problem.hint)
   const ready = cli !== undefined && portOpen && !tourist
   if (ready) hints.push('Everything the DevTools path needs is in place: preview and upload can run.')
-  return { cli: cli ?? null, cliFound: cli !== undefined, port, portOpen, appid, tourist, ready, hints }
+  return { cli: cli ?? null, cliFound: cli !== undefined, port, portOpen, appid, tourist, ready, problems, hints }
 }
 
 function isFile(path: string): boolean {

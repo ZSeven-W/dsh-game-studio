@@ -36,6 +36,7 @@ test('a tourist AppID is named, and a closed port points at the IDE setting', as
   assert.equal(report.ready, false)
   assert.ok(report.hints.some((hint) => /service port|服务端口/u.test(hint)), 'the port hint stays')
   assert.ok(report.hints.some((hint) => /AppID/u.test(hint)), 'the AppID hint stays')
+  assert.deepEqual(report.problems.map((problem) => problem.code), ['cli_missing', 'port_closed', 'tourist_appid'])
   assert.ok(report.hints.some((hint) => /DevTools CLI was not found/u.test(hint)))
 })
 
@@ -51,5 +52,6 @@ test('an open port and a real AppID are reported as ready', async (t) => {
   assert.equal(report.tourist, false)
   // The CLI is still missing on this machine, so it cannot be "ready".
   assert.equal(report.ready, false)
+  assert.deepEqual(report.problems.map((problem) => problem.code), ['cli_missing'])
   assert.ok(report.hints.some((hint) => /DevTools CLI was not found/u.test(hint)))
 })

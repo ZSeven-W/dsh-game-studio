@@ -401,10 +401,27 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
     try {
       const result = await runCommand(sessionId, `wechat-devtools ${JSON.stringify({ project, op: 'doctor' })}`)
       if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
-      const report = JSON.parse(result.text) as { ready?: boolean; hints?: string[] }
-      setNotice(report.ready
-        ? { kind: 'info', text: t('tab.envReady') }
-        : { kind: 'error', text: t('tab.envHints', { hints: (report.hints ?? []).join(' ') }) })
+      const report = JSON.parse(result.text) as {
+        ready?: boolean
+        problems?: Array<{ code?: string; hint?: string }>
+        hints?: string[]
+      }
+      if (report.ready) {
+        setNotice({ kind: 'info', text: t('tab.envReady') })
+        return
+      }
+      // The host sends stable codes; unknown codes fall back to its own hint.
+      const lines = (report.problems ?? []).map((problem) => {
+        if (problem.code === 'cli_missing') return t('tab.envCliMissing')
+        if (problem.code === 'port_closed') return t('tab.envPortClosed')
+        if (problem.code === 'tourist_appid') return t('tab.envTourist')
+        return problem.hint ?? ''
+      }).filter(Boolean)
+      const fallback = (report.hints ?? []).join(' ')
+      setNotice({
+        kind: 'error',
+        text: lines.length > 0 ? t('tab.envHints', { hints: lines.join(' ') }) : t('tab.envHints', { hints: fallback }),
+      })
     } catch (error) {
       setNotice({ kind: 'error', text: String((error as Error)?.message ?? error) })
     } finally {

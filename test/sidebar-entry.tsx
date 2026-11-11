@@ -56,6 +56,10 @@ const runCommand = async (_session: string, input: string) => {
       ok: true,
       text: JSON.stringify({
         ready: false,
+        problems: [
+          { code: 'port_closed', hint: 'service port closed' },
+          { code: 'tourist_appid', hint: 'tourist appid' },
+        ],
         hints: [
           'WeChat DevTools must have its service port on: 工具 → 设置 → 安全设置 → 服务端口 → 开启，然后重新运行。',
           'The project uses the tourist AppID: preview works, but uploading needs the real mini-game AppID.',
