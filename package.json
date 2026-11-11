@@ -53,7 +53,8 @@
     "acceptance": "node scripts/acceptance.mjs",
     "upstream": "node scripts/upstream-check.mjs",
     "trace": "node scripts/trace-check.mjs",
-    "installed": "node scripts/installed-check.mjs"
+    "installed": "node scripts/installed-check.mjs",
+    "bench": "node scripts/bench.mjs"
   },
   "dsh": {
     "bundle": {

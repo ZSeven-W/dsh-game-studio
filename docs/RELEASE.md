@@ -63,7 +63,11 @@ plugin_manager install_bundle  file:<abs path to the tarball>
 ```
 
 Then verify with the installed build, not the source tree: `npm run installed` boots the
-installed plugin, creates a game, exports it, runs the wizard/materials/review and boots
+installed plugin
+
+`npm run bench` records frame rate, boot time and memory warnings for the 2D and 3D
+exports (`BENCH_TIER=low` for the low-end profile; headless WebGL is software, so
+treat the 3D number as a lower bound)., creates a game, exports it, runs the wizard/materials/review and boots
 the exported game in the mock-wx harness (10 checks; `--path` for another install).
 
 ## 5. Upstream
