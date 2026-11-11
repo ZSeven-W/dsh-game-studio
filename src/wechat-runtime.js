@@ -410,6 +410,24 @@
     }
   }
 
+  /** WeChat asks mini-games to show the 适龄提示 chosen in the wizard. */
+  function drawAgeBadge(ctx, W, H) {
+    var rating = (G.GAME && G.GAME.ageRating) || '';
+    if (!rating) return;
+    var label = '适龄提示 ' + rating;
+    ctx.font = font(11);
+    var width = Math.round(ctx.measureText(label).width + 16);
+    var height = 20;
+    var left = Math.round((W - width) / 2);
+    var top = H - height - 14;
+    ctx.fillStyle = 'rgba(10,14,32,0.55)';
+    ctx.fillRect(left, top, width, height);
+    ctx.fillStyle = '#ffe9a8';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, W / 2, top + height / 2);
+  }
+
   /** The revive button is drawn even for games with a canvas HUD (2D templates). */
   function drawReviveButton(ctx, W, H) {
     if (!reviveVisible || !ads.rewarded) { reviveRect = null; return; }
@@ -609,6 +627,7 @@
       try {
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.textBaseline = 'middle';
+        if (state.phase === 'title') drawAgeBadge(ctx, W, H);
         drawReviveButton(ctx, W, H);
       } finally {
         ctx.restore();
@@ -634,6 +653,7 @@
         var title = (G.GAME && G.GAME.title) || '';
         if (title) centerText(ctx, title, W / 2, H * 0.40, Math.round(H * 0.042), '#ffffff');
         pill(ctx, '点击开始 / Tap to start', W / 2, Math.round(H * 0.44), 'center', 15, '#ffe9a8');
+        drawAgeBadge(ctx, W, H);
         return;
       }
       if (typeof state.hearts === 'number' && state.hearts >= 0) {
@@ -764,6 +784,7 @@
     showLoading: showLoading,
     playTone: playTone,
     memory: memory,
+    ageRating: function () { return (G.GAME && G.GAME.ageRating) || null; },
     audio: audioStats,
     metrics: function () {
       var elapsed = clockNow() - startedAt;

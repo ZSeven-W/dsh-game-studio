@@ -54,6 +54,7 @@ async function prepareGame(spec, dir) {
   // Short round so the acceptance run does not wait a minute.
   project.rules = { ...project.rules, duration: 6 }
   await writeJson(paths.manifest(dir), project)
+  await updateRelease(dir, { ageRating: '8+', category: '游戏 > 休闲游戏', monetization: 'iaa', gameName: spec.title })
   await updateCommerce(dir, {
     enabled: true,
     interstitial: AD_UNITS.interstitial,

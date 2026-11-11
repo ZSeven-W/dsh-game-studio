@@ -15,6 +15,7 @@ import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadLedger, loadManifest, paths, RUNTIMES, type GameManifest, type RuntimeId } from './project.ts'
 import { embedCommerce, loadCommerce } from './commerce.ts'
+import { loadRelease } from './release.ts'
 import { analyzeWechatPackage, type PackageReport } from './size.ts'
 import { StudioError, writeJson } from './util.ts'
 
@@ -114,6 +115,7 @@ function readme(manifest: GameManifest, appid: string): string {
     '- 导出结果里的 report 是包体报告：最大文件、是否超过 4 MB 主包、该压缩什么。',
     '- 运行时暴露 __wechatRuntime.metrics()（启动耗时、帧数、平均帧率）和 __wechatRuntime.quality（设备档位）；崩溃与未处理异常会写进 wx.getRealtimeLogManager。',
     '- 内存告警（wx.onMemoryWarning）会记录等级、上报 game_memory_warning 并调用 wx.triggerGC（宿主支持时），可用 __wechatRuntime.memory 查看。',
+    '- 向导里选的适龄提示（8+/12+/16+）会画在标题页底部，同时写进游戏数据；没选就不显示。',
     '- 素材超过 1.5 MB 时会自动放进 assets 分包（game.json 的 subpackages），游戏启动前先 wx.loadSubpackage 预下载，期间屏幕显示下载提示。',
     '- 微信的包体限制：主包 4MB、总包 30MB；导出时会在超过 4MB 时给出警告。',
     '',
@@ -199,6 +201,9 @@ export async function exportWechat(dir: string, options: WechatExportOptions = {
   }
 
   const commerce = embedCommerce(await loadCommerce(dir))
+  // The wizard's 适龄提示 must be visible in the game, not only in RELEASE.md.
+  const release = await loadRelease(dir).catch(() => null)
+  const ageRating = release?.ageRating
   const assetBytes = written.filter(entry => entry.file.startsWith('assets/')).reduce((sum, entry) => sum + entry.bytes, 0)
   // A subpackage keeps the main package under 4 MB, but the game may only start
   // after it finished downloading; the boot wrapper below takes care of that.
@@ -207,6 +212,7 @@ export async function exportWechat(dir: string, options: WechatExportOptions = {
     title: manifest.title,
     rules: manifest.rules,
     ...(commerce ? { monetization: commerce } : {}),
+    ...(ageRating ? { ageRating } : {}),
     ...(useSubpackage ? { subpackage: { name: 'assets' } } : {}),
     slots: Object.fromEntries(Object.entries(manifest.slots).map(([slot, spec]) => [slot, {
       tile: spec.tile === true,

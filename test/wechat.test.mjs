@@ -13,6 +13,7 @@ import { PNG } from 'pngjs'
 import { createProject, loadManifest, paths } from '../src/project.ts'
 import { updateCommerce } from '../src/commerce.ts'
 import { writeJson } from '../src/util.ts'
+import { updateRelease } from '../src/release.ts'
 import { exportWechat } from '../src/wechat.ts'
 import { openMockPage } from './wechat-harness.mjs'
 
@@ -417,6 +418,23 @@ test('a memory warning is recorded, reported and triggers the GC hook', async (t
     assert.equal(result.gc, 1, 'triggerGC is called when the host provides it')
     assert.ok(result.events.includes('game_memory_warning'))
     assert.ok(result.logs >= 1, 'the warning also reaches the realtime log')
+    assert.deepEqual(errors, [])
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
+test('the age rating chosen in the wizard reaches the exported game', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  const without = await exportWechat(dir)
+  const plain = await readFile(join(without.dir, 'game.js'), 'utf8')
+  assert.doesNotMatch(plain, /"ageRating"/u, 'no badge before the wizard records a rating')
+
+  await updateRelease(dir, { ageRating: '12+' })
+  const exported = await exportWechat(dir)
+  assert.match(exported.dir ? await readFile(join(exported.dir, 'game.js'), 'utf8') : '', /"ageRating":"12\+"/u)
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    assert.equal(await page.evaluate(() => window.__G.__wechatRuntime.ageRating()), '12+')
     assert.deepEqual(errors, [])
   })
   if (!ran) return t.skip('no Chrome or Edge here')
