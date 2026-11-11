@@ -93,6 +93,7 @@ export function commerceCheck(state: CommerceState): CommerceCheck {
       if (state.iap.payUrl) {
         notes.push('签名服务需要返回 signData（JSON 字符串，含 mode:"goods"、offerId、buyQuantity、env、currencyType、platform、zoneId、productId、goodsPrice、outTradeNo、attach）、paySig 和 signature。')
         notes.push('paySig = HMAC-SHA256(支付 AppKey, "requestMidasPaymentGameItem&" + signData)；signature 为用户态签名，两者都必须在服务端算。')
+        notes.push('支付沙箱：让签名服务把 signData 里的 env 设为 1，正式上线用 0；沙箱环境只能走测试订单。')
       }
     }
   }

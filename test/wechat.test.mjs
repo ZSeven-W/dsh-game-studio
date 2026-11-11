@@ -338,6 +338,24 @@ test('game sounds are synthesised to a wav and played through InnerAudioContext'
   if (!ran) return t.skip('no Chrome or Edge here')
 })
 
+test('an ad error is turned into a code and a fix for the player', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  await updateCommerce(dir, { enabled: true, interstitial: 'adunit-123456', rewarded: 'adunit-654321', analytics: true })
+  const exported = await exportWechat(dir)
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    const result = await page.evaluate(() => {
+      window.__wxAds.failRewarded(1004)
+      return { state: window.__G.__commerce.state(), events: window.__wxAds.events.map(entry => entry.id) }
+    })
+    assert.equal(result.state.lastErrorCode, 1004)
+    assert.match(result.state.lastErrorHint, /没有合适的广告/u)
+    assert.ok(result.events.includes('game_ad_error'), 'the failure is reported for the dashboard')
+    assert.deepEqual(errors, [])
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
 /** Open one exported project in a mock-wx page and hand it to `run`. False = no browser. */
 async function withMockWx(exportedDir, run, options = {}) {
   const mock = await openMockPage(exportedDir, options)

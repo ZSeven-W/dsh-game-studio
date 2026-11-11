@@ -85,11 +85,15 @@ const MOCK_INJECT = `(function () {
     },
     createRewardedVideoAd: function () {
       var close = null;
+      var onError = null;
+      window.__wxAds.failRewarded = function (code) {
+        if (onError) onError({ errCode: code, errMsg: 'mock ad error ' + code });
+      };
       return {
         show: function () { window.__wxAds.rewarded += 1; setTimeout(function () { if (close) close({ isEnded: true }); }, 40); return Promise.resolve(); },
         load: function () { return Promise.resolve(); },
         onClose: function (fn) { close = fn; },
-        onError: function () {}
+        onError: function (fn) { onError = fn; }
       };
     },
     onTouchStart: function (fn) { window.__touch = function (event) { fn(event); }; },

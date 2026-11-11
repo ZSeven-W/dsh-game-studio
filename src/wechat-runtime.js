@@ -263,11 +263,38 @@
    * from the game's .studio/wechat-commerce.json. Analytics uses whatever the
    * base library has (reportEvent, else reportAnalytics). */
   var money;
-  var ads = { interstitial: null, rewarded: null, shown: 0, rewardedShown: 0, lastError: '' };
+  var ads = {
+    interstitial: null, rewarded: null, shown: 0, rewardedShown: 0,
+    lastError: '', lastErrorCode: 0, lastErrorHint: '', lastErrorAt: 0,
+  };
   var reviveVisible = false;
   var reviveRect = null;
   var lastPhase = 'title';
   var adBusy = false;
+
+  // WeChat's ad error codes, with the fix a non-coder can act on.
+  var AD_HINTS = {
+    1000: '广告后端错误，稍后会自己恢复',
+    1001: '广告参数错误（检查调用参数）',
+    1002: '广告位 ID 无效，去后台核对广告位 ID',
+    1003: '广告内部错误，稍后重试',
+    1004: '这次没有合适的广告，属正常情况',
+    1005: '广告组件审核中，审核通过后才会展示',
+    1006: '广告组件被驳回，去后台看审核结果',
+    1007: '广告组件被封禁，去后台查看',
+    1008: '广告位已关闭，去后台重新打开',
+  };
+
+  function failAd(kind, error) {
+    var code = Number((error && (error.errCode || error.errNo)) || 0);
+    var hint = AD_HINTS[code] || String((error && (error.errMsg || error.message)) || error || 'ad error');
+    ads.lastError = hint;
+    ads.lastErrorCode = code;
+    ads.lastErrorHint = hint;
+    ads.lastErrorAt = Date.now();
+    report('ad_error', { kind: kind, code: code });
+    return hint;
+  }
 
   function readState() {
     try { return G.__gameState ? G.__gameState() : null; } catch (error) { return null; }
@@ -287,18 +314,18 @@
       if (money.interstitial && wx.createInterstitialAd) {
         ads.interstitial = wx.createInterstitialAd({ adUnitId: money.interstitial });
         if (ads.interstitial && ads.interstitial.onError) {
-          ads.interstitial.onError(function (error) { ads.lastError = String((error && error.errMsg) || error); });
+          ads.interstitial.onError(function (error) { failAd('interstitial', error); });
         }
       }
-    } catch (error) { ads.lastError = String((error && error.message) || error); }
+    } catch (error) { failAd('create_interstitial', error); }
     try {
       if (money.rewarded && wx.createRewardedVideoAd) {
         ads.rewarded = wx.createRewardedVideoAd({ adUnitId: money.rewarded });
         if (ads.rewarded && ads.rewarded.onError) {
-          ads.rewarded.onError(function (error) { ads.lastError = String((error && error.errMsg) || error); });
+          ads.rewarded.onError(function (error) { failAd('rewarded', error); });
         }
       }
-    } catch (error) { ads.lastError = String((error && error.message) || error); }
+    } catch (error) { failAd('create_rewarded', error); }
   }
 
   function moneyConfig() {
@@ -314,10 +341,10 @@
     adBusy = true;
     try {
       var shown = ads.interstitial.show();
-      if (shown && shown.catch) shown.catch(function () { ads.lastError = 'interstitial show failed'; });
+      if (shown && shown.catch) shown.catch(function (error) { failAd('interstitial_show', error); });
       ads.shown += 1;
       report('ad_interstitial', {});
-    } catch (error) { ads.lastError = String((error && error.message) || error); }
+    } catch (error) { failAd('interstitial_show', error); }
     setTimeout(function () { adBusy = false; }, 1200);
   }
 
@@ -337,12 +364,16 @@
       ads.rewarded.onClose(function (res) { finish(!res || res.isEnded !== false); });
       var shown = ads.rewarded.show();
       if (shown && shown.catch) {
-        shown.catch(function () {
-          ads.rewarded.load().then(function () { ads.rewarded.show(); }).catch(function () { finish(false); });
+        shown.catch(function (error) {
+          failAd('rewarded_show', error);
+          ads.rewarded.load().then(function () { ads.rewarded.show(); }).catch(function (loadError) {
+            failAd('rewarded_load', loadError);
+            finish(false);
+          });
         });
       }
     } catch (error) {
-      ads.lastError = String((error && error.message) || error);
+      failAd('rewarded_show', error);
       finish(false);
     }
     // A player who closes the mini-game mid-ad must not lock the button forever.
@@ -391,6 +422,12 @@
     ctx.textAlign = 'center';
     ctx.fillText(label, W / 2, reviveTop + height / 2);
     reviveRect = { left: left, top: reviveTop, width: width, height: height };
+    // A failed ad keeps the button visible, so put the reason and the fix there.
+    if (ads.lastErrorHint && Date.now() - ads.lastErrorAt < 8000) {
+      ctx.font = font(12);
+      ctx.fillStyle = 'rgba(255,236,200,0.92)';
+      ctx.fillText(ads.lastErrorHint, W / 2, reviveTop + height + 18);
+    }
   }
 
   /* ---- Audio ---------------------------------------------------------------
@@ -699,6 +736,8 @@
         shown: ads.shown,
         rewardedShown: ads.rewardedShown,
         lastError: ads.lastError,
+        lastErrorCode: ads.lastErrorCode,
+        lastErrorHint: ads.lastErrorHint,
         reviveVisible: reviveVisible,
       };
     },
