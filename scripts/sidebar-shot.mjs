@@ -109,6 +109,15 @@ try {
     await page.screenshot({ path: join(outDir, 'sidebar-env.png'), fullPage: true })
   }
 
+  // Preview writes a QR file; the panel shows it so the user can scan directly.
+  const previewButton = await page.$('text=预览二维码')
+  if (previewButton) {
+    await previewButton.click()
+    await page.waitForSelector('img[alt="preview QR"]', { timeout: 5000 }).catch(() => undefined)
+    await page.waitForTimeout(500)
+    await page.screenshot({ path: join(outDir, 'sidebar-preview.png'), fullPage: true })
+  }
+
   const commerceButton = await page.$('text=商业化')
   if (commerceButton) {
     await commerceButton.click()

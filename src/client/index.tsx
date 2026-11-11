@@ -334,6 +334,11 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
   const [release, setRelease] = useState<ReleaseView | null>(null)
   const [releaseOpen, setReleaseOpen] = useState(false)
   const [releaseBusy, setReleaseBusy] = useState(false)
+  // Preview writes a QR PNG next to the export; show it here so the user scans it
+  // instead of hunting for a file path.
+  const [qrPath, setQrPath] = useState<string | undefined>()
+  const [uploadVersion, setUploadVersion] = useState('1.0.0')
+  const qrUrl = useFileUrl(readBytes, sessionId, qrPath, qrPath ?? '', 'image/png')
 
   const loadRelease = useCallback(async () => {
     setReleaseBusy(true)
@@ -395,6 +400,36 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
       setReleaseBusy(false)
     }
   }, [runCommand, sessionId, project, t, loadRelease])
+
+  const previewDevtools = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-devtools ${JSON.stringify({ project, op: 'preview' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      const parsed = JSON.parse(result.text) as { qr?: string | null }
+      setQrPath(parsed.qr ?? undefined)
+      setNotice({ kind: 'info', text: parsed.qr ? t('tab.previewQr') : t('tab.previewNoQr') })
+    } catch (error) {
+      setNotice({ kind: 'error', text: String((error as Error)?.message ?? error) })
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t])
+
+  const uploadDevtools = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const version = uploadVersion.trim() || '1.0.0'
+      const result = await runCommand(sessionId, `wechat-devtools ${JSON.stringify({ project, op: 'upload', version })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      setNotice({ kind: 'info', text: t('tab.uploaded', { version }) })
+      await loadRelease()
+    } catch (error) {
+      setNotice({ kind: 'error', text: String((error as Error)?.message ?? error) })
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t, uploadVersion, loadRelease])
 
   const checkEnvironment = useCallback(async () => {
     setReleaseBusy(true)
@@ -535,7 +570,18 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
         <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void writeReviewGuide() }}>{t('tab.releaseReview')}</button>
         <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void openDevtools() }}>{t('tab.releaseDevtools')}</button>
         <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void checkEnvironment() }}>{t('tab.checkEnv')}</button>
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void previewDevtools() }}>{t('tab.preview')}</button>
+        <input style={{ ...s.input, minWidth: 84, width: 84 }} value={uploadVersion} disabled={releaseBusy}
+          aria-label={t('tab.uploadVersion')}
+          onChange={(event) => { setUploadVersion(event.target.value) }} />
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void uploadDevtools() }}>{t('tab.upload')}</button>
       </div>
+      {qrUrl !== undefined && <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px',
+      }}>
+        <img src={qrUrl} alt="preview QR" width={160} height={160} style={{ border: `1px solid ${tok.border}`, borderRadius: 8 }} />
+        <span style={s.small}>{t('tab.previewScan')}</span>
+      </div>}
       {(release?.steps ?? []).filter(step => step.status !== 'skipped').map(step => <div key={step.id} style={s.releaseStep}>
         <button type="button" style={s.check} disabled={releaseBusy || step.blocked}
           title={step.blocked ? t('tab.releaseBlocked') : step.title}

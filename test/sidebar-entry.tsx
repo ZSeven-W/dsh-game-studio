@@ -42,6 +42,25 @@ const readBytes = async (_session: string, path: string) => {
   if (path.endsWith('.studio/state.json')) {
     return { data: new TextEncoder().encode(JSON.stringify(fixtures.state)) }
   }
+  if (path.endsWith('.png')) {
+    // A stand-in QR picture so the panel's preview block renders.
+    const canvas = document.createElement('canvas')
+    canvas.width = 160
+    canvas.height = 160
+    const context = canvas.getContext('2d')
+    if (context) {
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, 160, 160)
+      context.fillStyle = '#111111'
+      for (let y = 0; y < 20; y += 1) {
+        for (let x = 0; x < 20; x += 1) {
+          if ((x * 7 + y * 13 + ((x * y) % 5)) % 3 === 0) context.fillRect(x * 8, y * 8, 8, 8)
+        }
+      }
+    }
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+    return { data: new Uint8Array(await blob!.arrayBuffer()) }
+  }
   if (path.endsWith('dist/index.html')) {
     return { data: new TextEncoder().encode('<!doctype html><meta charset="utf-8"><body style="margin:0;background:#10151f;color:#e8ecf5;font-family:system-ui;display:grid;place-items:center;height:100vh"><div style="text-align:center"><div style="font-size:22px;font-weight:600">Lantern Isle</div><div style="opacity:.7;margin-top:6px">游戏预览区（截图用占位）</div></div></body>') }
   }
@@ -52,6 +71,9 @@ const runCommand = async (_session: string, input: string) => {
   if (input.startsWith('wechat-release {')) return { ok: true, text: JSON.stringify(fixtures.release) }
   if (input.startsWith('wechat-commerce')) return { ok: true, text: JSON.stringify(fixtures.commerce) }
   if (input.startsWith('wechat-devtools')) {
+    if (input.includes('"preview"')) {
+      return { ok: true, text: JSON.stringify({ action: 'preview', project: '/tmp/lantern-isle-3d/export/wechat/lantern-isle-3d', qr: 'export/wechat/lantern-isle-3d/preview.png' }) }
+    }
     return {
       ok: true,
       text: JSON.stringify({
