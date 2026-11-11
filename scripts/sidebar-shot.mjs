@@ -305,7 +305,22 @@ try {
   if (commerceButton) {
     await commerceButton.click()
     await page.waitForTimeout(800)
-    await page.screenshot({ path: join(outDir, 'sidebar-commerce.png'), fullPage: true })
+    // Opening the panel renders the live form hints: prove the seller rules execute
+    // in the browser (a dangling helper used to crash exactly here).
+    const adInput = await page.$('input[placeholder="adunit-..."]')
+    if (!adInput) {
+      console.error('the monetization panel did not render its ad-unit field')
+      process.exitCode = 1
+    } else {
+      await adInput.fill('nope')
+      await page.waitForTimeout(400)
+      const hint = await page.evaluate(() => document.body.innerText.includes('广告位 ID 应以 adunit- 开头'))
+      console.log(`commerce live hint rendered: ${hint}`)
+      if (!hint) process.exitCode = 1
+      await page.screenshot({ path: join(outDir, 'sidebar-commerce.png'), fullPage: true })
+      await adInput.fill('')
+      await page.waitForTimeout(200)
+    }
   }
   console.log(`screenshots written to ${outDir} (${errors.length} page errors)`)
   for (const error of errors) console.log(`  ${error}`)
