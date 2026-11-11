@@ -19,7 +19,7 @@ no bump; anything that changes `lib/` does.
 
 ```sh
 cd dsh-game-studio-fork
-npm version 0.1.0-rc.43 --no-git-tag-version
+npm version 0.1.0-rc.73 --no-git-tag-version   # the next increment
 ```
 
 ## 2. Build and run the local gates
