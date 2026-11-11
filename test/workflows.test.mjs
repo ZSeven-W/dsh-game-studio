@@ -49,3 +49,7 @@ test('CI treats the sidebar screenshots as required evidence', () => {
   assert.match(shots, /required evidence in CI/u)
   assert.match(shots, /screenshots skipped \(local run\)/u)
 })
+
+test('CI boots the built package as an installed one', () => {
+  assert.match(check, /node scripts\/installed-check\.mjs --path \. --no-browser/u)
+})
