@@ -13,7 +13,7 @@ import {
 import { buildProject } from './build.ts'
 import { commerceCheck, embedCommerce, loadCommerce, updateCommerce } from './commerce.ts'
 import { writeWechatCi } from './ci.ts'
-import { findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
+import { devtoolsDoctor, findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
 import { loadRelease, markReleaseDone, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
 import { reviewGuide } from './review.ts'
 import { exportWechat } from './wechat.ts'
@@ -116,7 +116,7 @@ const COMMAND_ACTIONS: Array<[string, string]> = [
   ['build', 'rebuild the game and refresh the preview'],
   ['export', 'export the playable HTML build'],
   ['export-wechat', 'export the WeChat mini-game project (optional "appid")'],
-  ['wechat-devtools', 'op: open | preview | upload'],
+  ['wechat-devtools', 'op: open | preview | upload | doctor'],
   ['wechat-release', 'op: status | update | materials | review'],
   ['wechat-commerce', 'op: status | configure (ad units, IAP, analytics)'],
   ['wechat-ci', 'write the CI upload kit (optional version/desc)'],
@@ -896,7 +896,7 @@ export function apply(ctx: any, config: Config = {}): void {
       + 'as DEVTOOLS_PORT_CLOSED with the steps to open it.',
     parameters: {
       path: projectParam,
-      action: { type: 'string', enum: ['open', 'preview', 'upload'], description: 'What to do in the IDE. Defaults to open.' },
+      action: { type: 'string', enum: ['open', 'preview', 'upload', 'doctor'], description: 'What to do in the IDE. "doctor" only checks the environment (CLI, service port, AppID) and returns what to fix. Defaults to open.' },
       version: { type: 'string', description: 'Upload version, e.g. "1.0.0". Defaults to 1.0.0.' },
       desc: { type: 'string', description: 'Upload description shown in the WeChat admin version list.' },
     },
@@ -908,6 +908,11 @@ export function apply(ctx: any, config: Config = {}): void {
     async execute(args: any, exec: any) {
       const dir = await projectDir(exec, args.path)
       const action = String(args.action ?? 'open')
+      if (action === 'doctor') {
+        const exportDir = findWechatExport(dir)
+        if (!exportDir) throw new StudioError('No WeChat mini-game export found; run the WeChat export first.', 'NO_WECHAT_EXPORT')
+        return { project: dir, ...(await devtoolsDoctor(exportDir)) }
+      }
       if (action === 'open') {
         const result = await openInDevtools(dir)
         await markReleaseDone(dir, 'devtools', 'opened in WeChat DevTools').catch(() => undefined)
@@ -1311,8 +1316,13 @@ export function apply(ctx: any, config: Config = {}): void {
           }
           else if (action === 'wechat-devtools') {
             const op = String(payload.op ?? 'open')
-            if (!['open', 'preview', 'upload'].includes(op)) throw new StudioError(`Unknown DevTools action "${op}". Use open, preview or upload.`, 'BAD_ACTION')
-            if (op === 'preview') result = await previewInDevtools(dir)
+            if (!['open', 'preview', 'upload', 'doctor'].includes(op)) throw new StudioError(`Unknown DevTools action "${op}". Use open, preview, upload or doctor.`, 'BAD_ACTION')
+            if (op === 'doctor') {
+              const exportDir = findWechatExport(dir)
+              if (!exportDir) throw new StudioError('No WeChat mini-game export found; run the WeChat export first.', 'NO_WECHAT_EXPORT')
+              result = await devtoolsDoctor(exportDir)
+            }
+            else if (op === 'preview') result = await previewInDevtools(dir)
             else if (op === 'upload') {
               result = await uploadFromDevtools(dir, { version: typeof payload.version === 'string' ? payload.version : undefined, desc: typeof payload.desc === 'string' ? payload.desc : undefined })
               await markReleaseDone(dir, 'upload', `uploaded ${String(payload.version ?? '1.0.0')}`).catch(() => undefined)

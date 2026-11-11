@@ -85,6 +85,13 @@ test('a non-coder journey: create, export, wizard, materials, monetization, help
   assert.match(badUnit.text, /adunit-/u)
 
   // 7. The two calls that need the user's account explain themselves.
+  const doctor = await run(`wechat-devtools ${JSON.stringify({ project: game, op: 'doctor' })}`)
+  assert.equal(doctor.kind, 'success', doctor.text)
+  const environment = JSON.parse(doctor.text)
+  assert.equal(typeof environment.cliFound, 'boolean')
+  assert.equal(typeof environment.portOpen, 'boolean')
+  assert.equal(environment.tourist, true, 'the exported project still uses the tourist AppID')
+  assert.ok(Array.isArray(environment.hints) && environment.hints.length > 0, 'the doctor always explains something')
   const devtools = await run(`wechat-devtools ${JSON.stringify({ project: game, op: 'preview' })}`)
   assert.equal(devtools.kind, 'error')
   assert.match(devtools.text, /(DevTools|服务端口|port)/u)

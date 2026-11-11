@@ -115,6 +115,8 @@ no longer exists.
 | `NO_BROWSER` | The export needs Chrome or Edge to rasterise SVG art | Install one, or use PNG art |
 | `NO_WECHAT_EXPORT` | A WeChat step ran before the export | Run the WeChat export first |
 | `DEVTOOLS_PORT_CLOSED` | The IDE's service port is off | 工具 → 设置 → 安全设置 → 服务端口 → 开启 |
+
+Before the first preview, run `wechat-devtools` with `op: "doctor"`: it reports whether the CLI is found, the service port answers and the project carries a real AppID, each with the fix. It never changes the IDE setting.
 | `DEVTOOLS_BAD_APPID` | The project still uses `touristappid` | Re-export with the real AppID, then upload |
 | `DEVTOOLS_NOT_LOGGED_IN` | The IDE is not signed in | Open it once and scan the QR code |
 | `NO_DEVTOOLS` | The IDE or its CLI cannot be found | Install WeChat DevTools |

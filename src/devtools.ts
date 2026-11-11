@@ -9,10 +9,11 @@
  */
 import { spawn } from 'node:child_process'
 import { accessSync, constants, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { connect } from 'node:net'
 import { join } from 'node:path'
 import { StudioError } from './util.ts'
 
-export type DevtoolsAction = 'open' | 'preview' | 'upload'
+export type DevtoolsAction = 'open' | 'preview' | 'upload' | 'doctor'
 
 export interface DevtoolsOptions {
   /** Explicit CLI path, for a non-standard install. */
@@ -42,6 +43,67 @@ export function devtoolsInstallHint(platform: NodeJS.Platform = process.platform
   if (platform === 'win32') return 'Install WeChat DevTools from https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html'
   if (platform === 'darwin') return 'Install WeChat DevTools from https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html (it installs cli under the app bundle)'
   return 'WeChat DevTools has no Linux build; run the upload from a Mac or Windows machine, or use CI with the official devtools CLI.'
+}
+
+/** The IDE's service port, as shown in 工具 → 设置 → 安全设置 → 服务端口. */
+export const DEVTOOLS_DEFAULT_PORT = 9420
+
+export interface DevtoolsDoctorReport {
+  cli: string | null
+  cliFound: boolean
+  port: number
+  portOpen: boolean
+  appid: string | null
+  tourist: boolean
+  ready: boolean
+  hints: string[]
+}
+
+/** Is something listening on the IDE's service port? A closed port is the usual blocker. */
+export function probeDevtoolsPort(port = DEVTOOLS_DEFAULT_PORT, timeoutMs = 800): Promise<boolean> {
+  return new Promise((resolvePort) => {
+    const socket = connect({ host: '127.0.0.1', port })
+    const finish = (open: boolean): void => {
+      socket.destroy()
+      resolvePort(open)
+    }
+    socket.setTimeout(timeoutMs)
+    socket.once('connect', () => finish(true))
+    socket.once('timeout', () => finish(false))
+    socket.once('error', () => finish(false))
+  })
+}
+
+function readProjectAppid(exportDir: string): string | null {
+  try {
+    const config = JSON.parse(readFileSync(join(exportDir, 'project.config.json'), 'utf8')) as { appid?: unknown }
+    return typeof config.appid === 'string' ? config.appid.trim() : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * One diagnostic before the real attempt: CLI present? service port open? real
+ * AppID in the project? Each finding carries the fix, so a non-coder can act on it
+ * without reading the IDE's output.
+ */
+export async function devtoolsDoctor(
+  exportDir: string,
+  options: { port?: number; configuredCli?: string } = {},
+): Promise<DevtoolsDoctorReport> {
+  const cli = findDevtools(options.configuredCli)
+  const port = options.port ?? DEVTOOLS_DEFAULT_PORT
+  const appid = readProjectAppid(exportDir)
+  const tourist = appid === null || appid === '' || appid === 'touristappid'
+  const portOpen = await probeDevtoolsPort(port)
+  const hints: string[] = []
+  if (cli === undefined) hints.push(`WeChat DevTools CLI was not found. ${devtoolsInstallHint()}`)
+  if (!portOpen) hints.push(DEVTOOLS_PORT_HINT)
+  if (tourist) hints.push('The project uses the tourist AppID: preview works, but uploading needs the real mini-game AppID (re-export with the appid).')
+  const ready = cli !== undefined && portOpen && !tourist
+  if (ready) hints.push('Everything the DevTools path needs is in place: preview and upload can run.')
+  return { cli: cli ?? null, cliFound: cli !== undefined, port, portOpen, appid, tourist, ready, hints }
 }
 
 function isFile(path: string): boolean {
