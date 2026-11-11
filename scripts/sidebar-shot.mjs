@@ -67,7 +67,7 @@ if (!browser) {
 const page = await browser.newPage({ viewport: { width: 400, height: 900 }, deviceScaleFactor: 2 })
 const errors = []
 page.on('pageerror', (error) => errors.push(String(error?.stack ?? error)))
-await page.addInitScript((data) => { window.__FIXTURES__ = data }, fixtures)
+await page.addInitScript((data) => { window.__FIXTURES__ = data.fixtures; window.__WIDTH__ = data.width }, { fixtures, width: 372 })
 const html = `<!doctype html><html><head><meta charset="utf-8"><style>
   body { margin: 0; background: #f3f4f6; }
 </style></head><body><div id="root"></div><script src="${'sidebar.js'}"></script></body></html>`
@@ -126,6 +126,23 @@ try {
     await page.waitForTimeout(600)
     await page.screenshot({ path: join(outDir, 'sidebar-uploaded.png'), fullPage: true })
   }
+
+  // Real sidebars are narrower than the draw width; check the same panel at 320 px.
+  const narrow = await browser.newPage({ viewport: { width: 320, height: 900 }, deviceScaleFactor: 2 })
+  const narrowErrors = []
+  narrow.on('pageerror', (error) => narrowErrors.push(String(error)))
+  await narrow.addInitScript((data) => { window.__FIXTURES__ = data.fixtures; window.__WIDTH__ = data.width }, { fixtures, width: 320 })
+  await narrow.goto(`file:///${pageFile.replace(/\\/gu, '/')}`)
+  await narrow.waitForSelector('text=上线向导', { timeout: 20000 })
+  await narrow.click('text=上线向导')
+  await narrow.waitForSelector('text=注册小游戏账号', { timeout: 20000 })
+  await narrow.waitForTimeout(400)
+  const overflow = await narrow.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  console.log(`narrow width overflow: ${overflow}px (${narrowErrors.length} page errors)`)
+  await narrow.screenshot({ path: join(outDir, 'sidebar-narrow.png'), fullPage: true })
+  await narrow.close()
+  if (overflow > 0) process.exitCode = 1
+  if (narrowErrors.length > 0) process.exitCode = 1
 
   const commerceButton = await page.$('text=商业化')
   if (commerceButton) {

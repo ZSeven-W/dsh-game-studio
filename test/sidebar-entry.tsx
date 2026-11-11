@@ -11,6 +11,7 @@ interface Fixtures {
 }
 
 const fixtures = (window as unknown as { __FIXTURES__: Fixtures }).__FIXTURES__
+const containerWidth = (window as unknown as { __WIDTH__?: number }).__WIDTH__ ?? 372
 let uploaded = false
 const components = new Map<string, unknown>()
 let dictionary: Record<string, string> = {}
@@ -113,5 +114,5 @@ const props = {
 }
 
 const root = createRoot(document.getElementById('root') as HTMLElement)
-root.render(createElement('div', { style: { width: 372, padding: 12, fontFamily: 'system-ui, "Segoe UI", sans-serif', background: '#ffffff' } },
+root.render(createElement('div', { style: { width: containerWidth, maxWidth: '100%', boxSizing: 'border-box', padding: 12, fontFamily: 'system-ui, "Segoe UI", sans-serif', background: '#ffffff' } },
   createElement(Tab as never, props as never)))
