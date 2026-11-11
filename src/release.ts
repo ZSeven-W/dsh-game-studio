@@ -491,6 +491,7 @@ export async function releaseMaterials(
   const runtimes = Array.isArray(manifest?.runtime) ? manifest.runtime : []
   const is3d = runtimes.includes('three')
   const rating = state.ageRating ?? null
+  const privacyDone = state.steps.privacy?.status === 'done'
   const category = state.category || '游戏 > 休闲游戏（以微信后台可选项为准）'
   const monetization = state.monetization ?? 'none'
   const lines = [
@@ -515,6 +516,10 @@ export async function releaseMaterials(
     '- 依据：《网络游戏适龄提示》团体标准；最终以审核意见为准。',
     '',
     '## 3. 用户隐私保护指引（草案）',
+    '',
+    privacyDone
+      ? '- 状态：已在后台完成「不收集」声明（向导里已打勾）。'
+      : '- 状态：**尚未完成**——提交前到后台「设置 → 服务内容声明 → 用户隐私保护指引」按「不收集」如实勾选，并在向导里打勾。',
     '',
     '**自检结论：本游戏不处理用户个人信息**——没有登录、手机号、位置、相册、通讯录；分数与静音状态只写在 `wx.setStorage` 的本机缓存里，不上传。',
     '',

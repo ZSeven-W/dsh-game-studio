@@ -332,3 +332,23 @@ test('the age-rating card never claims a rating the user has not chosen', async 
   assert.match(chosenText, /适龄级别：12\+/u)
   assert.match(chosenText, /本游戏适合 12 周岁/u)
 })
+
+test('the privacy draft says whether the console step is actually done', async (t) => {
+  const dir = await tempGame(t)
+  const exportDir = join(dir, 'export', 'wechat', 'privacy')
+  await mkdir(exportDir, { recursive: true })
+
+  const before = await releaseMaterials(dir, { exportDir, manifestTitle: 'Privacy Game' })
+  const beforeText = await readFile(before.file, 'utf8')
+  assert.match(beforeText, /状态：\*\*尚未完成\*\*/u, 'the draft admits the step is open')
+  assert.match(beforeText, /用户隐私保护指引/u)
+  // And the review agrees.
+  const risks = await reviewRisks(dir, await loadRelease(dir), { exportDir })
+  assert.ok(risks.some((risk) => risk.id === 'privacy'), 'the review flags the open privacy step')
+
+  await updateRelease(dir, { step: 'privacy' })
+  const after = await releaseMaterials(dir, { exportDir, manifestTitle: 'Privacy Game' })
+  const afterText = await readFile(after.file, 'utf8')
+  assert.match(afterText, /状态：已在后台完成「不收集」声明/u)
+  assert.doesNotMatch(afterText, /尚未完成/u)
+})
