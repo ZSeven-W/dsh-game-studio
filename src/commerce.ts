@@ -78,6 +78,9 @@ export function commerceCheck(state: CommerceState): CommerceCheck {
     notes.push('导出的游戏只在两局之间展示一次插屏，激励视频只由玩家点「看广告复活」触发，不强制观看。')
   }
   if (state.ads.rewarded && !state.ads.interstitial) notes.push('只配置了激励视频：不会自动弹插屏。')
+  if (state.enabled && state.analytics) {
+    notes.push('埋点用 wx.reportEvent 上报（事件名 game_*）；必须先在后台「数据 → 指标 / 事件管理」建同名事件，否则会被丢弃。')
+  }
 
   if (state.iap?.enabled) {
     if (!state.iap.licenseNumber) problems.push('开通内购必须填写游戏版号（审批文号）；没有版号不能做虚拟支付。')
@@ -171,3 +174,4 @@ export function embedCommerce(state: CommerceState): EmbeddedCommerce | null {
   if (iap) embedded.iap = iap
   return embedded
 }
+

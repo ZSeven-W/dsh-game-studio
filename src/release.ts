@@ -463,13 +463,22 @@ export async function releaseMaterials(
       : '- 未选择内购变现。',
     '- 插件只做接入骨架与合规检查，不承诺过审、备案或收入。',
     '',
-    '## 7. 上线前检查',
+    '## 7. 数据事件（可选）',
+    '',
+    '- 游戏会用 `wx.reportEvent` 上报这些事件，名称固定：',
+    '  `game_round_start`、`game_round_end`、`game_ad_interstitial`、`game_ad_rewarded`、',
+    '  `game_iap_order`、`game_iap_dry_run`、`game_iap_paid`、`game_iap_failed`。',
+    '- 事件必须现在后台建好同名事件（「数据 → 指标 / 事件管理」），否则上报会被丢弃、后台看不到数据。',
+    '- 基础库需 2.14.4 及以上；低版本会自动降级到 `wx.reportAnalytics`（如果宿主支持）。',
+    '',
+    '## 8. 上线前检查',
     '',
     '- [ ] 已在真机预览：能开始、能玩完一局、结算页可重开。',
     '- [ ] 已确认包体（主包 4 MB / 总包 30 MB）与基础库版本。',
     '- [ ] AppID 已替换为真实值（不是 touristappid）。',
-    '- [ ] 小游戏备案已通过。',
+    '- [ ] 小游戏备案已通过；需要时报关小程序（ICP）备案。',
     '- [ ] 适龄提示与隐私指引已按实际内容填写。',
+    '- [ ] 要看的埋点事件已在后台建好（见上一节）。',
     '',
   ]
   const markdown = lines.join('\n')
@@ -478,6 +487,8 @@ export async function releaseMaterials(
   await writeFile(target, markdown, 'utf8')
   return { markdown, file: target }
 }
+
+
 
 
 
