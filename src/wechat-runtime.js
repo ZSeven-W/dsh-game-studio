@@ -60,7 +60,13 @@
   mainCanvas = decorateCanvas(mainCanvas, true);
   mainCanvas.width = Math.round(cssW * dpr);
   mainCanvas.height = Math.round(cssH * dpr);
-  var mainCtx = mainCanvas.getContext('2d');
+  // Ask for the 2D context only when a 2D game actually reads it: taking it
+  // eagerly would make getContext('webgl2') return null for three.js games.
+  var mainCtx = null;
+  function mainContext() {
+    if (!mainCtx) mainCtx = mainCanvas.getContext('2d');
+    return mainCtx;
+  }
 
   function newCanvas() {
     // First wx.createCanvas() call is the on-screen canvas; later calls are offscreen.
@@ -141,7 +147,10 @@
   G.focus = function () {};
   G.blur = function () {};
   G.alert = function () {};
-  G.__wechatRuntime = { width: cssW, height: cssH, dpr: dpr, canvas: mainCanvas, ctx: mainCtx };
+  G.__wechatRuntime = {
+    width: cssW, height: cssH, dpr: dpr, canvas: mainCanvas,
+    get ctx() { return mainContext(); },
+  };
 
   function pointerEvent(touch, type) {
     return {

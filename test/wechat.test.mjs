@@ -54,8 +54,10 @@ async function rasterSlots(dir) {
 
 async function launchBrowser() {
   const { chromium } = await import('playwright-core')
-  try { return await chromium.launch({ channel: 'chrome', headless: true }) }
-  catch { try { return await chromium.launch({ channel: 'msedge', headless: true }) } catch { return null } }
+  // SwiftShader keeps WebGL2 available on machines (and CI) without a GPU.
+  const args = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']
+  try { return await chromium.launch({ channel: 'chrome', headless: true, args }) }
+  catch { try { return await chromium.launch({ channel: 'msedge', headless: true, args }) } catch { return null } }
 }
 
 test('export writes an importable WeChat mini-game project beside the HTML export', async (t) => {
@@ -110,15 +112,38 @@ test('the AppID and the orientation reach project.config.json and game.json', as
   assert.deepEqual(JSON.parse(await readFile(join(result.dir, 'game.json'), 'utf8')), { deviceOrientation: 'landscape' })
 })
 
-test('a three.js/WebGL project is refused with a clear error and no output', async (t) => {
+test('a three.js project exports with its runtime inlined before the game code', async (t) => {
+  const { dir } = await tempProject(t, { template: 'voxel' })
+  await rasterSlots(dir)
+  const original = await readFile(paths.code(dir), 'utf8')
+  const result = await exportWechat(dir).catch((error) => {
+    if (error?.code === 'MISSING_RUNTIME') return null
+    throw error
+  })
+  if (!result) return t.skip('run npm run build first: lib/vendor/three.js is missing')
+  assert.deepEqual(result.runtimes, ['three'])
+  const game = await readFile(join(result.dir, 'game.js'), 'utf8')
+  assert.ok(game.trimEnd().endsWith(original.trimEnd()), 'the game code is appended unchanged')
+  const adapterAt = game.indexOf('__wechatRuntime')
+  const threeAt = game.indexOf('window.THREE=')
+  const payloadAt = game.indexOf('window.GAME=')
+  assert.ok(adapterAt >= 0 && adapterAt < threeAt, 'the wx adapter boots before three.js')
+  assert.ok(threeAt < payloadAt, 'three.js is defined before the game payload')
+  // three.js is ~750 KB, so the 3D project is big but still inside WeChat's 4 MB main package.
+  assert.ok(result.bytes > 500 * 1024, `expected the inlined runtime, got ${result.bytes} bytes`)
+  assert.ok(result.bytes < 4 * 1024 * 1024, `main package must stay under 4 MB, got ${result.bytes} bytes`)
+  assert.deepEqual(result.warnings, [])
+})
+
+test('an unknown runtime in game.json is refused before anything is written', async (t) => {
   const { dir } = await tempProject(t)
   const manifest = await loadManifest(dir)
-  manifest.runtime = ['three']
+  manifest.runtime = ['unity']
   await writeJson(paths.manifest(dir), manifest)
   const error = await exportWechat(dir).then(() => null, (thrown) => thrown)
   assert.ok(error, 'export must fail')
-  assert.equal(error.code, 'WECHAT_3D_UNSUPPORTED')
-  assert.match(error.message, /2D canvas games only/u)
+  assert.equal(error.code, 'BAD_MANIFEST')
+  assert.match(error.message, /Unknown runtime "unity"/u)
   assert.equal(await readdir(paths.exportDir(dir)).then(files => files.length, () => 0), 0)
 })
 
@@ -141,8 +166,11 @@ async function serveMockWx(root) {
 <html lang="zh-CN"><head><meta charset="utf-8"><style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}canvas{display:block;width:100vw;height:100vh;touch-action:none}</style>
 </head><body><canvas id="game"></canvas><script src="/mock-inject.js"></script></body></html>`
 
-  // Loads the exported game.js the way a mini-game would: the runtime first, then
-  // the payload and the untouched game code, with wx.* and a DOM-less window.
+  // Loads the exported game.js the way a mini-game would: one global object
+  // (GameGlobal === window) and a wx.* surface, with no DOM above the canvas.
+  // `with (GameGlobal)` is what makes the free identifiers inside game.js
+  // (window, document, THREE, ...) resolve against the fake global, exactly as
+  // they do in WeChat, where GameGlobal *is* the global object.
   const mockInject = `(function () {
   var main = document.getElementById('game');
   var mainUsed = false;
@@ -166,13 +194,7 @@ async function serveMockWx(root) {
   };
   window.__G = G;
   fetch('/game.js').then(function (response) { return response.text(); }).then(function (code) {
-    var marker = '\\nwindow.GAME=';
-    var index = code.indexOf(marker);
-    if (index < 0) throw new Error('window.GAME payload not found');
-    new Function('GameGlobal', 'wx', code.slice(0, index))(G, wx);
-    new Function('window', 'document', 'Image', 'localStorage', 'performance', 'requestAnimationFrame', code.slice(index + 1))(
-      G, G.document, G.Image, G.localStorage, G.performance, window.requestAnimationFrame.bind(window)
-    );
+    new Function('GameGlobal', 'wx', 'with (GameGlobal) {\\n' + code + '\\n}')(G, wx);
     window.__ready = true;
   }).catch(function (error) { window.__bootError = String(error && error.stack || error); });
 })();`
@@ -199,13 +221,11 @@ async function serveMockWx(root) {
   return { server, port: server.address().port }
 }
 
-test('the exported project boots the original 2D game on a mocked wx', async (t) => {
-  const { dir } = await tempProject(t)
-  await rasterSlots(dir)
-  const exported = await exportWechat(dir)
+/** Open one exported project in a mock-wx page and hand it to `run`. False = no browser. */
+async function withMockWx(exportedDir, run) {
   const browser = await launchBrowser()
-  if (!browser) return t.skip('no Chrome or Edge here')
-  const { server, port } = await serveMockWx(exported.dir)
+  if (!browser) return false
+  const { server, port } = await serveMockWx(exportedDir)
   const page = await browser.newPage({ viewport: { width: 500, height: 900 }, deviceScaleFactor: 1 })
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error?.message ?? error)))
@@ -213,27 +233,53 @@ test('the exported project boots the original 2D game on a mocked wx', async (t)
   try {
     await page.goto(`http://127.0.0.1:${port}/mock.html`)
     await page.waitForFunction('window.__ready === true || window.__bootError', undefined, { timeout: 20000 })
-    const boot = await page.evaluate(() => ({
-      ready: window.__ready === true,
-      error: window.__bootError ?? '',
-      runtime: Boolean(window.__G && window.__G.__wechatRuntime),
-      title: window.__G.__gameState().phase,
-    }))
+    const boot = await page.evaluate(() => ({ ready: window.__ready === true, error: window.__bootError ?? '' }))
     assert.equal(boot.error, '')
     assert.equal(boot.ready, true)
-    assert.equal(boot.runtime, true, 'the adapter installed its runtime globals')
-    assert.equal(boot.title, 'title')
+    await run({ page, errors })
+  } finally {
+    await page.close().catch(() => undefined)
+    await browser.close().catch(() => undefined)
+    await new Promise((resolve) => server.close(resolve))
+  }
+  return true
+}
 
-    // The game starts on a tap, and only touches on the canvas are delivered.
+test('the exported 2D game boots on a mocked wx and starts on a tap', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  const exported = await exportWechat(dir)
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    const boot = await page.evaluate(() => ({ runtime: Boolean(window.__G.__wechatRuntime), phase: window.__G.__gameState().phase }))
+    assert.equal(boot.runtime, true, 'the adapter installed its runtime globals')
+    assert.equal(boot.phase, 'title')
     await page.evaluate(() => window.__touch({ changedTouches: [{ identifier: 1, clientX: 250, clientY: 720 }] }))
     await page.waitForFunction('window.__G.__gameState().phase === "playing"', undefined, { timeout: 10000 })
     const state = await page.evaluate(() => window.__G.__gameState())
     assert.equal(state.phase, 'playing')
     assert.ok(state.world.w > 0 && state.world.h > 0, 'the game got a sized world from the adapter')
     assert.deepEqual(errors, [])
-  } finally {
-    await page.close().catch(() => undefined)
-    await browser.close().catch(() => undefined)
-    await new Promise((resolve) => server.close(resolve))
-  }
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
+test('the exported 3D game renders through WebGL on a mocked wx', async (t) => {
+  const { dir } = await tempProject(t, { template: 'voxel' })
+  await rasterSlots(dir)
+  const exported = await exportWechat(dir)
+  assert.deepEqual(exported.runtimes, ['three'])
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    const boot = await page.evaluate(() => window.__G.__gameState())
+    assert.equal(boot.renderer, 'webgl', 'three.js got a WebGL context from the adapter canvas')
+    assert.equal(boot.phase, 'title')
+    // The 3D template ignores taps for 600 ms after the title card appears.
+    await page.waitForTimeout(900)
+    await page.evaluate(() => window.__touch({ changedTouches: [{ identifier: 1, clientX: 250, clientY: 700 }] }))
+    await page.waitForFunction('window.__G.__gameState().phase === "playing"', undefined, { timeout: 10000 })
+    const state = await page.evaluate(() => window.__G.__gameState())
+    assert.equal(state.renderer, 'webgl')
+    assert.ok(state.fps > 0, `expected a live frame loop, got fps ${state.fps}`)
+    assert.deepEqual(errors, [])
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
 })
