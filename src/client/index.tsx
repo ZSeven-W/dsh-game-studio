@@ -470,6 +470,11 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
     if (next && release === null) void loadRelease()
   }, [releaseOpen, release, loadRelease])
 
+  // The button shows how far the release got; a fresh game shows the first-run hint.
+  useEffect(() => {
+    if (release === null) void loadRelease()
+  }, [release, loadRelease])
+
   const ownerLabel = (owner: ReleaseStepView['owner']): string => owner === 'wechat'
     ? t('tab.releaseOwner.wechat')
     : owner === 'plugin' ? t('tab.releaseOwner.plugin') : t('tab.releaseOwner.user')
@@ -549,7 +554,9 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
       <button type="button" style={s.button} onClick={() => { void run('build', {}) }} disabled={busy}>{t('tab.rebuild')}</button>
       <button type="button" style={s.button} onClick={() => { void run('export', {}) }} disabled={busy}>{t('tab.export')}</button>
       <button type="button" style={s.button} onClick={() => { void run('export-wechat', {}) }} disabled={busy}>{t('tab.exportWechat')}</button>
-      <button type="button" style={s.button} onClick={toggleRelease} disabled={busy}>{t('tab.release')}</button>
+      <button type="button" style={s.button} onClick={toggleRelease} disabled={busy}>
+        {release ? `${t('tab.release')} · ${release.progress.done}/${release.progress.total}` : t('tab.release')}
+      </button>
       <button type="button" style={s.button} onClick={toggleCommerce} disabled={busy}>{t('tab.commerce')}</button>
       <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30' }) }} disabled={busy}>{t('tab.share')}</button>
       <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30', scope: 'public' }) }} disabled={busy}>
@@ -576,6 +583,7 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
           onChange={(event) => { setUploadVersion(event.target.value) }} />
         <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void uploadDevtools() }}>{t('tab.upload')}</button>
       </div>
+      {release && release.progress.done === 0 && <div style={s.small}>{t('tab.releaseFirstHint')}</div>}
       {qrUrl !== undefined && <div style={{
         display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px',
       }}>
