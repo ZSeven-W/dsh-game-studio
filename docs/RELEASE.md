@@ -3,13 +3,26 @@
 The plugin ships as one npm package; the WeChat target has no separate artefact.
 Run this before tagging a release or opening a pull request.
 
+## Sidebar controls this guide refers to
+
+| Sidebar button | What it does |
+| --- | --- |
+| **Export WeChat mini-game** | Writes the importable project under `export/wechat/<slug>/`; pass the real AppID here |
+| **Launch wizard** | The 15–17 step checklist with owners, blockers and the next action |
+| **Write release materials** | Writes `RELEASE.md` (copy-paste texts) next to the export |
+| **Pre-review check** | Writes `REVIEW.md` (the 12 rejection reasons and this project's risks) |
+| **Check environment** | Reports CLI, service port and AppID blockers without opening the IDE |
+| **Preview QR** | Shows the device QR the IDE generated |
+| **Upload version** | Uploads the typed version through the IDE CLI |
+| **Monetization** | Ad unit IDs, IAP gate and analytics switch |
+
 ## 1. Build and test
 
 ```sh
 npm ci
 npm run build
-npm test            # 159 tests; 49 fail on a Windows box without gh/cloudflared/Codex
-npm run acceptance  # 21 checks; browser checks skip when no Chrome is installed
+npm test            # 256 tests; 49 fail on a Windows box without gh/cloudflared/Codex
+npm run acceptance  # 39 checks; browser checks skip when no Chrome is installed
 npm run trace       # the requirement→evidence table still points at real tests
 ```
 
