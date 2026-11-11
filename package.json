@@ -49,7 +49,8 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "acceptance": "node scripts/acceptance.mjs"
   },
   "dsh": {
     "bundle": {
@@ -108,3 +109,4 @@
     "access": "public"
   }
 }
+
