@@ -8,11 +8,12 @@
 //   NODE_OPTIONS=--experimental-strip-types node scripts/acceptance.mjs [--out DIR]
 //
 // This is deliberately the same code path the tests use: the harness is imported,
-// not copied, so a passing acceptance run means the shipped adapter works.
+// not copied, so a passing acceptance run means the shipped adapter works. It is
+// also the regression check to re-run after an upstream update.
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createProject, loadManifest, paths } from '../src/project.ts'
+import { createProject, paths } from '../src/project.ts'
 import { updateCommerce } from '../src/commerce.ts'
 import { exportWechat } from '../src/wechat.ts'
 import { reviewGuide } from '../src/review.ts'
@@ -28,8 +29,8 @@ const outRoot = resolve(outIndex >= 0 ? args[outIndex + 1] : join(repo, '..', 'a
 
 const AD_UNITS = { interstitial: 'adunit-demo0001', rewarded: 'adunit-demo0002' }
 const GAMES = [
-  { id: '2d', title: 'Moon Garden', template: 'collector', orientation: 'portrait' },
-  { id: '3d', title: 'Lantern Isle', template: 'voxel', orientation: 'portrait' },
+  { id: '2d', title: 'Moon Garden', template: 'collector', orientation: 'portrait', renderer: null },
+  { id: '3d', title: 'Lantern Isle', template: 'voxel', orientation: 'portrait', renderer: 'webgl' },
 ]
 
 const report = {
@@ -38,13 +39,13 @@ const report = {
   plugin: JSON.parse(await readFile(join(repo, 'package.json'), 'utf8')).version,
   output: outRoot,
   games: [],
-  release: null,
   checks: [],
 }
 
-function check(name, ok, detail) {
-  report.checks.push({ name, ok, detail })
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`)
+function check(name, ok, detail = '', skipped = false) {
+  report.checks.push({ name, ok: skipped ? true : ok, skipped, detail })
+  const mark = skipped ? 'SKIP' : ok ? 'PASS' : 'FAIL'
+  console.log(`${mark}  ${name}${detail ? ` — ${detail}` : ''}`)
 }
 
 async function prepareGame(spec, dir) {
@@ -69,8 +70,8 @@ async function playExported(spec, exportedDir, shotsDir) {
   try {
     const page = mock.page
     await page.waitForFunction('window.__G && window.__G.__gameState', undefined, { timeout: 20000 })
-    const titleState = await page.evaluate(() => window.__G.__gameState())
     await page.screenshot({ path: shot('title') })
+    const titleState = await page.evaluate(() => window.__G.__gameState())
     await page.waitForTimeout(900)
     await page.evaluate(() => window.__touch({ changedTouches: [{ identifier: 1, clientX: 250, clientY: 700 }] }))
     await page.waitForFunction('window.__G.__gameState().phase === "playing"', undefined, { timeout: 20000 })
@@ -78,8 +79,31 @@ async function playExported(spec, exportedDir, shotsDir) {
     const playingState = await page.evaluate(() => window.__G.__gameState())
     const metrics = await page.evaluate(() => window.__G.__wechatRuntime.metrics())
     const quality = await page.evaluate(() => window.__G.__wechatRuntime.quality)
+    // Everything below is what a real device would exercise; each probe is
+    // asserted as its own check so a regression names the broken capability.
+    const probe = await page.evaluate(async () => {
+      const toneOk = window.__G.__wechatRuntime.playTone(440, 0.05, 'sine', 0.05)
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      return {
+        toneOk,
+        audioPlayed: window.__wxAudio ? window.__wxAudio.played.length : 0,
+        audioFiles: window.__wxAudio ? window.__wxAudio.files.length : 0,
+        ads: window.__wxAds ? { interstitial: window.__wxAds.interstitial, rewarded: window.__wxAds.rewarded } : null,
+        edits: window.__wxAds ? window.__wxAds.events.map((entry) => entry.id) : [],
+      }
+    })
     await page.screenshot({ path: shot('playing') })
-    return { skipped: false, titlePhase: titleState.phase, playingPhase: playingState.phase, metrics, quality, errors: mock.errors, shots: [shot('title'), shot('playing')] }
+    return {
+      skipped: false,
+      titlePhase: titleState.phase,
+      playingPhase: playingState.phase,
+      state: playingState,
+      metrics,
+      quality,
+      probe,
+      errors: mock.errors,
+      shots: [shot('title'), shot('playing')],
+    }
   } finally {
     await mock.close()
   }
@@ -94,15 +118,31 @@ for (const spec of GAMES) {
   await prepareGame(spec, dir)
   const exported = await exportWechat(dir, { appid: 'touristappid' })
   const play = await playExported(spec, exported.dir, shotsDir)
-  check(`${spec.id}: export produced an importable project`, exported.files.includes('game.js') && exported.files.includes('project.config.json'), `${exported.bytes} bytes`)
-  check(`${spec.id}: export fits the 4 MB main package`, exported.report.totalBytes < 4 * 1024 * 1024, `${(exported.report.totalBytes / 1048576).toFixed(2)} MB`)
+
+  check(`${spec.id}: export produced an importable project`,
+    exported.files.includes('game.js') && exported.files.includes('project.config.json'), `${exported.bytes} bytes`)
+  check(`${spec.id}: export fits the 4 MB main package`,
+    exported.report.totalBytes < 4 * 1024 * 1024, `${(exported.report.totalBytes / 1048576).toFixed(2)} MB`)
+
   if (play.skipped) {
-    check(`${spec.id}: booted in the mock wx harness`, false, 'no Chrome or Edge installed')
+    for (const name of ['booted in the mock wx harness', 'reached the title screen', 'started on a tap', 'no page errors', 'audio plays a tone', 'no ad is forced at boot', 'device tier reported']) {
+      check(`${spec.id}: ${name}`, false, 'no Chrome or Edge installed', true)
+    }
   } else {
-    check(`${spec.id}: reached the title screen`, play.titlePhase === 'title', play.titlePhase)
+    check(`${spec.id}: booted in the mock wx harness`, play.titlePhase === 'title', play.titlePhase)
     check(`${spec.id}: started on a tap`, play.playingPhase === 'playing', play.playingPhase)
     check(`${spec.id}: no page errors`, play.errors.length === 0, play.errors.join(' | ').slice(0, 200))
+    check(`${spec.id}: audio plays a tone`, play.probe.toneOk === true && play.probe.audioPlayed >= 1,
+      `${play.probe.audioFiles} wav, ${play.probe.audioPlayed} played`)
+    check(`${spec.id}: no ad is forced at boot`,
+      play.probe.ads !== null && play.probe.ads.interstitial === 0 && play.probe.ads.rewarded === 0,
+      JSON.stringify(play.probe.ads))
+    check(`${spec.id}: device tier reported`, Boolean(play.quality?.tier), `${play.quality?.tier} · cap ${play.quality?.dprCap}x`)
+    if (spec.renderer) {
+      check(`${spec.id}: renders through WebGL`, play.state.renderer === spec.renderer, play.state.renderer)
+    }
   }
+
   // Release materials and the pre-review check go next to the export.
   await updateRelease(dir, { ageRating: '8+', category: '游戏 > 休闲游戏', monetization: 'iaa', gameName: spec.title })
   const materials = await releaseMaterials(dir, {
@@ -112,6 +152,9 @@ for (const spec of GAMES) {
     orientation: spec.orientation,
   })
   const review = await reviewGuide(dir, { exportDir: exported.dir })
+  check(`${spec.id}: release materials written`, materials.file.endsWith('RELEASE.md'), materials.file)
+  check(`${spec.id}: pre-review risks listed`, review.risks.length > 0, review.risks.map((risk) => risk.id).join(', '))
+
   report.games.push({
     id: spec.id,
     title: spec.title,
@@ -129,34 +172,39 @@ for (const spec of GAMES) {
     materials: materials.file,
     review: { file: review.file, risks: review.risks },
   })
-  check(`${spec.id}: release materials written`, materials.file.endsWith('RELEASE.md'), materials.file)
-  check(`${spec.id}: pre-review risks listed`, review.risks.length > 0, review.risks.map(risk => risk.id).join(', '))
 }
 
 report.finishedAt = new Date().toISOString()
-report.passed = report.checks.every(entry => entry.ok)
+const counted = report.checks.filter((entry) => !entry.skipped)
+report.passed = counted.every((entry) => entry.ok)
+report.summary = {
+  passed: counted.filter((entry) => entry.ok).length,
+  failed: counted.filter((entry) => !entry.ok).length,
+  skipped: report.checks.filter((entry) => entry.skipped).length,
+}
 await writeFile(join(outRoot, 'report.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8')
 
+const icon = (entry) => entry.skipped ? '⏭️' : entry.ok ? '✅' : '❌'
 const lines = [
   `# WeChat acceptance run — ${report.passed ? 'PASS' : 'FAIL'}`,
   '',
   `- plugin ${report.plugin} · node ${report.node}`,
+  `- ${report.summary.passed} passed · ${report.summary.failed} failed · ${report.summary.skipped} skipped`,
   `- ${report.startedAt} → ${report.finishedAt}`,
   '',
   '## Checks',
   '',
-  ...report.checks.map(entry => `- ${entry.ok ? '✅' : '❌'} ${entry.name}${entry.detail ? ` — ${entry.detail}` : ''}`),
+  ...report.checks.map((entry) => `- ${icon(entry)} ${entry.name}${entry.detail ? ` — ${entry.detail}` : ''}`),
   '',
   '## Games',
   '',
-  '| game | template | export | boot | playing | fps | risks |',
-  '| --- | --- | --- | --- | --- | --- | --- |',
-  ...report.games.map(game => `| ${game.title} | ${game.template} | ${(game.export.bytes / 1024).toFixed(0)} KB | ${game.play.skipped ? 'skipped' : game.play.titlePhase} | ${game.play.skipped ? '—' : game.play.playingPhase} | ${game.play.metrics?.fps ?? '—'} | ${game.review.risks.map(risk => risk.id).join(', ')} |`),
+  '| game | template | export | boot | playing | fps | tier | risks |',
+  '| --- | --- | --- | --- | --- | --- | --- | --- |',
+  ...report.games.map((game) => `| ${game.title} | ${game.template} | ${(game.export.bytes / 1024).toFixed(0)} KB | ${game.play.skipped ? 'skipped' : game.play.titlePhase} | ${game.play.skipped ? '—' : game.play.playingPhase} | ${game.play.metrics?.fps ?? '—'} | ${game.play.quality?.tier ?? '—'} | ${game.review.risks.map((risk) => risk.id).join(', ')} |`),
   '',
   'Screenshots: `screens/`. Machine-readable report: `report.json`.',
   '',
 ]
 await writeFile(join(outRoot, 'REPORT.md'), lines.join('\n'), 'utf8')
-console.log(`\n${report.passed ? 'acceptance PASS' : 'acceptance FAIL'} → ${outRoot}`)
+console.log(`\n${report.passed ? 'acceptance PASS' : 'acceptance FAIL'} (${report.summary.passed} passed, ${report.summary.failed} failed, ${report.summary.skipped} skipped) → ${outRoot}`)
 if (!report.passed) process.exitCode = 1
-
