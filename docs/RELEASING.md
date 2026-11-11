@@ -8,7 +8,9 @@ packed until the checks pass, and nothing is installed until the tarball exists.
 `node artifacts/evidence-index.mjs` lists every evidence class (acceptance,
 sidebar shots, rehearsal, clean clone, package, upstream drill, upgrade drill,
 bench, GUI mount, patch series, snapshot) with its file, freshness and status. It
-fails when one is missing, so run it before touching the version. The workspace also
+fails when one is missing, so run it before touching the version. `node artifacts/evidence-version.mjs` compares the
+evidence reports with the package version and the sidebar screenshots with the client
+source, so neither can be shipped stale. The workspace also
 has `node artifacts/entry-check.mjs`, which checks that every sidebar control is
 mentioned in the user documents (it fails when a button is renamed but the docs are not), and `node
 artifacts/prdoc-check.mjs` compares the PR body's test/patch numbers with the latest

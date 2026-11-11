@@ -69,7 +69,12 @@ await build({
 
 const browser = await launchBrowser()
 if (!browser) {
-  console.log('no Chrome or Edge installed: screenshots skipped')
+  // The screenshots are evidence: on CI a missing browser is a failure, not a skip.
+  if (process.env.CI) {
+    console.error('no Chrome or Edge installed: the sidebar screenshots are required evidence in CI')
+    process.exit(1)
+  }
+  console.log('no Chrome or Edge installed: screenshots skipped (local run)')
   process.exit(0)
 }
 const parseRgb = (value) => {

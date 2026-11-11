@@ -7,6 +7,7 @@ import { test } from 'node:test'
 
 const check = readFileSync(new URL('../.github/workflows/check.yml', import.meta.url), 'utf8')
 const drift = readFileSync(new URL('../.github/workflows/upstream-drift.yml', import.meta.url), 'utf8')
+const shots = readFileSync(new URL('../scripts/sidebar-shot.mjs', import.meta.url), 'utf8')
 
 test('CI runs the acceptance and screenshot evidence inside the workspace', () => {
   assert.match(check, /node-version: '24'/u)
@@ -38,4 +39,13 @@ test('the nightly drift job applies, builds and tests the series on upstream', (
   assert.match(drift, /actions\/upload-artifact@v4/u)
   assert.match(drift, /if: always\(\)/u)
   assert.match(drift, /artifacts\/upstream-drift\/report\.json/u)
+})
+
+test('CI treats the sidebar screenshots as required evidence', () => {
+  assert.match(check, /npm run shots -- --out artifacts\/sidebar/u)
+  // A missing browser must fail CI instead of silently skipping the screenshots:
+  // the panel render is the only thing that catches a dangling client identifier.
+  assert.match(shots, /process\.env\.CI/u)
+  assert.match(shots, /required evidence in CI/u)
+  assert.match(shots, /screenshots skipped \(local run\)/u)
 })
