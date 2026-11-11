@@ -230,6 +230,7 @@ interface ReleaseView {
   reviewAt?: string | null
   materialsPresent?: boolean
   reviewPresent?: boolean
+  uploads?: Array<{ version: string; at: string; note?: string }>
 }
 
 interface CommerceView {
@@ -597,6 +598,11 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
               ? t('tab.releaseBlockedHint', { title: release.blocked[0].title })
               : ''}
         </span>
+        {release?.uploads && release.uploads.length > 0 && (
+          <span style={s.small}>{t('tab.lastUpload', { version: release.uploads[release.uploads.length - 1].version })}</span>
+        )}
+        {release?.uploads?.some((entry) => entry.version === uploadVersion.trim())
+          && <span style={s.small}>{t('tab.versionUploaded')}</span>}
         {release?.materialsAt && (release.materialsPresent === false
           ? <span style={s.small}>{t('tab.materialsMissing')}</span>
           : <span style={s.small}>{t('tab.materialsReady')}</span>)}

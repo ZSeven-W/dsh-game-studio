@@ -40,6 +40,7 @@ try {
     ...releaseStatus(dir, await loadRelease(dir), releasePlan(false)),
     materialsPresent: true,
     reviewPresent: true,
+    uploads: [{ version: '0.9.0', at: new Date().toISOString(), note: 'uploaded 0.9.0 · 主包 803 KB · upload ok' }],
   }
   fixtures.commerce = {
     enabled: false,

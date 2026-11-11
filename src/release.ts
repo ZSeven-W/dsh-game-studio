@@ -58,6 +58,8 @@ export interface ReleaseState {
   /** Set by the plugin when it writes RELEASE.md / REVIEW.md next to the export. */
   materialsAt?: string
   reviewAt?: string
+  /** Every version the plugin uploaded, newest last. */
+  uploads?: Array<{ version: string; at: string; note?: string }>
   steps: Record<string, ReleaseStepState>
   createdAt: string
   updatedAt: string
@@ -76,6 +78,7 @@ export interface ReleaseStatus {
   /** False when the timestamp exists but the file was deleted (or never exported). */
   materialsPresent: boolean
   reviewPresent: boolean
+  uploads: Array<{ version: string; at: string; note?: string }>
   blocked: Array<{ id: string; title: string; missing: string[] }>
 }
 
@@ -348,6 +351,7 @@ export function releaseStatus(dir: string, state: ReleaseState, plan: ReleaseSte
   const relevant = steps.filter(step => step.status !== 'skipped')
   const done = relevant.filter(step => step.status === 'done').length
   const next = relevant.filter(step => step.status === 'todo' && !step.blocked)
+  const uploads = (state.uploads ?? []).slice(-10)
   return {
     game: dir,
     appid: state.appid ?? '',
@@ -355,6 +359,7 @@ export function releaseStatus(dir: string, state: ReleaseState, plan: ReleaseSte
     ageRating: state.ageRating ?? null,
     materialsAt: state.materialsAt ?? null,
     reviewAt: state.reviewAt ?? null,
+    uploads,
     progress: { done, total: relevant.length, percent: relevant.length === 0 ? 0 : Math.round((done / relevant.length) * 100) },
     steps,
     next: next.slice(0, 3).map(step => ({ id: step.id, title: step.title, owner: step.owner, how: step.how })),
@@ -398,6 +403,14 @@ export async function releaseFilePresence(dir: string): Promise<{ materials: boo
     materials: existsSync(join(exportDir, 'RELEASE.md')),
     review: existsSync(join(exportDir, 'REVIEW.md')),
   }
+}
+
+/** Complete the upload step and keep the versions that were really uploaded. */
+export async function markUploaded(dir: string, version: string, note: string): Promise<void> {
+  const state = await loadRelease(dir)
+  state.uploads = [...(state.uploads ?? []), { version, at: now(), note }].slice(-20)
+  state.steps.upload = { status: 'done', note, updatedAt: now() }
+  await saveRelease(dir, state)
 }
 
 /** Record that the materials / review file was written (shown in the sidebar). */

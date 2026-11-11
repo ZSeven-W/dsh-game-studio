@@ -14,7 +14,7 @@ import { buildProject } from './build.ts'
 import { commerceCheck, embedCommerce, loadCommerce, updateCommerce } from './commerce.ts'
 import { writeWechatCi } from './ci.ts'
 import { devtoolsDoctor, findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
-import { loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, releaseFilePresence, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
+import { loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFilePresence, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
 import { reviewGuide } from './review.ts'
 import { exportWechat } from './wechat.ts'
 import { runCodexBatch, type CodexBatch } from './generation.ts'
@@ -933,7 +933,7 @@ export function apply(ctx: any, config: Config = {}): void {
       if (action === 'preview') return { project: dir, ...(await previewInDevtools(dir, { cli })) }
       if (action === 'upload') {
         const result = await uploadFromDevtools(dir, { version: args.version, desc: args.desc, cli })
-        await markReleaseDone(dir, 'upload', uploadNote(args.version ?? '1.0.0', result)).catch(() => undefined)
+        await markUploaded(dir, args.version ?? '1.0.0', uploadNote(args.version ?? '1.0.0', result)).catch(() => undefined)
         return { project: dir, ...result }
       }
       throw new StudioError(`Unknown DevTools action "${action}"; use open, preview, upload or doctor.`, 'BAD_ACTION')
@@ -1340,8 +1340,9 @@ export function apply(ctx: any, config: Config = {}): void {
             }
             else if (op === 'preview') result = await previewInDevtools(dir, { cli })
             else if (op === 'upload') {
-              result = await uploadFromDevtools(dir, { version: typeof payload.version === 'string' ? payload.version : undefined, desc: typeof payload.desc === 'string' ? payload.desc : undefined, cli })
-              await markReleaseDone(dir, 'upload', uploadNote(String(payload.version ?? '1.0.0'), result)).catch(() => undefined)
+              const version = String(payload.version ?? '1.0.0')
+              result = await uploadFromDevtools(dir, { version, desc: typeof payload.desc === 'string' ? payload.desc : undefined, cli })
+              await markUploaded(dir, version, uploadNote(version, result)).catch(() => undefined)
             } else {
               result = await openInDevtools(dir, { cli })
               await markReleaseDone(dir, 'devtools', 'opened in WeChat DevTools').catch(() => undefined)

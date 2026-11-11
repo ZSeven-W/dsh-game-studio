@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
-  loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, releaseFile, releaseFilePresence, releaseMaterials, releasePlan, releaseStatus, updateRelease,
+  loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFile, releaseFilePresence, releaseMaterials, releasePlan, releaseStatus, updateRelease,
 } from '../src/release.ts'
 import { createProject } from '../src/project.ts'
 import { updateCommerce } from '../src/commerce.ts'
@@ -200,4 +200,21 @@ test('a deleted materials file is not reported as present', async (t) => {
   // The user deleted one file by hand: do not claim it is still generated.
   await rm(join(exportDir, 'RELEASE.md'))
   assert.deepEqual(await releaseFilePresence(dir), { materials: false, review: true })
+})
+
+test('uploads keep the versions that were really sent', async (t) => {
+  const dir = await tempGame(t)
+  await markUploaded(dir, '1.0.0', 'uploaded 1.0.0 · 主包 1 KB · upload ok')
+  await markUploaded(dir, '1.0.1', 'uploaded 1.0.1 · 主包 1 KB · upload ok')
+
+  const state = await loadRelease(dir)
+  const view = releaseStatus(dir, state, releasePlan('none'))
+  assert.deepEqual(view.uploads.map((entry) => entry.version), ['1.0.0', '1.0.1'])
+  assert.equal(view.steps.find((step) => step.id === 'upload').status, 'done', 'the upload step is done')
+  assert.match(view.uploads[1].note, /upload ok/u)
+
+  // A retry of the same version is still recorded: the user should see it and bump.
+  await markUploaded(dir, '1.0.1', 'uploaded 1.0.1 again')
+  const again = releaseStatus(dir, await loadRelease(dir), releasePlan('none'))
+  assert.equal(again.uploads.filter((entry) => entry.version === '1.0.1').length, 2)
 })
