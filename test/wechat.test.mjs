@@ -298,6 +298,43 @@ test('large art goes into an assets subpackage and the game waits for it', async
   if (!ran) return t.skip('no Chrome or Edge here')
 })
 
+test('game sounds are synthesised to a wav and played through InnerAudioContext', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  const exported = await exportWechat(dir)
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    // The collector template calls this exact shape on a tap; drive it directly so
+    // the assertion does not depend on which sound a round happens to trigger.
+    const result = await page.evaluate(async () => {
+      const audio = new window.__G.AudioContext()
+      const oscillator = audio.createOscillator()
+      const gain = audio.createGain()
+      oscillator.type = 'square'
+      oscillator.frequency.setValueAtTime(520, audio.currentTime)
+      oscillator.frequency.exponentialRampToValueAtTime(780, audio.currentTime + 0.08)
+      gain.gain.setValueAtTime(0.0001, audio.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.06, audio.currentTime + 0.01)
+      gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.1)
+      oscillator.connect(gain).connect(audio.destination)
+      oscillator.start(audio.currentTime)
+      oscillator.stop(audio.currentTime + 0.1)
+      await new Promise((resolve) => setTimeout(resolve, 120))
+      return {
+        files: window.__wxAudio.files.length,
+        played: window.__wxAudio.played.length,
+        bytes: window.__wxAudio.files[0]?.bytes ?? 0,
+        audio: window.__G.__wechatRuntime.audio,
+      }
+    })
+    assert.equal(result.files, 1, 'one wav written')
+    assert.equal(result.played, 1, 'played once')
+    assert.ok(result.bytes > 1000, `wav should carry a header and samples, got ${result.bytes} bytes`)
+    assert.equal(result.audio.played, 1)
+    assert.deepEqual(errors, [])
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
 /** Open one exported project in a mock-wx page and hand it to `run`. False = no browser. */
 async function withMockWx(exportedDir, run, options = {}) {
   const mock = await openMockPage(exportedDir, options)

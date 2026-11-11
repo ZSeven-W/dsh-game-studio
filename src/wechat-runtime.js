@@ -393,9 +393,153 @@
     reviveRect = { left: left, top: reviveTop, width: width, height: height };
   }
 
+  /* ---- Audio ---------------------------------------------------------------
+   * The templates use a sliver of WebAudio (oscillator + gain + scheduled
+   * envelope) for their bleeps. Mini-games have no WebAudio, so each scheduled
+   * tone is rendered to a small WAV and played with wx.createInnerAudioContext().
+   * Sound is optional: every step is guarded, and any failure leaves the game
+   * silent instead of breaking it. */
+  var AUDIO_RATE = 22050;
+  var audioFiles = {};
+  var audioStats = { played: 0, failed: 0 };
+
+  function encodeWav(samples) {
+    var count = samples.length;
+    var buffer = new ArrayBuffer(44 + count * 2);
+    var view = new DataView(buffer);
+    var writeString = function (offset, text) {
+      for (var i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    };
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + count * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, AUDIO_RATE, true);
+    view.setUint32(28, AUDIO_RATE * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, count * 2, true);
+    for (var i = 0; i < count; i++) {
+      var sample = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(44 + i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+    }
+    return buffer;
+  }
+
+  function playTone(frequency, duration, type, volume, slideTo) {
+    if (!wx.createInnerAudioContext) return false;
+    var name = String(type || 'sine');
+    var freq = Math.max(20, Number(frequency) || 440);
+    var last = Math.max(0.02, Number(duration) || 0.1);
+    var level = Math.max(0.0001, Math.min(1, Number(volume) || 0.08));
+    var slide = slideTo ? Math.max(20, Number(slideTo)) : 0;
+    var key = [Math.round(freq), Math.round(last * 1000), name, Math.round(level * 1000), Math.round(slide)].join('-');
+    var path = audioFiles[key];
+    if (!path) {
+      var base = (wx.env && wx.env.USER_DATA_PATH) || '';
+      var fs = null;
+      try { fs = wx.getFileSystemManager ? wx.getFileSystemManager() : null; } catch (error) { fs = null; }
+      if (!fs || !base) { audioStats.failed += 1; return false; }
+      var count = Math.max(1, Math.floor(AUDIO_RATE * last));
+      var samples = [];
+      var phase = 0;
+      for (var i = 0; i < count; i++) {
+        var t = i / AUDIO_RATE;
+        var current = slide ? freq + (slide - freq) * (t / last) : freq;
+        phase += (Math.PI * 2 * current) / AUDIO_RATE;
+        var wave;
+        if (name === 'square') wave = Math.sin(phase) >= 0 ? 1 : -1;
+        else if (name === 'sawtooth') wave = ((phase / Math.PI) % 2) - 1;
+        else if (name === 'triangle') wave = 2 * Math.abs(2 * (((phase / (Math.PI * 2)) % 1 + 1) % 1) - 1) - 1;
+        else wave = Math.sin(phase);
+        var progress = t / last;
+        var env = progress < 0.1 ? progress / 0.1 : Math.max(0, 1 - (progress - 0.1) / 0.9);
+        samples.push(wave * env * level);
+      }
+      if (Object.keys(audioFiles).length > 16) audioFiles = {};
+      path = base + '/dsh-tone-' + Object.keys(audioFiles).length + '.wav';
+      try { fs.writeFileSync(path, encodeWav(samples)); } catch (error) { audioStats.failed += 1; return false; }
+      audioFiles[key] = path;
+    }
+    try {
+      var player = wx.createInnerAudioContext();
+      player.src = path;
+      if (player.onEnded) player.onEnded(function () { if (player.destroy) player.destroy(); });
+      if (player.onError) player.onError(function () { audioStats.failed += 1; });
+      player.play();
+      audioStats.played += 1;
+      return true;
+    } catch (error) {
+      audioStats.failed += 1;
+      return false;
+    }
+  }
+
+  /** The WebAudio subset the studio templates use, rendered through playTone. */
+  function AudioContextShim() {
+    if (!(this instanceof AudioContextShim)) return new AudioContextShim();
+    var context = this;
+    this.state = 'running';
+    this.sampleRate = AUDIO_RATE;
+    this.destination = { kind: 'destination' };
+    this.resume = function () { return Promise.resolve(); };
+    this.close = function () { return Promise.resolve(); };
+    this.createGain = function () {
+      var points = [];
+      var node = {
+        connect: function (target) { return target; },
+        disconnect: function () {},
+      };
+      node.gain = {
+        value: 1,
+        setValueAtTime: function (value) { points.push(Number(value)); return node.gain; },
+        linearRampToValueAtTime: function (value) { points.push(Number(value)); return node.gain; },
+        exponentialRampToValueAtTime: function (value) { points.push(Number(value)); return node.gain; },
+        cancelScheduledValues: function () { return node.gain; },
+      };
+      node.points = points;
+      return node;
+    };
+    this.createOscillator = function () {
+      var frequencies = [];
+      var target = null;
+      var started = null;
+      var osc = {
+        type: 'sine',
+        frequency: {
+          value: 440,
+          setValueAtTime: function (value) { frequencies.push(Number(value)); return osc.frequency; },
+          linearRampToValueAtTime: function (value) { frequencies.push(Number(value)); return osc.frequency; },
+          exponentialRampToValueAtTime: function (value) { frequencies.push(Number(value)); return osc.frequency; },
+        },
+        connect: function (node) { target = node; return node; },
+        disconnect: function () {},
+        start: function (when) { started = Number(when) || 0; return osc; },
+        stop: function (when) {
+          var end = Number(when);
+          if (!isFinite(end)) end = (started || 0) + 0.1;
+          var duration = Math.max(0.02, end - (started || 0));
+          var freq = frequencies.length > 0 ? frequencies[0] : 440;
+          var slide = frequencies.length > 1 ? frequencies[frequencies.length - 1] : 0;
+          var level = 0.08;
+          if (target && target.points && target.points.length > 0) level = Math.max.apply(null, target.points);
+          playTone(freq, duration, osc.type, level, slide);
+          return osc;
+        },
+      };
+      return osc;
+    };
+    // A getter keeps currentTime honest even though the shim never advances it:
+    // the templates only schedule relative to it.
+    Object.defineProperty(context, 'currentTime', { get: function () { return 0; } });
+  }
+
   /** Fills the screen with a short message; used while a subpackage downloads. */
-  function showLoading(text) {
-    var ctx = mainContext();
+  function showLoading(text) {    var ctx = mainContext();
     if (!ctx) return;
     ctx.save();
     try {
@@ -567,6 +711,8 @@
     width: cssW, height: cssH, dpr: dpr, safeTop: safeTop,
     quality: { tier: quality, benchmarkLevel: benchmarkLevel, dprCap: dprCap },
     showLoading: showLoading,
+    playTone: playTone,
+    audio: audioStats,
     metrics: function () {
       var elapsed = clockNow() - startedAt;
       return {
@@ -611,6 +757,8 @@
   G.focus = function () {};
   G.blur = function () {};
   G.alert = function () {};
+  G.AudioContext = AudioContextShim;
+  G.webkitAudioContext = AudioContextShim;
 
   function pointerEvent(touch, type) {
     return {
@@ -728,6 +876,7 @@
     });
   }
 })();
+
 
 
 

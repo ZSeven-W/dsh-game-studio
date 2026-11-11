@@ -41,7 +41,7 @@
 | 🤖 **自动试玩** | `game_studio_playtest` 在无界面的 Chrome 或 Edge 里玩最新代码，报告阶段、得分、帧率、脚本错误并附截图。不靠方向键操作的游戏（格子、卡牌、瞄准、节奏……）定义 `window.__autoplay`，试玩就能玩到真正的玩法。 |
 | 🕰️ **版本历史** | 每次让游戏发生变化的构建都会保存；`game_studio_restore_version` 把代码、规则和美术一起恢复。 |
 | 📦 **单文件导出** | `game_studio_export` 生成一个不联网、自包含的 HTML 文件，用任何浏览器打开，或放到任意静态托管上。 |
-| 🟢 **导出微信小游戏** | `game_studio_export_wechat` 在 `export/wechat/<slug>/` 下生成可直接导入微信开发者工具的工程（`game.js`、`game.json`、`project.config.json`、`assets/*.png`）。游戏代码不改，由内置的 `wx.*` 运行时适配层跑起来；SVG 素材自动转成 PNG；素材超过 1.5 MB 时自动放进 assets 分包，游戏启动前预下载。2D canvas 与 3D three.js/voxel 都可用：WebGL 渲染到离屏画布再合成到上屏画布，HUD 按 `__gameState` 用 canvas 重绘（小游戏没有 DOM）。每次导出附带包体报告（最大文件、4 MB 主包限制、该删什么），运行时按设备 benchmark 限制渲染倍率：低端 1×、中端 1.5×、高端 2×，低端机锁定 30fps；`__wechatRuntime.metrics()` 给出启动耗时、帧数与平均帧率，崩溃会写进 `wx.getRealtimeLogManager`。之后可以用 `game_studio_wechat_devtools` 通过 IDE 自带的 CLI 打开、预览、上传，或让 `game_studio_wechat_ci` 生成一套带上传密钥的 CI 工作流。 |
+| 🟢 **导出微信小游戏** | `game_studio_export_wechat` 在 `export/wechat/<slug>/` 下生成可直接导入微信开发者工具的工程（`game.js`、`game.json`、`project.config.json`、`assets/*.png`）。游戏代码不改，由内置的 `wx.*` 运行时适配层跑起来；SVG 素材自动转成 PNG；素材超过 1.5 MB 时自动放进 assets 分包，游戏启动前预下载。2D canvas 与 3D three.js/voxel 都可用：WebGL 渲染到离屏画布再合成到上屏画布，HUD 按 `__gameState` 用 canvas 重绘（小游戏没有 DOM）；模板的 WebAudio 音效被渲染成小 WAV，用 `wx.createInnerAudioContext` 播放。每次导出附带包体报告（最大文件、4 MB 主包限制、该删什么），运行时按设备 benchmark 限制渲染倍率：低端 1×、中端 1.5×、高端 2×，低端机锁定 30fps；`__wechatRuntime.metrics()` 给出启动耗时、帧数与平均帧率，崩溃会写进 `wx.getRealtimeLogManager`。之后可以用 `game_studio_wechat_devtools` 通过 IDE 自带的 CLI 打开、预览、上传，或让 `game_studio_wechat_ci` 生成一套带上传密钥的 CI 工作流。 |
 | 📱 **在手机上试玩** | `game_studio_share` 在本地网络上开一个临时只读链接（或通过 `cloudflared` 开启 Cloudflare 临时公网链接，发给任何网络下的朋友都能玩），侧栏里会显示二维码。 |
 | 🌐 **发布到 GitHub Pages** | `game_studio_publish` 用本机已登录的 `gh` 把构建好的 HTML（或整面游戏墙）推到你名下的公开仓库并开启 GitHub Pages，生成关掉电脑也能长期游玩的网址。 |
 | 🚀 **上线向导** | 侧栏「上线向导」和 `game_studio_wechat_release` 跟踪从小游戏注册、小游戏备案到审核发布的每一步，标明谁来做（微信后台 / 插件 / 你），只把插件真的做完的步骤标成完成，并在导出目录写一份 `RELEASE.md`：一句话简介、建议类目、适龄提示、隐私指引草案、备案说明、审核说明，直接复制到后台表单。另一个动作「审核自查」会写 `REVIEW.md`：12 条真实常见驳回原因 + 你这个工程当前踩中的那几条。 |
@@ -203,6 +203,7 @@ npm test        # node --test；找不到 Chrome 或 Edge 时跳过需要浏览�
 - 完整声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
 
 **许可证**：MIT
+
 
 
 

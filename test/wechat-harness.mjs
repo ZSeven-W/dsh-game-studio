@@ -30,6 +30,7 @@ const MOCK_INJECT = `(function () {
   window.__wxIap = { request: null, payment: null };
   window.__wxLogs = [];
   window.__wxSubpackages = [];
+  window.__wxAudio = { files: [], played: [] };
   var wx = {
     createCanvas: function () {
       if (!mainUsed) { mainUsed = true; return main; }
@@ -44,6 +45,27 @@ const MOCK_INJECT = `(function () {
       };
     },
     setPreferredFramesPerSecond: function () {},
+    env: { USER_DATA_PATH: '/wxdata' },
+    getFileSystemManager: function () {
+      return {
+        writeFileSync: function (path, data) {
+          window.__wxAudio.files.push({ path: path, bytes: data && (data.byteLength || data.length) || 0 });
+        }
+      };
+    },
+    createInnerAudioContext: function () {
+      var player = {
+        src: '',
+        onEnded: null,
+        onError: null,
+        play: function () {
+          window.__wxAudio.played.push(this.src);
+          if (this.onEnded) setTimeout(this.onEnded, 5);
+        },
+        destroy: function () {}
+      };
+      return player;
+    },
     createImage: function () { return new Image(); },
     reportEvent: function (id, data) { window.__wxAds.events.push({ id: id, data: data }); },
     request: function (options) {
@@ -147,3 +169,4 @@ export async function openMockPage(exportedDir, options = {}) {
   const boot = await page.evaluate(() => ({ ready: window.__ready === true, error: window.__bootError ?? '' }))
   return { browser, page, errors, boot, close }
 }
+
