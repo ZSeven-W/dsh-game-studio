@@ -53,7 +53,7 @@
 | 发布：向导、材料模板、状态记录 | `src/release.ts` | `test/release.test.mjs::marking steps moves progress and unblocks dependants` |
 | 驳回原因 | `src/review.ts` | `test/review.test.mjs::the ICP filing is a warning` |
 | DevTools CLI 自动化 | `src/devtools.ts` | `test/devtools.test.mjs::runDevtools captures the CLI output` |
-| CI 上传 | `src/ci.ts` 生成 miniprogram-ci + Actions | `test/ci.test.mjs::the CI kit writes an upload script` |
+| CI 上传 | `src/ci.ts` 生成 miniprogram-ci + Actions | `test/ci.test.mjs::the CI kit writes an upload script` |、`test/ci-upload.test.mjs::the generated upload script uploads`
 | 商业化：广告、内购、埋点；材料与导出逐项一致 | `src/commerce.ts`、运行时、`src/release.ts` | `test/commerce.test.mjs::the exporter embeds the ad unit IDs`、`test/consistency.test.mjs::the release materials agree with what the exported game actually embeds` |
 | 体验：小白按向导、失败有提示、步骤无死胡同 | 侧栏向导 + 编码错误（`DEVTOOLS_*`、`CI_NEEDS_APPID`、`BAD_AD_UNIT`） | `test/host.test.mjs::/game-studio wechat-commerce stores ad unit IDs`、`test/journey.test.mjs::a user can walk the whole wizard`、`test/host.test.mjs::/game-studio without an action explains itself`、`test/codes.test.mjs::every WeChat error code is documented` |
 | 侧栏面板不静默消失、文案不缺、中文标点规范 | `src/client/index.tsx`、`src/client/locales.ts` | `test/client.test.mjs::the WeChat export button`、`test/client-runtime.test.mjs::the built sidebar bundle loads`、`test/copy.test.mjs::Chinese copy uses full-width punctuation`、`test/client.test.mjs::the sidebar only calls command actions`、`test/changelog.test.mjs::every changelog entry points at a commit`、`test/releasing.test.mjs::every command in the release checklist`、`test/claims.test.mjs::no user-facing copy promises`、`test/host.test.mjs::the JSON the sidebar renders` |
