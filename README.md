@@ -186,6 +186,7 @@ npm run build   # lib/index.js, lib/client.js and the bundled three.js runtime
 npm test        # node --test; browser tests are skipped when no Chrome or Edge is found
 npm run acceptance # 2D + 3D game → WeChat export → boot in the mock wx harness; writes
                    # screenshots and REPORT.md to ../artifacts/acceptance
+npm run upstream   # is upstream still where this fork branched from, and does the series apply?
 ```
 
 The acceptance run uses the same mock-wx harness as the tests, so it fails when the

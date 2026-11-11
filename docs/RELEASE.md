@@ -65,6 +65,7 @@ produced by the installed plugin.
 ## 5. Upstream
 
 ```sh
+npm run upstream   # is upstream still at the base commit, and does the series still apply?
 git format-patch 93459aa..HEAD -o ../artifacts/upstream-pr --no-signature
 ```
 
