@@ -420,3 +420,31 @@ test('the materials contain no placeholder leaks in any realistic state', async 
     }
   }
 })
+
+test('the step count follows the monetization choice, and old answers survive a switch', async (t) => {
+  assert.equal(releasePlan('none').length, 15)
+  assert.equal(releasePlan('iaa').length, 16)
+  assert.equal(releasePlan('iap').length, 16)
+  assert.equal(releasePlan('both').length, 17)
+  assert.ok(releasePlan('iaa').some((step) => step.id === 'iaa'))
+  assert.ok(!releasePlan('iap').some((step) => step.id === 'iaa'), 'no ad step when only IAP is chosen')
+
+  const dir = await tempGame(t)
+  // Do the ad step, then switch to IAP: the plan drops the ad step and the progress
+  // counts only the current plan; switching back keeps the earlier tick.
+  await updateRelease(dir, { monetization: 'iaa' })
+  await updateRelease(dir, { step: 'iaa' })
+  const ads = JSON.parse(JSON.stringify(releaseStatus(dir, await loadRelease(dir), releasePlan('iaa'))))
+  assert.equal(ads.progress.total, 16)
+  assert.equal(ads.steps.find((step) => step.id === 'iaa').status, 'done')
+
+  await updateRelease(dir, { monetization: 'iap' })
+  const switched = releaseStatus(dir, await loadRelease(dir), releasePlan('iap'))
+  assert.equal(switched.progress.total, 16)
+  assert.ok(!switched.steps.some((step) => step.id === 'iaa'), 'the ad step is not shown under IAP')
+  assert.ok(switched.steps.some((step) => step.id === 'iap'))
+
+  await updateRelease(dir, { monetization: 'iaa' })
+  const back = releaseStatus(dir, await loadRelease(dir), releasePlan('iaa'))
+  assert.equal(back.steps.find((step) => step.id === 'iaa').status, 'done', 'the earlier tick is still there')
+})

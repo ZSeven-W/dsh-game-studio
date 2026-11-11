@@ -43,6 +43,8 @@ acceptance run covers most of them end to end.
 | Materials match the exported game (ad units, rating, round, events) | `test/consistency.test.mjs` | ✅ (`materials match the export`) |
 | Demo purchase runs without a signing endpoint | `test/wechat.test.mjs` | ✅ (`demo purchase returns dryRun`) |
 
+向导步骤数随变现方式变化：不变现 15 步，广告或内购 16 步，两者 17 步；`wechat-release status` 的 `total` 始终是当前计划的步数，已完成的旧步骤在切换回来时仍保留。
+
 ## 3. Version and package
 
 ```sh
