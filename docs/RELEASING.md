@@ -73,7 +73,7 @@ It must be 10/10, including "the exported game boots on a mocked wx".
 
 ```sh
 git format-patch 93459aa..HEAD -o ../artifacts/upstream-pr --no-signature
-git diff 93459aa..HEAD > ../artifacts/upstream-pr/wechat-minigame.diff
+git diff 93459aa..HEAD --output=../artifacts/upstream-pr/wechat-minigame.diff
 npm run upstream -- --build
 ```
 
