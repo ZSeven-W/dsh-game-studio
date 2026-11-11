@@ -33,5 +33,9 @@ test('the nightly drift job applies, builds and tests the series on upstream', (
   assert.match(drift, /cron: '0 19 \* \* \*'/u)
   assert.match(drift, /workflow_dispatch:/u)
   assert.match(drift, /remote add upstream/u)
-  assert.match(drift, /npm run upstream -- --remote upstream --build/u)
+  assert.match(drift, /npm run upstream -- --remote upstream --build --out artifacts\/upstream-drift\/report\.json/u)
+  // The JSON report is the CI evidence: keep it even when the check fails.
+  assert.match(drift, /actions\/upload-artifact@v4/u)
+  assert.match(drift, /if: always\(\)/u)
+  assert.match(drift, /artifacts\/upstream-drift\/report\.json/u)
 })

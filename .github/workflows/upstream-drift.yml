@@ -33,4 +33,14 @@ jobs:
       - name: Add the original repository as upstream
         run: git remote add upstream https://github.com/ZSeven-W/dsh-game-studio.git
       - name: Check the series against upstream
-        run: npm run upstream -- --remote upstream --build
+        run: npm run upstream -- --remote upstream --build --out artifacts/upstream-drift/report.json
+      - name: Drift report tail
+        if: always()
+        run: test -f artifacts/upstream-drift/report.json && tail -n 60 artifacts/upstream-drift/report.json || true
+      - name: Upload the drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-drift
+          path: artifacts/upstream-drift/report.json
+          if-no-files-found: warn

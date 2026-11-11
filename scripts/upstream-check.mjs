@@ -10,7 +10,7 @@
 //
 // Exit codes: 0 = up to date and applying cleanly (or skipped because the remote
 // or ref is unavailable), 1 = the series no longer applies.
-import { existsSync, symlinkSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -32,6 +32,8 @@ const REMOTE = value('--remote', 'origin')
 const BRANCH = value('--branch', 'main')
 const OVERRIDE = value('--upstream', null)
 const buildAfterApply = flag('--build')
+// Written for CI (uploaded even when the check fails); omitted for interactive runs.
+const OUT = value('--out', null)
 
 function git(cwd, argv, { allowFail = false } = {}) {
   const result = spawnSync('git', argv, { cwd, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
@@ -50,6 +52,7 @@ const report = {
   base: null,
   head: null,
   patchCount: 0,
+  seriesBytes: 0,
   applied: null,
   conflicts: [],
   message: '',
@@ -130,6 +133,7 @@ async function applySeries() {  const patchDir = await mkdtemp(join(tmpdir(), 'd
       return
     }
     const series = readSeries(repo, report.base)
+    report.seriesBytes = Buffer.byteLength(series.text, 'utf8')
     if (!series.ok) {
       report.applied = false
       report.message += `; could not read the patch series (${series.error})`
@@ -214,6 +218,12 @@ try {
 } catch (error) {
   report.status = 'error'
   report.message = String((error && error.message) || error)
+}
+
+if (OUT) {
+  const outPath = resolve(repo, OUT)
+  mkdirSync(dirname(outPath), { recursive: true })
+  writeFileSync(outPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
 }
 
 if (asJson) {
