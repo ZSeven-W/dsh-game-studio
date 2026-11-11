@@ -90,7 +90,8 @@ upstream origin/main: up-to-date
   tests     85 pass, 0 fail, 0 skipped
   pack      ok (468 KB, 40 files)   # sources/tests/docs never enter the tarball
 
-`--build` exits non-zero when the series does not apply, the build fails, the
+`--no-apply` skips the worktree and reports only the fork/upstream relationship
+(fast, used by the contract test). `--build` exits non-zero when the series does not apply, the build fails, the
 WeChat tests fail, or the packed artifact is unclean.    # the count grows as tests are added; 0 fail is the check
 ```
 
