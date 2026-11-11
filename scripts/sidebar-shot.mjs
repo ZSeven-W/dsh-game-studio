@@ -118,6 +118,15 @@ try {
     await page.screenshot({ path: join(outDir, 'sidebar-preview.png'), fullPage: true })
   }
 
+  // Upload with the fake CLI: the wizard must show the upload step done afterwards.
+  const uploadButton = await page.$('text=上传版本')
+  if (uploadButton) {
+    await uploadButton.click()
+    await page.waitForSelector('text=已上传版本', { timeout: 5000 }).catch(() => undefined)
+    await page.waitForTimeout(600)
+    await page.screenshot({ path: join(outDir, 'sidebar-uploaded.png'), fullPage: true })
+  }
+
   const commerceButton = await page.$('text=商业化')
   if (commerceButton) {
     await commerceButton.click()

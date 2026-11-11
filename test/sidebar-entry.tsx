@@ -11,6 +11,7 @@ interface Fixtures {
 }
 
 const fixtures = (window as unknown as { __FIXTURES__: Fixtures }).__FIXTURES__
+let uploaded = false
 const components = new Map<string, unknown>()
 let dictionary: Record<string, string> = {}
 
@@ -68,11 +69,23 @@ const readBytes = async (_session: string, path: string) => {
 }
 
 const runCommand = async (_session: string, input: string) => {
-  if (input.startsWith('wechat-release {')) return { ok: true, text: JSON.stringify(fixtures.release) }
+  // Remember the upload so the next status read shows the step done, the way the
+  // host's markReleaseDone does.
+  if (input.startsWith('wechat-release {')) {
+    const base = fixtures.release as { steps?: Array<{ id: string; status: string }>; progress?: unknown }
+    if (!uploaded || !Array.isArray(base.steps)) return { ok: true, text: JSON.stringify(fixtures.release) }
+    const steps = base.steps.map((step) => (step.id === 'upload' ? { ...step, status: 'done' } : step))
+    const done = steps.filter((step) => step.status === 'done').length
+    return { ok: true, text: JSON.stringify({ ...base, steps, progress: { done, total: steps.length, percent: Math.round((done * 100) / steps.length) } }) }
+  }
   if (input.startsWith('wechat-commerce')) return { ok: true, text: JSON.stringify(fixtures.commerce) }
   if (input.startsWith('wechat-devtools')) {
     if (input.includes('"preview"')) {
       return { ok: true, text: JSON.stringify({ action: 'preview', project: '/tmp/lantern-isle-3d/export/wechat/lantern-isle-3d', qr: 'export/wechat/lantern-isle-3d/preview.png' }) }
+    }
+    if (input.includes('"upload"')) {
+      uploaded = true
+      return { ok: true, text: JSON.stringify({ action: 'upload', project: '/tmp/lantern-isle-3d/export/wechat/lantern-isle-3d', output: 'upload ok' }) }
     }
     return {
       ok: true,
