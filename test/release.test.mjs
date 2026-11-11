@@ -268,3 +268,36 @@ test('materials and the review go stale when the answers or the settings change'
   assert.equal(stepped.state.answersAt, after.answersAt, 'a step change is not an answer change')
   assert.ok(before.answersAt === undefined || before.answersAt <= after.answersAt)
 })
+
+test('the materials follow the monetization settings, before and after regenerating', async (t) => {
+  const dir = await tempGame(t)
+  const exportDir = join(dir, 'export', 'wechat', 'monetized')
+  await mkdir(exportDir, { recursive: true })
+
+  // Start with ads only: the materials name the unit and say IAP is not chosen.
+  await updateRelease(dir, { monetization: 'iaa' })
+  await updateCommerce(dir, { enabled: true, interstitial: 'adunit-111111', rewarded: 'adunit-222222' })
+  const first = await releaseMaterials(dir, { exportDir, manifestTitle: 'Ads Game' })
+  const firstText = await readFile(first.file, 'utf8')
+  assert.match(firstText, /当前选择：iaa/u)
+  assert.match(firstText, /adunit-111111/u)
+  assert.match(firstText, /adunit-222222/u)
+  assert.match(firstText, /未选择内购变现/u)
+  assert.doesNotMatch(firstText, /版号：ISBN/u)
+
+  // Now add IAP: regenerating must describe the new state, not the old one.
+  await updateRelease(dir, { monetization: 'both' })
+  await updateCommerce(dir, { iapEnabled: true, licenseNumber: 'ISBN 978-7-498-12345-6', merchantId: '1900000109' })
+  const second = await releaseMaterials(dir, { exportDir, manifestTitle: 'Ads Game' })
+  const secondText = await readFile(second.file, 'utf8')
+  assert.match(secondText, /当前选择：both/u)
+  assert.match(secondText, /版号：ISBN 978-7-498-12345-6/u)
+  assert.match(secondText, /商户号：1900000109/u)
+  assert.match(secondText, /签名服务：未配置/u)
+  assert.doesNotMatch(secondText, /未选择内购变现/u)
+
+  // And the status knows the file is fresh again after the regeneration.
+  const state = await loadRelease(dir)
+  const freshness = await releaseFreshness(dir, state)
+  assert.equal(freshness.materialsStale, false)
+})
