@@ -16,7 +16,9 @@ test('upstream-check --json reports the fork versus upstream and exits 0 on a cl
   assert.match(report.head, /^[0-9a-f]{40}$/u)
   // --no-apply: the fast path must say so instead of claiming it applied.
   assert.equal(report.applied, null)
-  assert.ok(report.patchCount >= 100, `patchCount ${report.patchCount}`)
+  // In a clean clone origin/main equals HEAD: nothing to report is correct there.
+  if (report.base === report.head) assert.equal(report.patchCount, 0, `patchCount ${report.patchCount}`)
+  else assert.ok(report.patchCount >= 100, `patchCount ${report.patchCount}`)
   // The recovery hint is what a maintainer sees when the series stops applying.
   assert.equal(typeof report.recovery, 'string')
   assert.ok(Array.isArray(report.conflicts))
