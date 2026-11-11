@@ -85,11 +85,20 @@ Expected output when the fork is healthy:
 upstream origin/main: up-to-date
   series    applies cleanly
   build     ok
-  tests     61 pass, 0 fail, 0 skipped    # the count grows as tests are added; 0 fail is the check
+  tests     67 pass, 0 fail, 0 skipped    # the count grows as tests are added; 0 fail is the check
 ```
 
 CI runs the same command nightly (`.github/workflows/upstream-drift.yml`); in a GitHub fork origin
 is the fork, so the workflow adds the original repository as `upstream` and passes `--remote upstream`.
+The job keeps `artifacts/upstream-drift/report.json` (status, seriesBytes, applied, build, test
+counts) as an `upstream-drift` artefact even when it fails.
+
+When the series conflicts, the check prints a copy-pasteable recovery line and records it as
+`recovery` in the report:
+
+```
+next  git rebase --onto <upstream-12> <base-12> main  # then resolve src/index.ts and rerun npm run upstream -- --build
+```
 git format-patch 93459aa..HEAD -o ../artifacts/upstream-pr --no-signature
 ```
 
