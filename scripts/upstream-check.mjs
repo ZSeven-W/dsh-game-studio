@@ -128,12 +128,17 @@ function verifyBuildIn(worktree) {
     env: { ...process.env, NODE_OPTIONS: '--experimental-strip-types' },
   })
   const out = String(tests.stdout ?? '') + String(tests.stderr ?? '')
+  const failedTests = [...out.matchAll(/^not ok \d+ - (.+)$/gmu)].map((match) => match[1].trim())
   report.tests = {
     pass: Number(out.match(/^# pass (\d+)/mu)?.[1] ?? 0),
     fail: Number(out.match(/^# fail (\d+)/mu)?.[1] ?? 0),
     skipped: Number(out.match(/^# skipped (\d+)/mu)?.[1] ?? 0),
+    // Keep the failing names and the tail of the output, so a red run can be
+    // diagnosed from the report instead of reproducing the worktree by hand.
+    failed: failedTests,
+    output: tests.status === 0 ? undefined : out.slice(-4000),
   }
-  if (tests.status !== 0) report.message += '; the WeChat tests fail after applying the series'
+  if (tests.status !== 0) report.message += `; the WeChat tests fail after applying the series: ${failedTests.join(' | ') || 'unknown'}`
   unlinkNodeModules(worktree)
 }
 
