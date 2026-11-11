@@ -193,6 +193,10 @@ npm run trace      # do the requirement→test references in docs/TRACEABILITY.m
 The acceptance run uses the same mock-wx harness as the tests, so it fails when the
 shipped adapter breaks — re-run it after an upstream update.
 
+More detail: `docs/RELEASE.md` is the maintainer release checklist (which test covers
+which WeChat capability), and `docs/TRACEABILITY.md` maps every V4.0 requirement to the
+code and test that prove it.
+
 ## Ecosystem
 
 - [DSH Crew](https://github.com/ZSeven-W/dsh-crew) — dispatch work to DSH agents from Claude Code / Codex
