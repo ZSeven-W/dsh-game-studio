@@ -45,7 +45,7 @@ Ask the agent for a game in plain words — "a 3D game: a red panda collects bam
 | 📱 **Try it on your phone** | `game_studio_share` opens a temporary read-only link on your local network — or a temporary public link via a Cloudflare Quick Tunnel (`cloudflared`) so friends on any network can play — with a QR code in the sidebar. |
 | 🌐 **Publish to GitHub Pages** | `game_studio_publish` pushes the built HTML (or the whole game wall) to a public repository under your signed-in `gh` account and enables GitHub Pages for a permanent link that stays live after you close your computer. |
 | 🚀 **Launch wizard** | The sidebar wizard and `game_studio_wechat_release` track every step from registering the mini-game and filing 小游戏备案 to review and release, says who does what (WeChat console / the plugin / you), marks the steps the plugin really ran, and writes `RELEASE.md` next to the export with copy-paste texts: intro, category, age-rating card, privacy draft, filing blurb and the review note. A second action, 审核自查, writes `REVIEW.md`: the 12 reasons mini-games actually get rejected plus which of them this project is heading for. |
-| 💰 **Ads and purchases, never forced** | `game_studio_wechat_commerce` stores the ad unit IDs and the in-app purchase settings. The runtime shows at most one interstitial between two rounds and a rewarded video only when the player taps 看广告复活; round and ad events go to `wx.reportEvent`. Purchases stay off until a game licence (版号) and a WeChat Pay merchant ID are recorded; with a signing endpoint it calls `wx.requestVirtualPayment`, without one it runs in demo mode. The plugin never signs a payment or collects money. |
+| 💰 **Ads and purchases, never forced** | `game_studio_wechat_commerce` stores the ad unit IDs and the in-app purchase settings. The runtime shows at most one interstitial between two rounds and a rewarded video only when the player taps 看广告复活; round and ad events go to `wx.reportEvent`. Purchases stay off until a game licence (版号) and a WeChat Pay merchant ID are recorded; with a signing endpoint it calls `wx.requestVirtualPayment`, without one it runs in demo mode. The plugin never signs a payment or collects money. The sidebar 商业化 panel edits the same settings without touching a file.
 | 🗂️ **My games** | Open the sidebar's **+** and pick **Game Studio · My games**: every game in the workspace as a tile with its latest playtest picture, filtered by 2D/3D and sorted by recency, versions or name. Click one to play it — no agent, no tokens. You can also subscribe to online game sources (`owner/repo`, GitHub repository URL, or GitHub Pages URL) to browse and play published games alongside your own. **Export wall** packs your local games into one offline page to send to friends. |
 
 ## Games made with it
@@ -202,6 +202,7 @@ npm test        # node --test; browser tests are skipped when no Chrome or Edge 
 - See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for the full notices.
 
 **License**: MIT
+
 
 
 

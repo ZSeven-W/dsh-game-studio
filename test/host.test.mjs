@@ -371,6 +371,16 @@ test('/game-studio wechat-commerce stores ad unit IDs and refuses a bad one', as
   const configured = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'configure', enabled: true, interstitial: 'adunit-abc123def456' })}`)
   assert.equal(configured.kind, 'success', configured.text)
   assert.equal(JSON.parse(configured.text).embedded.interstitial, 'adunit-abc123def456')
+
+  // The sidebar sends an empty string when the user clears a field; turning the
+  // ads switch off at the same time is the valid way to remove the last unit.
+  const cleared = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'configure', enabled: false, interstitial: '' })}`)
+  assert.equal(cleared.kind, 'success', cleared.text)
+  assert.equal(JSON.parse(cleared.text).ads.interstitial, undefined)
+
+  // Clearing the only unit while ads stay on is refused, not silently saved.
+  const refusedClear = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'configure', enabled: true })}`)
+  assert.equal(refusedClear.kind, 'error')
 })
 
 test('/game-studio wechat-release review reports the risks and writes the guide', async (t) => {

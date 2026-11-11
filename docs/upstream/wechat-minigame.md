@@ -54,6 +54,8 @@ Base commit: `93459aafc9436d66364f05b804a7841d399c2594` (current `main`).
 | 10 | `feat(commerce): in-app purchases behind the licence gate, with an honest dry-run` | IAP skeleton |
 | 11 | `feat(perf): package budget and device-aware render scale` | package report + quality tiers |
 | 12 | `feat(observability): boot/fps metrics and realtime error logging` | metrics + RealtimeLog |
+| 13 | `feat(commerce): a monetization panel in the sidebar` | sidebar panel for ad units and IAP settings |
+| 14 | `docs: pull-request description and patch-series notes for the WeChat target` | this document |
 
 Each commit builds and tests on its own; version bumps ride along with the
 feature commit that needed them, matching the repository's existing
@@ -111,3 +113,4 @@ feature commit that needed them, matching the repository's existing
    `src/size.ts` (the new capabilities, each self-contained).
 3. `src/index.ts` tool/command wiring and `src/client/index.tsx` (one button and
    one panel).
+

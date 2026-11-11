@@ -83,6 +83,8 @@ const s: Record<string, CSSProperties> = {
   releasePanel: { borderBottom: `1px solid ${tok.border}`, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflow: 'auto' },
   releaseHead: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 },
   releaseStep: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '1px 0' },
+  field: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 },
+  input: { font: 'inherit', fontSize: 12, padding: '2px 6px', borderRadius: 6, border: `1px solid ${tok.border}`, background: 'transparent', color: 'inherit', minWidth: 180 },
   check: { width: 22, height: 22, flex: 'none', borderRadius: 6, border: `1px solid ${tok.border}`, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0 },
   doneTitle: { color: tok.muted, textDecoration: 'line-through' },
   badge: { fontSize: 11, color: tok.muted, border: `1px solid ${tok.border}`, borderRadius: 999, padding: '1px 7px', flex: 'none' },
@@ -214,6 +216,14 @@ interface ReleaseStepView {
 interface ReleaseView {
   progress: { done: number; total: number; percent: number }
   steps: ReleaseStepView[]
+}
+
+interface CommerceView {
+  enabled: boolean
+  ads: { interstitial?: string; rewarded?: string }
+  iap: { enabled: boolean; licenseNumber?: string; merchantId?: string; payUrl?: string }
+  analytics: boolean
+  check?: { ok: boolean; problems: string[]; notes: string[] }
 }
 
 function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, runCommand } = props as { useTabInfo: () => any; t: T } & TabInjected
@@ -396,6 +406,68 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
     ? t('tab.releaseOwner.wechat')
     : owner === 'plugin' ? t('tab.releaseOwner.plugin') : t('tab.releaseOwner.user')
 
+  // ---- WeChat monetization -------------------------------------------------
+  const [commerce, setCommerce] = useState<CommerceView | null>(null)
+  const [commerceOpen, setCommerceOpen] = useState(false)
+  const [commerceBusy, setCommerceBusy] = useState(false)
+  const [adsOn, setAdsOn] = useState(false)
+  const [interstitial, setInterstitial] = useState('')
+  const [rewarded, setRewarded] = useState('')
+  const [iapOn, setIapOn] = useState(false)
+  const [licence, setLicence] = useState('')
+  const [merchant, setMerchant] = useState('')
+  const [payUrl, setPayUrl] = useState('')
+
+  const applyCommerce = useCallback((view: CommerceView) => {
+    setCommerce(view)
+    setAdsOn(Boolean(view.enabled))
+    setInterstitial(view.ads?.interstitial ?? '')
+    setRewarded(view.ads?.rewarded ?? '')
+    setIapOn(Boolean(view.iap?.enabled))
+    setLicence(view.iap?.licenseNumber ?? '')
+    setMerchant(view.iap?.merchantId ?? '')
+    setPayUrl(view.iap?.payUrl ?? '')
+  }, [])
+
+  const loadCommerce = useCallback(async () => {
+    setCommerceBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-commerce ${JSON.stringify({ project, op: 'status' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      applyCommerce(JSON.parse(result.text) as CommerceView)
+    } finally {
+      setCommerceBusy(false)
+    }
+  }, [runCommand, sessionId, project, t, applyCommerce])
+
+  const saveCommerce = useCallback(async () => {
+    setCommerceBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-commerce ${JSON.stringify({
+        project, op: 'configure',
+        enabled: adsOn,
+        interstitial,
+        rewarded,
+        analytics: commerce?.analytics ?? true,
+        iapEnabled: iapOn,
+        licenseNumber: licence,
+        merchantId: merchant,
+        payUrl,
+      })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      applyCommerce(JSON.parse(result.text) as CommerceView)
+      setNotice({ kind: 'info', text: t('tab.commerceSaved') })
+    } finally {
+      setCommerceBusy(false)
+    }
+  }, [runCommand, sessionId, project, t, applyCommerce, commerce, adsOn, interstitial, rewarded, iapOn, licence, merchant, payUrl])
+
+  const toggleCommerce = useCallback(() => {
+    const next = !commerceOpen
+    setCommerceOpen(next)
+    if (next && commerce === null) void loadCommerce()
+  }, [commerceOpen, commerce, loadCommerce])
+
   const title = state?.title ?? baseName(project)
   const activeShare = liveShare(state?.share, heartbeat)
   const activeShareCopy = activeShare ? shareCopy(activeShare, t, clock(activeShare.expiresAt)) : undefined
@@ -410,6 +482,7 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
       <button type="button" style={s.button} onClick={() => { void run('export', {}) }} disabled={busy}>{t('tab.export')}</button>
       <button type="button" style={s.button} onClick={() => { void run('export-wechat', {}) }} disabled={busy}>{t('tab.exportWechat')}</button>
       <button type="button" style={s.button} onClick={toggleRelease} disabled={busy}>{t('tab.release')}</button>
+      <button type="button" style={s.button} onClick={toggleCommerce} disabled={busy}>{t('tab.commerce')}</button>
       <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30' }) }} disabled={busy}>{t('tab.share')}</button>
       <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30', scope: 'public' }) }} disabled={busy}>
         {openingPublic ? t('tab.shareOpening') : t('tab.sharePublic')}
@@ -438,6 +511,37 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
           : { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{step.title}</span>
         <span style={s.badge}>{ownerLabel(step.owner)}</span>
       </div>)}
+    </div>}
+    {commerceOpen && <div style={s.releasePanel}>
+      <div style={s.releaseHead}>
+        <strong>{t('tab.commerce')}</strong>
+        <button type="button" style={s.button} disabled={commerceBusy} onClick={() => { void loadCommerce() }}>{t('tab.reload')}</button>
+        <button type="button" style={s.button} disabled={commerceBusy} onClick={() => { void saveCommerce() }}>{t('tab.commerceSave')}</button>
+      </div>
+      <label style={s.field}>
+        <input type="checkbox" checked={adsOn} onChange={event => setAdsOn(event.target.checked)} />{t('tab.commerceEnabled')}
+      </label>
+      <label style={s.field}>{t('tab.commerceInterstitial')}
+        <input style={s.input} value={interstitial} placeholder="adunit-..." onChange={event => setInterstitial(event.target.value)} />
+      </label>
+      <label style={s.field}>{t('tab.commerceRewarded')}
+        <input style={s.input} value={rewarded} placeholder="adunit-..." onChange={event => setRewarded(event.target.value)} />
+      </label>
+      <label style={s.field}>
+        <input type="checkbox" checked={iapOn} onChange={event => setIapOn(event.target.checked)} />{t('tab.commerceIap')}
+      </label>
+      <label style={s.field}>{t('tab.commerceLicence')}
+        <input style={s.input} value={licence} onChange={event => setLicence(event.target.value)} />
+      </label>
+      <label style={s.field}>{t('tab.commerceMerchant')}
+        <input style={s.input} value={merchant} onChange={event => setMerchant(event.target.value)} />
+      </label>
+      <label style={s.field}>{t('tab.commercePayUrl')}
+        <input style={s.input} value={payUrl} placeholder="https://..." onChange={event => setPayUrl(event.target.value)} />
+      </label>
+      {(commerce?.check?.problems ?? []).map((problem, index) => <div key={`p${index}`} style={s.error}>{problem}</div>)}
+      {(commerce?.check?.notes ?? []).map((note, index) => <div key={`n${index}`} style={s.small}>{note}</div>)}
+      <div style={s.small}>{t('tab.commerceDataHint')}</div>
     </div>}
     {confirmAction === 'publish' && <div style={{ ...s.hint, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
       <span style={{ color: tok.text }}>{t('tab.publishConfirmHint')}</span>
