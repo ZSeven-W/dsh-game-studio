@@ -34,6 +34,23 @@ jobs:
         run: git remote add upstream https://github.com/ZSeven-W/dsh-game-studio.git
       - name: Check the series against upstream
         run: npm run upstream -- --remote upstream --build --out artifacts/upstream-drift/report.json
+      # Name the regression in the log: a drifted tree must not go green.
+      - name: Fail when the applied tree regressed
+        if: always()
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const path = "artifacts/upstream-drift/report.json";
+            if (!fs.existsSync(path)) { console.error("no report"); process.exit(1); }
+            const r = JSON.parse(fs.readFileSync(path, "utf8"));
+            const bad = [];
+            if (r.applied === false) bad.push("patches do not apply");
+            if (r.build && r.build !== "ok") bad.push("build " + r.build);
+            if (r.tests && r.tests.fail) bad.push("tests " + r.tests.fail + " fail");
+            if (r.pack && !r.pack.ok) bad.push("pack not clean");
+            if (bad.length) { console.error(bad.join("; ")); process.exit(1); }
+            console.log("applied, built, tested and packed cleanly on upstream");
+          '
       - name: Drift report tail
         if: always()
         run: test -f artifacts/upstream-drift/report.json && tail -n 60 artifacts/upstream-drift/report.json || true

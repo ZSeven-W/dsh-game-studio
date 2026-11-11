@@ -274,4 +274,12 @@ if (asJson) {
   }
 }
 
-if (report.status === 'error' || report.applied === false) process.exitCode = 1
+// A green run means the applied tree built, passed the WeChat tests and packed
+// cleanly. Reporting those in the JSON but exiting 0 would let the nightly job go
+// green while the fork is broken on upstream.
+const regressed = report.applied === true && (
+  report.build !== 'ok'
+  || (report.tests?.fail ?? 0) > 0
+  || report.pack?.ok === false
+)
+if (report.status === 'error' || report.applied === false || regressed) process.exitCode = 1

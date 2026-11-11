@@ -53,3 +53,11 @@ test('CI treats the sidebar screenshots as required evidence', () => {
 test('CI boots the built package as an installed one', () => {
   assert.match(check, /node scripts\/installed-check\.mjs --path \. --no-browser/u)
 })
+
+test('the drift workflow fails on a regression, not only on an unapplied series', () => {
+  // A green nightly run must mean: applied, built, tested, packed.
+  assert.match(drift, /Fail when the applied tree regressed/u)
+  assert.match(drift, /r\.pack && !r\.pack\.ok/u)
+  assert.match(drift, /r\.tests && r\.tests\.fail/u)
+  assert.match(drift, /r\.build && r\.build !== "ok"/u)
+})
