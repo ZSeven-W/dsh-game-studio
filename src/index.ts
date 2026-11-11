@@ -14,6 +14,7 @@ import { buildProject } from './build.ts'
 import { commerceCheck, embedCommerce, loadCommerce, updateCommerce } from './commerce.ts'
 import { findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
 import { loadRelease, markReleaseDone, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
+import { reviewGuide } from './review.ts'
 import { exportWechat } from './wechat.ts'
 import { runCodexBatch, type CodexBatch } from './generation.ts'
 import {
@@ -933,7 +934,7 @@ export function apply(ctx: any, config: Config = {}): void {
       + 'to paste into the console. Steps marked "需在微信后台完成" cannot be automated by the plugin.',
     parameters: {
       path: projectParam,
-      action: { type: 'string', enum: ['status', 'update', 'materials'], description: 'Defaults to status.' },
+      action: { type: 'string', enum: ['status', 'update', 'materials', 'review'], description: 'status, update a step, write the release materials, or write the review-risk guide.' },
       step: { type: 'string', description: 'Step id for update: register, verify, appid, basic-info, category, age-rating, privacy, record, export, devtools, upload, submit, publish, analytics, iaa, iap.' },
       status: { type: 'string', enum: ['todo', 'done', 'skipped'], description: 'New status for the step; defaults to done.' },
       note: { type: 'string', description: 'Short note stored with the step (certificate number, rejection reason, ...).' },
@@ -951,6 +952,10 @@ export function apply(ctx: any, config: Config = {}): void {
     async execute(args: any, exec: any) {
       const dir = await projectDir(exec, args.path)
       const action = String(args.action ?? 'status')
+      if (action === 'review') {
+        const guide = await reviewGuide(dir)
+        return { project: dir, file: guide.file, risks: guide.risks, markdown: guide.markdown }
+      }
       if (action === 'materials') {
         const manifest = await loadManifest(dir)
         const materials = await releaseMaterials(dir, {
@@ -1258,7 +1263,10 @@ export function apply(ctx: any, config: Config = {}): void {
           }
           else if (action === 'wechat-release') {
             const op = String(payload.op ?? 'status')
-            if (op === 'materials') {
+            if (op === 'review') {
+              const guide = await reviewGuide(dir)
+              result = { file: guide.file, risks: guide.risks }
+            } else if (op === 'materials') {
               const manifest = await loadManifest(dir)
               result = await releaseMaterials(dir, { exportDir: findWechatExport(dir), manifestTitle: manifest.title, style: manifest.style, orientation: manifest.orientation })
             } else if (op === 'update') {
@@ -1342,6 +1350,8 @@ export function apply(ctx: any, config: Config = {}): void {
     })
   })
 }
+
+
 
 
 

@@ -373,6 +373,17 @@ test('/game-studio wechat-commerce stores ad unit IDs and refuses a bad one', as
   assert.equal(JSON.parse(configured.text).embedded.interstitial, 'adunit-abc123def456')
 })
 
+test('/game-studio wechat-release review reports the risks and writes the guide', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const project = join(root, 'game')
+  const result = await runCommand(`wechat-release ${JSON.stringify({ project, op: 'review' })}`)
+  assert.equal(result.kind, 'success', result.text)
+  const parsed = JSON.parse(result.text)
+  assert.ok(parsed.risks.some(risk => risk.id === 'appid'), 'a fresh game has no AppID')
+  assert.ok(parsed.risks.some(risk => risk.id === 'record'), 'filing is not done yet')
+  assert.match(await readFile(parsed.file, 'utf8'), /审核风险自查/u)
+})
+
 // ---------------------------------------------------------------- playtest
 
 /** Stand-ins for the Harness's attachment store and model catalog. */

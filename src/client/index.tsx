@@ -362,6 +362,18 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
     }
   }, [runCommand, sessionId, project, t])
 
+  const writeReviewGuide = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-release ${JSON.stringify({ project, op: 'review' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      const parsed = JSON.parse(result.text) as { file?: string; risks?: unknown[] }
+      setNotice({ kind: 'info', text: t('tab.releaseReviewSaved', { file: parsed.file ?? '', count: String(parsed.risks?.length ?? 0) }) })
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t])
+
   const openDevtools = useCallback(async () => {
     setReleaseBusy(true)
     try {
@@ -414,6 +426,7 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
         })}</span>}
         <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void loadRelease() }}>{t('tab.reload')}</button>
         <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void writeReleaseMaterials() }}>{t('tab.releaseMaterials')}</button>
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void writeReviewGuide() }}>{t('tab.releaseReview')}</button>
         <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void openDevtools() }}>{t('tab.releaseDevtools')}</button>
       </div>
       {(release?.steps ?? []).filter(step => step.status !== 'skipped').map(step => <div key={step.id} style={s.releaseStep}>

@@ -14,6 +14,8 @@ export const zh = {
   'tab.release': '上线向导',
   'tab.releaseProgress': '已完成 {done}/{total} · {percent}%',
   'tab.releaseMaterials': '生成发布材料',
+  'tab.releaseReview': '审核自查',
+  'tab.releaseReviewSaved': '审核自查已写入 {file}（{count} 个风险）',
   'tab.releaseMaterialsSaved': '发布材料已写入：{file}',
   'tab.releaseDevtools': '打开开发者工具',
   'tab.releaseDevtoolsOpened': '已在微信开发者工具中打开导出工程',
@@ -147,6 +149,8 @@ export const en: typeof zh = {
   'tab.release': 'Launch wizard',
   'tab.releaseProgress': '{done}/{total} done · {percent}%',
   'tab.releaseMaterials': 'Write release materials',
+  'tab.releaseReview': 'Pre-review check',
+  'tab.releaseReviewSaved': 'Review check written to {file} ({count} risks)',
   'tab.releaseMaterialsSaved': 'Release materials written: {file}',
   'tab.releaseDevtools': 'Open DevTools',
   'tab.releaseDevtoolsOpened': 'Opened the export in WeChat DevTools',
@@ -390,3 +394,4 @@ export function liveShare<S extends { url: string; expiresAt: string }>(
   if (!Number.isFinite(beatAt) || now - beatAt > SHARE_HEARTBEAT_MAX_AGE_MS) return undefined
   return share
 }
+
