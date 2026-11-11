@@ -191,6 +191,7 @@ npm run upstream   # is upstream still where this fork branched from, and does t
 npm run trace      # do the requirement→test references in docs/TRACEABILITY.md still exist?
 npm run installed  # smoke-test the installed plugin (export, wizard, materials, runtime boot)
 npm run bench      # 2D + 3D frame rate, boot time and memory warnings (BENCH_TIER=low for low-end)
+npm run shots      # screenshot the sidebar panels into artifacts/sidebar/
 ```
 
 The acceptance run uses the same mock-wx harness as the tests, so it fails when the
