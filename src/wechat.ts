@@ -15,6 +15,7 @@ import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadLedger, loadManifest, paths, RUNTIMES, type GameManifest, type RuntimeId } from './project.ts'
 import { embedCommerce, loadCommerce } from './commerce.ts'
+import { analyzeWechatPackage, type PackageReport } from './size.ts'
 import { StudioError, writeJson } from './util.ts'
 
 const RUNTIME_FILE = fileURLToPath(new URL('./wechat-runtime.js', import.meta.url))
@@ -39,6 +40,7 @@ export interface WechatExportResult {
   appid: string
   runtimes: string[]
   monetization: { enabled: true; interstitial?: string; rewarded?: string; analytics: boolean } | null
+  report: PackageReport
   warnings: string[]
 }
 
@@ -104,6 +106,8 @@ function readme(manifest: GameManifest, appid: string): string {
     '- 音频目前静音（原游戏的 WebAudio 调用被安全跳过）；触摸/指针事件已适配。',
     '- 广告不强推：配置广告位后两局之间最多一次插屏，激励视频只由「看广告复活」触发；未配置则不加载广告代码。',
     '- 内购需要版号与微信支付商户号才能开启；配了签名服务地址才会真正调 wx.requestVirtualPayment，否则只跑演示流程。',
+    '- 低端机会自动降级：按设备 benchmark 把渲染倍率限制在 1×（中端 1.5×、高端 2×），低端机帧率上限 30。',
+    '- 导出结果里的 report 是包体报告：最大文件、是否超过 4 MB 主包、该压缩什么。',
     '- 微信的包体限制：主包 4MB、总包 30MB；导出时会在超过 4MB 时给出警告。',
     '',
     '## 注意',
@@ -245,7 +249,9 @@ export async function exportWechat(dir: string, options: WechatExportOptions = {
     warnings.push('这个工程没有素材槽位；游戏代码需要自己绘制画面。')
   }
 
-  return { dir: outDir, files, bytes, appid, runtimes, monetization: commerce, warnings }
+  const report = await analyzeWechatPackage(outDir)
+  return { dir: outDir, files, bytes, appid, runtimes, monetization: commerce, report, warnings }
 }
+
 
 

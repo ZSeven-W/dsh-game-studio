@@ -19,8 +19,18 @@
   var sys = wx.getSystemInfoSync();
   var cssW = Math.max(1, sys.windowWidth || 375);
   var cssH = Math.max(1, sys.windowHeight || 667);
-  var dpr = Math.min(2, sys.pixelRatio || 1);
+  // Weak phones pay for every extra pixel twice (fill rate and memory). WeChat
+  // reports a benchmarkLevel (higher is faster); cap the render scale instead of
+  // shipping a game that looks right only on flagship phones.
+  var benchmarkLevel = typeof sys.benchmarkLevel === 'number' ? sys.benchmarkLevel : null;
+  var quality = benchmarkLevel === null ? 'unknown' : benchmarkLevel >= 30 ? 'high' : benchmarkLevel >= 10 ? 'medium' : 'low';
+  var dprCap = quality === 'low' ? 1 : quality === 'medium' ? 1.5 : 2;
+  var dpr = Math.min(dprCap, sys.pixelRatio || 1);
   var safeTop = sys.safeArea && typeof sys.safeArea.top === 'number' ? sys.safeArea.top : 0;
+  if (quality === 'low' && wx.setPreferredFramesPerSecond) {
+    // A steady 30 fps on a weak device feels better than a wobbling 45 and saves battery.
+    try { wx.setPreferredFramesPerSecond(30); } catch (error) { /* optional */ }
+  }
   var mainCanvas = wx.createCanvas();
   var canvasEvents = {};
   var windowEvents = {};
@@ -518,6 +528,7 @@
   G.cancelAnimationFrame = function (id) { nativeCaf(id); };
   G.__wechatRuntime = {
     width: cssW, height: cssH, dpr: dpr, safeTop: safeTop,
+    quality: { tier: quality, benchmarkLevel: benchmarkLevel, dprCap: dprCap },
     canvas: gameCanvas, screen: mainCanvas,
     get ctx() { return mainContext(); },
     get webgl() { return webglCanvas; },
@@ -613,7 +624,7 @@
     var next = wx.getSystemInfoSync();
     cssW = Math.max(1, next.windowWidth || cssW);
     cssH = Math.max(1, next.windowHeight || cssH);
-    dpr = Math.min(2, next.pixelRatio || dpr);
+    dpr = Math.min(dprCap, next.pixelRatio || dpr);
     safeTop = next.safeArea && typeof next.safeArea.top === 'number' ? next.safeArea.top : safeTop;
     G.innerWidth = cssW;
     G.innerHeight = cssH;
@@ -644,3 +655,4 @@
     });
   }
 })();
+

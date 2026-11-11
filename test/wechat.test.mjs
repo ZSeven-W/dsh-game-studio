@@ -234,6 +234,29 @@ test('in-app purchases run in demo mode without a pay server, and through wx.req
   if (!paidTail) return t.skip('no Chrome or Edge here')
 })
 
+test('a weak device gets a capped render scale, a fast one does not', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  const exported = await exportWechat(dir)
+  assert.ok(exported.report.totalBytes > 0, 'the export carries its package report')
+
+  const low = await withMockWx(exported.dir, async ({ page }) => {
+    const quality = await page.evaluate(() => window.__G.__wechatRuntime.quality)
+    assert.equal(quality.tier, 'low')
+    assert.equal(quality.dprCap, 1)
+    assert.equal(await page.evaluate(() => window.__G.devicePixelRatio), 1, 'a 3x screen renders at 1x on a weak phone')
+  }, { benchmarkLevel: 5, pixelRatio: 3 })
+  if (!low) return t.skip('no Chrome or Edge here')
+
+  const high = await withMockWx(exported.dir, async ({ page }) => {
+    const quality = await page.evaluate(() => window.__G.__wechatRuntime.quality)
+    assert.equal(quality.tier, 'high')
+    assert.equal(quality.dprCap, 2)
+    assert.equal(await page.evaluate(() => window.__G.devicePixelRatio), 2, 'a fast phone still caps at 2x')
+  }, { benchmarkLevel: 40, pixelRatio: 3 })
+  if (!high) return t.skip('no Chrome or Edge here')
+})
+
 /** Serves one exported project plus a page that fakes the wx.* surface on a real canvas. */
 async function serveMockWx(root) {
   const mockHtml = `<!doctype html>
@@ -257,8 +280,14 @@ async function serveMockWx(root) {
       return document.createElement('canvas');
     },
     getSystemInfoSync: function () {
-      return { windowWidth: window.innerWidth, windowHeight: window.innerHeight, pixelRatio: 1 };
+      return {
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight,
+        pixelRatio: typeof window.__pixelRatio === 'number' ? window.__pixelRatio : 1,
+        benchmarkLevel: typeof window.__benchmarkLevel === 'number' ? window.__benchmarkLevel : undefined
+      };
     },
+    setPreferredFramesPerSecond: function () {},
     createImage: function () { return new Image(); },
     reportEvent: function (id, data) { window.__wxAds.events.push({ id: id, data: data }); },
     request: function (options) {
@@ -319,11 +348,17 @@ async function serveMockWx(root) {
 }
 
 /** Open one exported project in a mock-wx page and hand it to `run`. False = no browser. */
-async function withMockWx(exportedDir, run) {
+async function withMockWx(exportedDir, run, options = {}) {
   const browser = await launchBrowser()
   if (!browser) return false
   const { server, port } = await serveMockWx(exportedDir)
   const page = await browser.newPage({ viewport: { width: 500, height: 900 }, deviceScaleFactor: 1 })
+  if (options.benchmarkLevel !== undefined || options.pixelRatio !== undefined) {
+    await page.addInitScript((values) => {
+      if (typeof values.benchmarkLevel === 'number') window.__benchmarkLevel = values.benchmarkLevel
+      if (typeof values.pixelRatio === 'number') window.__pixelRatio = values.pixelRatio
+    }, options)
+  }
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error?.message ?? error)))
   page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
@@ -397,4 +432,5 @@ test('the exported 3D game renders through WebGL on a mocked wx', async (t) => {
   })
   if (!ran) return t.skip('no Chrome or Edge here')
 })
+
 
