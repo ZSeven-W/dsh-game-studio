@@ -10,6 +10,7 @@
 //
 // Exit codes: 0 = up to date and applying cleanly (or skipped because the remote
 // or ref is unavailable), 1 = the series no longer applies.
+import { existsSync, symlinkSync, unlinkSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -29,6 +30,7 @@ const skipApply = flag('--no-apply')
 const REMOTE = value('--remote', 'origin')
 const BRANCH = value('--branch', 'main')
 const OVERRIDE = value('--upstream', null)
+const buildAfterApply = flag('--build')
 
 function git(cwd, argv, { allowFail = false } = {}) {
   const result = spawnSync('git', argv, { cwd, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
@@ -52,9 +54,66 @@ const report = {
   message: '',
 }
 
-async function applySeries() {
-  const patchDir = await mkdtemp(join(tmpdir(), 'dsh-upstream-patches-'))
-  const worktree = await mkdtemp(join(tmpdir(), 'dsh-upstream-apply-'))
+/**
+ * Remove only the node_modules link. A recursive delete on Windows follows a
+ * junction and would wipe the fork's real node_modules — the first version of
+ * this check did exactly that.
+ */
+function unlinkNodeModules(worktree) {
+  const link = join(worktree, 'node_modules')
+  try {
+    if (!existsSync(link)) return
+    if (process.platform === 'win32') spawnSync('cmd', ['/c', 'rmdir', link], { encoding: 'utf8' })
+    else unlinkSync(link)
+  } catch { /* best effort */ }
+}
+
+/** Apply the series, then prove it builds and the WeChat tests pass (opt-in). */
+function verifyBuildIn(worktree) {
+  const target = join(repo, 'node_modules')
+  const link = join(worktree, 'node_modules')
+  try {
+    if (!existsSync(link)) {
+      if (process.platform === 'win32') spawnSync('cmd', ['/c', 'mklink', '/J', link, target], { encoding: 'utf8' })
+      else symlinkSync(target, link, 'dir')
+    }
+  } catch { /* build will report the missing dependency */ }
+  report.junction = existsSync(link)
+
+  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  const build = spawnSync(npm, ['run', 'build'], { cwd: worktree, shell: true, encoding: 'utf8', timeout: 300000 })
+  report.build = build.status === 0 ? 'ok' : 'failed'
+  if (build.status !== 0) {
+    const out = String(build.stdout ?? '') + String(build.stderr ?? '')
+    report.buildLog = out.trim().split(/\r?\n/u).slice(-14).join(' | ')
+    report.message += '; the applied tree does not build'
+    unlinkNodeModules(worktree)
+    return
+  }
+  const files = [
+    'test/wechat.test.mjs', 'test/release.test.mjs', 'test/client.test.mjs', 'test/consistency.test.mjs',
+    'test/journey.test.mjs', 'test/commerce.test.mjs', 'test/size.test.mjs', 'test/devtools.test.mjs',
+    'test/ci.test.mjs', 'test/review.test.mjs',
+  ]
+  const tests = spawnSync(process.execPath, ['--test', ...files], {
+    cwd: worktree,
+    encoding: 'utf8',
+    timeout: 600000,
+    env: { ...process.env, NODE_OPTIONS: '--experimental-strip-types' },
+  })
+  const out = String(tests.stdout ?? '') + String(tests.stderr ?? '')
+  report.tests = {
+    pass: Number(out.match(/^# pass (\d+)/mu)?.[1] ?? 0),
+    fail: Number(out.match(/^# fail (\d+)/mu)?.[1] ?? 0),
+    skipped: Number(out.match(/^# skipped (\d+)/mu)?.[1] ?? 0),
+  }
+  if (tests.status !== 0) report.message += '; the WeChat tests fail after applying the series'
+  unlinkNodeModules(worktree)
+}
+
+async function applySeries() {  const patchDir = await mkdtemp(join(tmpdir(), 'dsh-upstream-patches-'))
+  // Next to the checkout: esbuild's service is not allowed to write to %TEMP%.
+  const worktree = await mkdtemp(join(repo, '..', '.upstream-verify-'))
   try {
     if (report.upstream !== report.base) git(repo, ['fetch', '--quiet', REMOTE, report.upstream], { allowFail: true })
     const serialised = git(repo, ['format-patch', `${report.base}..HEAD`, '-o', patchDir, '--no-signature'], { allowFail: true })
@@ -87,7 +146,9 @@ async function applySeries() {
         report.conflicts = ['tree hash differs from the working fork']
       }
     }
+    if (report.applied && buildAfterApply) verifyBuildIn(worktree)
   } finally {
+    unlinkNodeModules(worktree)
     git(repo, ['worktree', 'remove', '--force', worktree], { allowFail: true })
     git(repo, ['worktree', 'prune'], { allowFail: true })
     await rm(patchDir, { recursive: true, force: true })
@@ -145,6 +206,9 @@ if (asJson) {
   console.log(`  upstream  ${report.upstream ? report.upstream.slice(0, 12) : '?'}`)
   console.log(`  head      ${report.head ? report.head.slice(0, 12) : '?'} (${report.patchCount} patches)`)
   if (report.applied !== null) console.log(`  series    ${report.applied ? 'applies cleanly' : 'no longer applies'}`)
+  if (report.build) console.log(`  links     node_modules junction: ${report.junction}`)
+  if (report.build) console.log(`  build     ${report.build}${report.buildLog ? ` — ${report.buildLog}` : ''}`)
+  if (report.tests) console.log(`  tests     ${report.tests.pass} pass, ${report.tests.fail} fail, ${report.tests.skipped} skipped`)
   if (report.conflicts.length > 0) console.log(`  conflicts ${report.conflicts.join(', ')}`)
   if (report.message) console.log(`  ${report.message}`)
   if (report.status === 'upstream-moved' && report.applied) {

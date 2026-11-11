@@ -70,6 +70,7 @@ produced by the installed plugin.
 
 ```sh
 npm run upstream   # is upstream still at the base commit, and does the series still apply?
+npm run upstream -- --build   # also apply the series in a worktree, build it and run the WeChat tests there
 git format-patch 93459aa..HEAD -o ../artifacts/upstream-pr --no-signature
 ```
 
