@@ -148,11 +148,19 @@ try {
     await page.screenshot({ path: join(outDir, 'sidebar-wizard-bottom.png'), fullPage: true })
   }
 
-  // The environment doctor's answer, as the panel shows it.
+  // The environment doctor's answer, as the panel shows it. Every blocker must be
+  // named in the user's language, not just returned as a code.
   const doctorButton = await page.$('text=检查环境')
-  if (doctorButton) {
+  if (!doctorButton) {
+    console.error('the environment check button did not render')
+    process.exitCode = 1
+  } else {
     await doctorButton.click()
     await page.waitForTimeout(500)
+    const envText = await page.evaluate(() => document.body.innerText)
+    const named = ['服务端口', 'touristappid'].filter((needle) => envText.includes(needle))
+    console.log(`environment blockers named: ${named.join(' + ') || 'NONE'}`)
+    if (named.length < 2) process.exitCode = 1
     await page.screenshot({ path: join(outDir, 'sidebar-env.png'), fullPage: true })
   }
 
