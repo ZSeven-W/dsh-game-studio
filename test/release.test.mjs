@@ -1,12 +1,12 @@
 // The WeChat release wizard: checklist integrity, state persistence, what is
 // blocked, and the copy-paste materials handed to the console.
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
-  loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, releaseFile, releaseMaterials, releasePlan, releaseStatus, updateRelease,
+  loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, releaseFile, releaseFilePresence, releaseMaterials, releasePlan, releaseStatus, updateRelease,
 } from '../src/release.ts'
 import { createProject } from '../src/project.ts'
 import { updateCommerce } from '../src/commerce.ts'
@@ -182,4 +182,22 @@ test('writing the materials and the review is remembered in the status', async (
   const reloaded = releaseStatus(dir, await loadRelease(dir), releasePlan('none'))
   assert.equal(reloaded.materialsAt, afterReview.materialsAt)
   assert.equal(reloaded.reviewAt, afterReview.reviewAt)
+})
+
+test('a deleted materials file is not reported as present', async (t) => {
+  const dir = await tempGame(t)
+  const before = await releaseFilePresence(dir)
+  assert.deepEqual(before, { materials: false, review: false }, 'nothing generated yet')
+
+  const exportDir = join(dir, 'export', 'wechat', 'moon-garden')
+  await mkdir(exportDir, { recursive: true })
+  // findWechatExport only treats a folder as an export when the project files exist.
+  for (const name of ['game.js', 'game.json', 'project.config.json']) await writeFile(join(exportDir, name), '{}\n')
+  await writeFile(join(exportDir, 'RELEASE.md'), '# materials\n')
+  await writeFile(join(exportDir, 'REVIEW.md'), '# review\n')
+  assert.deepEqual(await releaseFilePresence(dir), { materials: true, review: true })
+
+  // The user deleted one file by hand: do not claim it is still generated.
+  await rm(join(exportDir, 'RELEASE.md'))
+  assert.deepEqual(await releaseFilePresence(dir), { materials: false, review: true })
 })

@@ -36,7 +36,11 @@ try {
   // The panel shows that these two files already exist; generate them for the fixture.
   await markMaterialsWritten(dir)
   await markReviewWritten(dir)
-  fixtures.release = releaseStatus(dir, await loadRelease(dir), releasePlan(false))
+  fixtures.release = {
+    ...releaseStatus(dir, await loadRelease(dir), releasePlan(false)),
+    materialsPresent: true,
+    reviewPresent: true,
+  }
   fixtures.commerce = {
     enabled: false,
     ads: { interstitial: '', rewarded: '' },

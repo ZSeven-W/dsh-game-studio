@@ -14,7 +14,7 @@ import { buildProject } from './build.ts'
 import { commerceCheck, embedCommerce, loadCommerce, updateCommerce } from './commerce.ts'
 import { writeWechatCi } from './ci.ts'
 import { devtoolsDoctor, findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
-import { loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
+import { loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, releaseFilePresence, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
 import { reviewGuide } from './review.ts'
 import { exportWechat } from './wechat.ts'
 import { runCodexBatch, type CodexBatch } from './generation.ts'
@@ -1050,7 +1050,8 @@ export function apply(ctx: any, config: Config = {}): void {
         return { project: dir, ...result.status }
       }
       const state = await loadRelease(dir)
-      return { project: dir, ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')) }
+      const presence = await releaseFilePresence(dir)
+      return { project: dir, ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review }
     },
   }))
 
@@ -1389,7 +1390,8 @@ export function apply(ctx: any, config: Config = {}): void {
               result = updated.status
             } else {
               const state = await loadRelease(dir)
-              result = releaseStatus(dir, state, releasePlan(state.monetization ?? 'none'))
+              const presence = await releaseFilePresence(dir)
+              result = { ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review }
             }
           }
           else if (action === 'restore') result = await restoreVersion(dir, Math.trunc(Number(payload.version)))

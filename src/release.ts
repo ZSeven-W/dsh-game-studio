@@ -12,11 +12,13 @@
  * It never claims a step is done because it guessed: only the user marks console
  * steps, and the plugin marks the steps it really ran (export, upload).
  */
+import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { loadManifest, paths } from './project.ts'
 import { loadCommerce } from './commerce.ts'
 import { readJson, StudioError, writeJson } from './util.ts'
+import { findWechatExport } from './devtools.ts'
 
 export type ReleaseStage = 'account' | 'material' | 'compliance' | 'build' | 'review' | 'launch' | 'growth'
 export type ReleaseOwner = 'wechat' | 'plugin' | 'user'
@@ -71,6 +73,9 @@ export interface ReleaseStatus {
   next: Array<{ id: string; title: string; owner: ReleaseOwner; how: string[] }>
   materialsAt: string | null
   reviewAt: string | null
+  /** False when the timestamp exists but the file was deleted (or never exported). */
+  materialsPresent: boolean
+  reviewPresent: boolean
   blocked: Array<{ id: string; title: string; missing: string[] }>
 }
 
@@ -383,6 +388,16 @@ export async function updateRelease(
   }
   await saveRelease(dir, state)
   return { state, status: releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')) }
+}
+
+/** Whether RELEASE.md / REVIEW.md still exist next to the export. */
+export async function releaseFilePresence(dir: string): Promise<{ materials: boolean; review: boolean }> {
+  const exportDir = await findWechatExport(dir)
+  if (!exportDir) return { materials: false, review: false }
+  return {
+    materials: existsSync(join(exportDir, 'RELEASE.md')),
+    review: existsSync(join(exportDir, 'REVIEW.md')),
+  }
 }
 
 /** Record that the materials / review file was written (shown in the sidebar). */
