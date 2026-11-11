@@ -36,7 +36,7 @@ acceptance run covers most of them end to end.
 | Audio through InnerAudioContext | `test/wechat.test.mjs` | ✅ (`audio plays a tone`) |
 | Boot metrics and realtime error logging | `test/wechat.test.mjs` | ✅ |
 | DevTools CLI error mapping | `test/devtools.test.mjs` | — |
-| Launch wizard + RELEASE.md | `test/release.test.mjs` | ✅ |
+| Launch wizard + RELEASE.md | `test/release.test.mjs`, `test/journey.test.mjs` | ✅ |
 | Pre-review risks | `test/review.test.mjs` | ✅ |
 | CI upload kit | `test/ci.test.mjs` | — |
 | Sidebar export button, wizard, monetization panel | `test/client.test.mjs` | — |
