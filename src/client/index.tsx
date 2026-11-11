@@ -219,6 +219,10 @@ interface ReleaseStepView {
 interface ReleaseView {
   progress: { done: number; total: number; percent: number }
   steps: ReleaseStepView[]
+  /** Steps that are relevant, not done and not blocked: what to do next. */
+  next?: ReleaseStepView[]
+  /** Steps held back by a prerequisite. */
+  blocked?: ReleaseStepView[]
 }
 
 interface CommerceView {
@@ -578,6 +582,13 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
     {releaseOpen && <div style={s.releasePanel}>
       <div style={s.releaseHead}>
         <strong>{t('tab.release')}</strong>
+        <span style={s.small}>
+          {release && release.next && release.next.length > 0
+            ? t('tab.releaseNext', { title: release.next[0].title })
+            : release && release.blocked && release.blocked.length > 0
+              ? t('tab.releaseBlockedHint', { title: release.blocked[0].title })
+              : ''}
+        </span>
         {release && <span style={s.small}>{t('tab.releaseProgress', {
           done: String(release.progress.done), total: String(release.progress.total), percent: String(release.progress.percent),
         })}</span>}
