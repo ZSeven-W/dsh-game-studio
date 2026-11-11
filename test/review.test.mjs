@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { releasePlan, updateRelease } from '../src/release.ts'
 import { updateCommerce } from '../src/commerce.ts'
+import { createProject } from '../src/project.ts'
 import { REVIEW_REASONS, reviewGuide, reviewMarkdown, reviewRisks } from '../src/review.ts'
 
 async function tempGame(t) {
@@ -128,4 +129,51 @@ test('an export over the 4 MB main package is caught before upload', async (t) =
   assert.match(size.title, /MB/u)
 })
 
+test('the review contains no placeholder leaks in any risk state', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'wechat-review-leaks-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
 
+  const cases = [
+    { label: 'empty', template: 'collector', setup: async () => {} },
+    {
+      label: 'configured',
+      template: 'collector',
+      setup: async (dir) => {
+        await updateRelease(dir, { appid: 'wx1234567890abcdef', ageRating: '12+', category: '游戏 > 休闲游戏', monetization: 'iaa' })
+        for (const step of ['record', 'record-icp', 'privacy', 'iaa']) await updateRelease(dir, { step, status: 'done' })
+        await updateCommerce(dir, { enabled: true, interstitial: 'adunit-1234567890', rewarded: 'adunit-1234567890', analytics: true })
+      },
+    },
+    { label: 'iap-no-licence', template: 'voxel', setup: async (dir) => { await updateRelease(dir, { monetization: 'iap' }) } },
+    {
+      label: 'iap-configured',
+      template: 'voxel',
+      setup: async (dir) => {
+        await updateRelease(dir, { monetization: 'iap', ageRating: '16+' })
+        await updateCommerce(dir, { iapEnabled: true, licenseNumber: 'ISBN 978-7', merchantId: '1900000109' })
+      },
+    },
+    {
+      label: 'oversize',
+      template: 'voxel',
+      setup: async (dir) => {
+        const exportDir = join(dir, 'export', 'wechat', 'big')
+        await mkdir(exportDir, { recursive: true })
+        for (const name of ['game.js', 'game.json', 'project.config.json']) await writeFile(join(exportDir, name), '{}')
+        await writeFile(join(exportDir, 'big.bin'), Buffer.alloc(5 * 1024 * 1024, 1))
+      },
+    },
+  ]
+
+  for (const item of cases) {
+    const dir = join(root, item.label)
+    await createProject(dir, { title: `Review ${item.label}`, template: item.template })
+    await item.setup(dir)
+    const guide = await reviewGuide(dir, {})
+    const text = await readFile(guide.file, 'utf8')
+    assert.ok(text.length > 500, `${item.label}: the review should have content`)
+    for (const token of ['undefined', 'null', 'NaN', 'Infinity', '[object Object]', '{title}', '{name}']) {
+      assert.ok(!text.includes(token), `${item.label}: "${token}" leaked into the review`)
+    }
+  }
+})
