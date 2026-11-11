@@ -183,6 +183,19 @@ export function releasePlan(monetization: Monetization = 'none'): ReleaseStep[] 
       needs: ['register', 'verify'],
     },
     {
+      id: 'record-icp',
+      stage: 'compliance',
+      title: '小程序备案（如适用）',
+      owner: 'wechat',
+      why: '「小游戏备案」之外，部分主体和服务还需要完成小程序备案（ICP 备案）；两条线都要过，缺一条会影响发布。',
+      how: [
+        '后台「设置 → 基本设置」查看是否还有「小程序备案 / ICP 备案」的待办提示。',
+        '按提示提交主体与服务信息；它和小游戏备案是两个入口，不要只做一条。',
+        '两项都完成后再提交版本审核；是否适用以后台提示为准。',
+      ],
+      needs: ['register', 'verify'],
+    },
+    {
       id: 'export',
       stage: 'build',
       title: '导出微信小游戏工程',
@@ -229,7 +242,7 @@ export function releasePlan(monetization: Monetization = 'none'): ReleaseStep[] 
         '按插件生成的材料填写版本说明与测试账号（如无需登录就写「无需登录」）。',
         '审核通常 1–7 个工作日；被驳回时按驳回理由改完再提。',
       ],
-      needs: ['record', 'upload'],
+      needs: ['record', 'record-icp', 'upload'],
     },
     {
       id: 'publish',
@@ -424,12 +437,13 @@ export async function releaseMaterials(
     '- 如后续接入广告或内购，请按实际调用的接口补充声明（例如设备标识、订单信息）。',
     '- 如接入微信登录，请说明头像/昵称的用途，并提供注销或撤回方式。',
     '',
-    '## 4. 小游戏备案（内容说明）',
+    '## 4. 小游戏备案 / 小程序备案（内容说明）',
     '',
     `${title} 是一款${options.style ? `${options.style} 风格的` : ''}休闲小游戏，单机运行，不含用户生成内容、不含社交与充值（如已接入内购，请改为「含虚拟支付」并附版号信息）。`,
     '',
     '- 主要内容：收集道具、躲避障碍，单局时长约 1 分钟。',
     '- 内容自查：无地图、无文字聊天、无真实货币兑换、无烟酒暴力元素。',
+    '- 备案提醒：小游戏备案与小程序（ICP）备案是两个入口，按后台提示把两条都完成再提交审核。',
     '',
     '## 5. 版本审核说明',
     '',
@@ -464,5 +478,7 @@ export async function releaseMaterials(
   await writeFile(target, markdown, 'utf8')
   return { markdown, file: target }
 }
+
+
 
 

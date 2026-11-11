@@ -48,6 +48,16 @@ test('a fresh game is blocked by its AppID and by the missing filing', async (t)
   assert.equal(risks.find(risk => risk.id === 'export').severity, 'warning')
 })
 
+test('the ICP filing is a warning until it is confirmed', async (t) => {
+  const dir = await tempGame(t)
+  const fresh = await reviewRisks(dir)
+  const icp = fresh.find(risk => risk.id === 'record-icp')
+  assert.equal(icp?.severity, 'warning')
+  await updateRelease(dir, { step: 'record-icp' })
+  const after = await reviewRisks(dir)
+  assert.ok(!after.some(risk => risk.id === 'record-icp'), 'confirming it clears the warning')
+})
+
 test('finishing the console steps and exporting removes those risks', async (t) => {
   const dir = await tempGame(t)
   await updateRelease(dir, { appid: 'wx1234567890abcdef', ageRating: '8+', category: '游戏 > 休闲游戏' })
@@ -86,4 +96,5 @@ test('an export over the 4 MB main package is caught before upload', async (t) =
   assert.equal(size?.severity, 'blocker')
   assert.match(size.title, /MB/u)
 })
+
 

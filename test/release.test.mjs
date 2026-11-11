@@ -29,7 +29,7 @@ test('the plan is coherent and gates monetization steps', () => {
   assert.ok(ids.indexOf('register') < ids.indexOf('record'))
   assert.ok(ids.indexOf('record') < ids.indexOf('submit'))
   assert.ok(ids.indexOf('submit') < ids.indexOf('publish'))
-  // IAP needs a game licence, so it only appears when the user asks for it.
+  // 小游戏备案 and 小程序(ICP)备案 are separate console flows; review needs both.\n  assert.ok(ids.includes('record-icp'))\n  assert.ok(ids.indexOf('record') < ids.indexOf('record-icp'))\n  // IAP needs a game licence, so it only appears when the user asks for it.
   assert.ok(!ids.includes('iaa') && !ids.includes('iap'))
   assert.ok(releasePlan('iaa').some(step => step.id === 'iaa'))
   assert.ok(!releasePlan('iaa').some(step => step.id === 'iap'))
@@ -91,6 +91,8 @@ test('materials are written next to the export with everything the console asks 
   assert.match(text, /版号/u, 'IAP must mention the game licence')
   assert.match(text, /流量主/u, 'IAA must mention the traffic-owner switch')
   assert.match(text, /无需登录/u)
+  assert.match(text, /小程序（ICP）备案/u)
   assert.match(text, /以微信后台[^。]*为准/u)
 })
+
 

@@ -147,6 +147,14 @@ export async function reviewRisks(dir: string, state?: ReleaseState, options: Re
   if (!stepDone(release, 'record')) {
     risks.push({ id: 'record', severity: 'blocker', title: '小游戏备案还没完成', fix: '后台「设置 → 基本设置 → 小游戏备案」；备案通过后再提交版本。' })
   }
+  if (!stepDone(release, 'record-icp')) {
+    risks.push({
+      id: 'record-icp',
+      severity: 'warning',
+      title: '小程序备案（ICP）是否适用还没确认',
+      fix: '在后台「设置 → 基本设置」确认是否需要小程序/ICP 备案；需要就提交。它和小游戏备案是两个入口。',
+    })
+  }
   if (!stepDone(release, 'privacy')) {
     risks.push({ id: 'privacy', severity: 'warning', title: '隐私保护指引还没配置', fix: '按实际收集的信息填写后台的用户隐私保护指引；不收集也要如实声明。' })
   }
@@ -228,5 +236,6 @@ export async function reviewGuide(dir: string, options: ReviewCheckOptions & { t
   await writeFile(file, markdown, 'utf8')
   return { file, markdown, risks }
 }
+
 
 
