@@ -26,7 +26,7 @@
 | 侧栏点「导出微信小游戏」；全新工程也能一次走通 | `src/client/index.tsx`、`src/index.ts` | `test/wechat.test.mjs::the exported 2D game boots`、`test/host.test.mjs::a brand-new game goes from create`、`test/journey-user.test.mjs::a non-coder journey`、`test/host.test.mjs::WeChat actions called before the export` |
 | 2D/3D 都支持 | `src/wechat.ts` 内联 three.js，按 runtime 决定顺序 | `test/wechat.test.mjs::the exported 3D game renders through WebGL` |
 | 发布向导：注册、AppID、类目/名称、认证、适龄提示、资质（IAA/IAP）、版本审核、小游戏备案、小程序备案、发布 | `src/release.ts` 的 15 步清单 | `test/release.test.mjs::the plan is coherent and gates monetization steps` |
-| 尽量自动调 DevTools CLI（打开/预览/上传） | `src/devtools.ts` | `test/devtools.test.mjs::devtoolsArgs builds the documented CLI calls` |
+| 尽量自动调 DevTools CLI（打开/预览/上传） | `src/devtools.ts` | `test/devtools.test.mjs::devtoolsArgs builds the documented CLI calls` |、`test/devtools-command.test.mjs::upload runs the CLI`
 | 服务端口由用户授权 | 端口关闭时报 `DEVTOOLS_PORT_CLOSED` 并给出开启步骤 | `test/devtools.test.mjs::the IDE messages become coded errors with a fix` |
 | 不能自动的标注「需在微信后台完成」 | 每步带 `owner`，侧栏以徽章显示 | `test/release.test.mjs::a fresh checklist starts at the console steps` |
 | 上线后接广告 | `src/commerce.ts` + 运行时插屏/激励视频/埋点 | `test/wechat.test.mjs::a game with ads shows one interstitial` |
