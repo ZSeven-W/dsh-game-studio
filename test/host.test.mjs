@@ -444,6 +444,44 @@ test('/game-studio without an action explains itself, and a typo lists the real 
   assert.match(typo.text, /no action for details/u)
 })
 
+test('a brand-new game goes from create to a WeChat export with no prior state', async (t) => {
+  const { root, call, runCommand } = await harness(t)
+  await call('game_studio_create', { path: 'fresh', title: 'Fresh Start' })
+
+  // Swap the SVG placeholders for PNG art so the export needs no browser.
+  const dir = join(root, 'fresh')
+  const manifest = JSON.parse(await readFile(join(dir, 'game.json'), 'utf8'))
+  for (const [slot, spec] of Object.entries(manifest.slots)) {
+    const file = `assets/${slot}.png`
+    const png = new PNG({ width: spec.size[0], height: spec.size[1] })
+    png.data.fill(180)
+    for (let i = 3; i < png.data.length; i += 4) png.data[i] = 255
+    await writeFile(join(dir, file), PNG.sync.write(png))
+    spec.file = file
+  }
+  await writeFile(join(dir, 'game.json'), JSON.stringify(manifest, null, 2))
+
+  const exported = await runCommand(`export-wechat ${JSON.stringify({ project: 'fresh', appid: 'touristappid' })}`)
+  assert.equal(exported.kind, 'success', exported.text)
+  const view = JSON.parse(exported.text)
+  for (const file of ['game.js', 'game.json', 'project.config.json']) assert.ok(view.files.includes(file), file)
+
+  // First-run wizard, materials, review and monetization all create their state.
+  const status = await runCommand(`wechat-release ${JSON.stringify({ project: 'fresh', op: 'status' })}`)
+  assert.equal(status.kind, 'success', status.text)
+  assert.equal(JSON.parse(status.text).steps.length, 15)
+
+  const materials = await runCommand(`wechat-release ${JSON.stringify({ project: 'fresh', op: 'materials' })}`)
+  assert.equal(materials.kind, 'success', materials.text)
+
+  const review = await runCommand(`wechat-release ${JSON.stringify({ project: 'fresh', op: 'review' })}`)
+  assert.equal(review.kind, 'success', review.text)
+
+  const commerce = await runCommand(`wechat-commerce ${JSON.stringify({ project: 'fresh', op: 'status' })}`)
+  assert.equal(commerce.kind, 'success', commerce.text)
+  assert.equal(JSON.parse(commerce.text).enabled, false, 'a fresh game starts with monetization off')
+})
+
 // ---------------------------------------------------------------- playtest
 
 /** Stand-ins for the Harness's attachment store and model catalog. */

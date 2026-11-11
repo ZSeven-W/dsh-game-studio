@@ -23,7 +23,7 @@
 | 需求 | 实现 | 证据 |
 | --- | --- | --- |
 | 一句话生成/改造游戏，选 2D/3D 模板 | 插件原有能力（`game_studio_create`） | `test/host.test.mjs::/game-studio wechat-release` |
-| 侧栏点「导出微信小游戏」 | `src/client/index.tsx`、`src/index.ts` | `test/wechat.test.mjs::the exported 2D game boots` |
+| 侧栏点「导出微信小游戏」；全新工程也能一次走通 | `src/client/index.tsx`、`src/index.ts` | `test/wechat.test.mjs::the exported 2D game boots`、`test/host.test.mjs::a brand-new game goes from create` |
 | 2D/3D 都支持 | `src/wechat.ts` 内联 three.js，按 runtime 决定顺序 | `test/wechat.test.mjs::the exported 3D game renders through WebGL` |
 | 发布向导：注册、AppID、类目/名称、认证、适龄提示、资质（IAA/IAP）、版本审核、小游戏备案、小程序备案、发布 | `src/release.ts` 的 15 步清单 | `test/release.test.mjs::the plan is coherent and gates monetization steps` |
 | 尽量自动调 DevTools CLI（打开/预览/上传） | `src/devtools.ts` | `test/devtools.test.mjs::devtoolsArgs builds the documented CLI calls` |
