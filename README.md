@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Describe a small game in one sentence — play it in the sidebar of a <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> conversation, swap in AI art, export one HTML file.</strong><br />
-  <sub>15 agent tools &bull; live sidebar preview &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art with a cost check first &bull; self-playing playtests &bull; version history &bull; one-file HTML export &bull; WeChat mini-game export</sub>
+  <sub>18 agent tools &bull; live sidebar preview &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art with a cost check first &bull; self-playing playtests &bull; version history &bull; one-file HTML export &bull; WeChat mini-game export</sub>
 </p>
 
 <p align="center">
