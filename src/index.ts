@@ -1280,6 +1280,7 @@ export function apply(ctx: any, config: Config = {}): void {
           }
           else if (action === 'wechat-devtools') {
             const op = String(payload.op ?? 'open')
+            if (!['open', 'preview', 'upload'].includes(op)) throw new StudioError(`Unknown DevTools action "${op}". Use open, preview or upload.`, 'BAD_ACTION')
             if (op === 'preview') result = await previewInDevtools(dir)
             else if (op === 'upload') {
               result = await uploadFromDevtools(dir, { version: typeof payload.version === 'string' ? payload.version : undefined, desc: typeof payload.desc === 'string' ? payload.desc : undefined })
@@ -1298,7 +1299,11 @@ export function apply(ctx: any, config: Config = {}): void {
             })
           }
           else if (action === 'wechat-commerce') {
-            const state = String(payload.op ?? 'status') === 'configure'
+            const commerceOp = String(payload.op ?? 'status')
+            // A misspelt "configure" used to fall back to status, so the user
+            // believed the ad units were saved when they were not.
+            if (!['status', 'configure'].includes(commerceOp)) throw new StudioError(`Unknown commerce action "${commerceOp}". Use status or configure.`, 'BAD_ACTION')
+            const state = commerceOp === 'configure'
               ? await updateCommerce(dir, {
                 enabled: typeof payload.enabled === 'boolean' ? payload.enabled : undefined,
                 interstitial: typeof payload.interstitial === 'string' ? payload.interstitial : undefined,
@@ -1314,6 +1319,7 @@ export function apply(ctx: any, config: Config = {}): void {
           }
           else if (action === 'wechat-release') {
             const op = String(payload.op ?? 'status')
+            if (!['status', 'update', 'materials', 'review'].includes(op)) throw new StudioError(`Unknown release action "${op}". Use status, update, materials or review.`, 'BAD_ACTION')
             if (op === 'review') {
               const guide = await reviewGuide(dir)
               result = { file: guide.file, risks: guide.risks }

@@ -388,6 +388,15 @@ test('the safe area reaches the runtime, including the landscape side inset', as
   if (!ran) return t.skip('no Chrome or Edge here')
 })
 
+test('an invalid AppID is refused before anything is written', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  await assert.rejects(exportWechat(dir, { appid: 'my-app' }), /not a mini-game AppID/u)
+  const ok = await exportWechat(dir, { appid: '  wx1234567890abcdef  ' })
+  const config = JSON.parse(await readFile(join(ok.dir, 'project.config.json'), 'utf8'))
+  assert.equal(config.appid, 'wx1234567890abcdef', 'the AppID is trimmed, not copied with spaces')
+})
+
 /** Open one exported project in a mock-wx page and hand it to `run`. False = no browser. */
 async function withMockWx(exportedDir, run, options = {}) {
   const mock = await openMockPage(exportedDir, options)

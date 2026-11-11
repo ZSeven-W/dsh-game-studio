@@ -413,6 +413,22 @@ test('/game-studio wechat-ci writes the upload kit next to an exported project',
   assert.match(missing.text, /run the WeChat export first/u)
 })
 
+test('/game-studio wechat-* refuses a misspelt action instead of guessing', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const project = join(root, 'game')
+  const devtools = await runCommand(`wechat-devtools ${JSON.stringify({ project, op: 'preivew' })}`)
+  assert.equal(devtools.kind, 'error')
+  assert.match(devtools.text, /Unknown DevTools action/u)
+
+  const commerce = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'configur' })}`)
+  assert.equal(commerce.kind, 'error')
+  assert.match(commerce.text, /Unknown commerce action/u)
+
+  const release = await runCommand(`wechat-release ${JSON.stringify({ project, op: 'material' })}`)
+  assert.equal(release.kind, 'error')
+  assert.match(release.text, /Unknown release action/u)
+})
+
 // ---------------------------------------------------------------- playtest
 
 /** Stand-ins for the Harness's attachment store and model catalog. */

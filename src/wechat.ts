@@ -258,7 +258,14 @@ export async function exportWechat(dir: string, options: WechatExportOptions = {
   files.push('game.json')
   written.push({ file: 'game.json', bytes: Buffer.byteLength(`${JSON.stringify(gameJson, undefined, 2)}\n`) })
 
-  const appid = String(options.appid ?? '').trim() || 'touristappid'
+  const rawAppid = String(options.appid ?? '').trim()
+  if (rawAppid && rawAppid !== 'touristappid' && !/^wx[0-9a-z]{8,}$/iu.test(rawAppid)) {
+    throw new StudioError(
+      `${JSON.stringify(rawAppid)} is not a mini-game AppID: it must start with "wx" and be at least 10 characters, or be "touristappid" for a preview build. Copy it from 后台「设置 → 基本设置」.`,
+      'APPID_INVALID',
+    )
+  }
+  const appid = rawAppid || 'touristappid'
   const projectConfig = {
     appid,
     projectname: slug,
