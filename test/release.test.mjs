@@ -9,6 +9,7 @@ import {
   loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFile, releaseFilePresence, releaseFreshness, releaseMaterials, releasePlan, releaseStatus, updateRelease,
 } from '../src/release.ts'
 import { createProject } from '../src/project.ts'
+import { reviewRisks } from '../src/review.ts'
 import { updateCommerce } from '../src/commerce.ts'
 
 async function tempGame(t) {
@@ -308,4 +309,26 @@ test('the materials follow the monetization settings, before and after regenerat
   const state = await loadRelease(dir)
   const freshness = await releaseFreshness(dir, state)
   assert.equal(freshness.materialsStale, false)
+})
+
+test('the age-rating card never claims a rating the user has not chosen', async (t) => {
+  const dir = await tempGame(t)
+  const exportDir = join(dir, 'export', 'wechat', 'rating')
+  await mkdir(exportDir, { recursive: true })
+
+  const draft = await releaseMaterials(dir, { exportDir, manifestTitle: 'Rating Game' })
+  const draftText = await readFile(draft.file, 'utf8')
+  assert.match(draftText, /适龄级别：尚未选择/u, 'the draft says the user has not chosen yet')
+  assert.match(draftText, /草案：本游戏适合 8 周岁/u, 'the 8+ draft copy is labelled as a draft')
+  assert.doesNotMatch(draftText, /适龄级别：8\+/u, 'no unqualified 8+ claim')
+
+  // And the review agrees: the missing rating is a risk.
+  const risks = await reviewRisks(dir, await loadRelease(dir), { exportDir })
+  assert.ok(risks.some((risk) => risk.id === 'age-rating'), 'the review flags the missing rating')
+
+  await updateRelease(dir, { ageRating: '12+' })
+  const chosen = await releaseMaterials(dir, { exportDir, manifestTitle: 'Rating Game' })
+  const chosenText = await readFile(chosen.file, 'utf8')
+  assert.match(chosenText, /适龄级别：12\+/u)
+  assert.match(chosenText, /本游戏适合 12 周岁/u)
 })

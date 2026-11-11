@@ -490,7 +490,7 @@ export async function releaseMaterials(
   const hasIap = state.monetization === 'iap' || state.monetization === 'both'
   const runtimes = Array.isArray(manifest?.runtime) ? manifest.runtime : []
   const is3d = runtimes.includes('three')
-  const rating = state.ageRating ?? '8+'
+  const rating = state.ageRating ?? null
   const category = state.category || '游戏 > 休闲游戏（以微信后台可选项为准）'
   const monetization = state.monetization ?? 'none'
   const lines = [
@@ -509,8 +509,8 @@ export async function releaseMaterials(
     '',
     '## 2. 适龄提示',
     '',
-    `- 适龄级别：${rating}`,
-    `- 游戏内展示文案：${AGE_RATING_COPY[rating]}`,
+    `- 适龄级别：${rating ?? '尚未选择（导出暂时内嵌草案 8+；提交前请在向导里选定）'}`,
+    `- 游戏内展示文案：${rating ? AGE_RATING_COPY[rating] : `待选定后生成（草案：${AGE_RATING_COPY['8+']}）`}`,
     '- 展示位置：启动首屏（模板标题页）固定展示，不遮挡开始按钮。',
     '- 依据：《网络游戏适龄提示》团体标准；最终以审核意见为准。',
     '',
