@@ -14,7 +14,7 @@ import { buildProject } from './build.ts'
 import { commerceCheck, embedCommerce, loadCommerce, updateCommerce } from './commerce.ts'
 import { writeWechatCi } from './ci.ts'
 import { devtoolsDoctor, findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
-import { loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFilePresence, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
+import { loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFilePresence, releaseFreshness, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
 import { reviewGuide } from './review.ts'
 import { exportWechat } from './wechat.ts'
 import { runCodexBatch, type CodexBatch } from './generation.ts'
@@ -1061,7 +1061,8 @@ export function apply(ctx: any, config: Config = {}): void {
       }
       const state = await loadRelease(dir)
       const presence = await releaseFilePresence(dir)
-      return { project: dir, ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review }
+      const freshness = await releaseFreshness(dir, state)
+      return { project: dir, ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review, materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale }
     },
   }))
 
@@ -1402,7 +1403,8 @@ export function apply(ctx: any, config: Config = {}): void {
             } else {
               const state = await loadRelease(dir)
               const presence = await releaseFilePresence(dir)
-              result = { ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review }
+              const freshness = await releaseFreshness(dir, state)
+              result = { ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review, materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale }
             }
           }
           else if (action === 'restore') result = await restoreVersion(dir, Math.trunc(Number(payload.version)))

@@ -1,12 +1,12 @@
 // The WeChat release wizard: checklist integrity, state persistence, what is
 // blocked, and the copy-paste materials handed to the console.
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
-  loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFile, releaseFilePresence, releaseMaterials, releasePlan, releaseStatus, updateRelease,
+  loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFile, releaseFilePresence, releaseFreshness, releaseMaterials, releasePlan, releaseStatus, updateRelease,
 } from '../src/release.ts'
 import { createProject } from '../src/project.ts'
 import { updateCommerce } from '../src/commerce.ts'
@@ -217,4 +217,54 @@ test('uploads keep the versions that were really sent', async (t) => {
   await markUploaded(dir, '1.0.1', 'uploaded 1.0.1 again')
   const again = releaseStatus(dir, await loadRelease(dir), releasePlan('none'))
   assert.equal(again.uploads.filter((entry) => entry.version === '1.0.1').length, 2)
+})
+
+test('materials and the review go stale when the answers or the settings change', async (t) => {
+  const dir = await tempGame(t)
+  await mkdir(join(dir, '.studio'), { recursive: true })
+  const commerce = join(dir, '.studio', 'wechat-commerce.json')
+  await writeFile(commerce, '{}\n')
+  // An old settings file must not make fresh materials look stale.
+  await utimes(commerce, new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'))
+
+  const fresh = await releaseFreshness(dir, {
+    materialsAt: '2021-01-01T00:00:00.000Z',
+    reviewAt: '2021-01-01T00:00:00.000Z',
+    answersAt: '2020-06-01T00:00:00.000Z',
+  })
+  assert.deepEqual(fresh, { materialsStale: false, reviewStale: false })
+
+  // New answers after the files were written: both are out of date.
+  const changed = await releaseFreshness(dir, {
+    materialsAt: '2021-01-01T00:00:00.000Z',
+    reviewAt: '2021-01-01T00:00:00.000Z',
+    answersAt: '2022-01-01T00:00:00.000Z',
+  })
+  assert.deepEqual(changed, { materialsStale: true, reviewStale: true })
+
+  // Newer monetization settings make the materials stale even without answers.
+  await utimes(commerce, new Date('2023-01-01T00:00:00Z'), new Date('2023-01-01T00:00:00Z'))
+  const settings = await releaseFreshness(dir, {
+    materialsAt: '2021-01-01T00:00:00.000Z',
+    reviewAt: '2021-01-01T00:00:00.000Z',
+    answersAt: '2020-06-01T00:00:00.000Z',
+  })
+  assert.deepEqual(settings, { materialsStale: true, reviewStale: false })
+
+  // Regenerating clears it: nothing happened after the new timestamps.
+  const regenerated = await releaseFreshness(dir, {
+    materialsAt: '2024-01-01T00:00:00.000Z',
+    reviewAt: '2024-01-01T00:00:00.000Z',
+    answersAt: '2020-06-01T00:00:00.000Z',
+  })
+  assert.deepEqual(regenerated, { materialsStale: false, reviewStale: false })
+
+  // updateRelease records answersAt when an answer changes, and not for steps.
+  const before = await loadRelease(dir)
+  await updateRelease(dir, { ageRating: '12+' })
+  const after = await loadRelease(dir)
+  assert.ok(after.answersAt, 'changing the age rating records answersAt')
+  const stepped = await updateRelease(dir, { step: 'appid', status: 'done' })
+  assert.equal(stepped.state.answersAt, after.answersAt, 'a step change is not an answer change')
+  assert.ok(before.answersAt === undefined || before.answersAt <= after.answersAt)
 })

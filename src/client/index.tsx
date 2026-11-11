@@ -230,6 +230,8 @@ interface ReleaseView {
   reviewAt?: string | null
   materialsPresent?: boolean
   reviewPresent?: boolean
+  materialsStale?: boolean
+  reviewStale?: boolean
   uploads?: Array<{ version: string; at: string; note?: string }>
 }
 
@@ -605,10 +607,14 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
           && <span style={s.small}>{t('tab.versionUploaded')}</span>}
         {release?.materialsAt && (release.materialsPresent === false
           ? <span style={s.small}>{t('tab.materialsMissing')}</span>
-          : <span style={s.small}>{t('tab.materialsReady')}</span>)}
+          : release.materialsStale
+            ? <span style={s.small}>{t('tab.materialsStale')}</span>
+            : <span style={s.small}>{t('tab.materialsReady')}</span>)}
         {release?.reviewAt && (release.reviewPresent === false
           ? <span style={s.small}>{t('tab.reviewMissing')}</span>
-          : <span style={s.small}>{t('tab.reviewReady')}</span>)}
+          : release.reviewStale
+            ? <span style={s.small}>{t('tab.reviewStale')}</span>
+            : <span style={s.small}>{t('tab.reviewReady')}</span>)}
         {release && <span style={s.small}>{t('tab.releaseProgress', {
           done: String(release.progress.done), total: String(release.progress.total), percent: String(release.progress.percent),
         })}</span>}

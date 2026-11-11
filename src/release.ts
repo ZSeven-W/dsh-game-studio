@@ -13,10 +13,10 @@
  * steps, and the plugin marks the steps it really ran (export, upload).
  */
 import { existsSync } from 'node:fs'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { loadManifest, paths } from './project.ts'
-import { loadCommerce } from './commerce.ts'
+import { commerceFile, loadCommerce } from './commerce.ts'
 import { readJson, StudioError, writeJson } from './util.ts'
 import { findWechatExport } from './devtools.ts'
 
@@ -60,6 +60,8 @@ export interface ReleaseState {
   reviewAt?: string
   /** Every version the plugin uploaded, newest last. */
   uploads?: Array<{ version: string; at: string; note?: string }>
+  /** When appid/name/category/age/monetization last changed (materials go stale after). */
+  answersAt?: string
   steps: Record<string, ReleaseStepState>
   createdAt: string
   updatedAt: string
@@ -78,6 +80,9 @@ export interface ReleaseStatus {
   /** False when the timestamp exists but the file was deleted (or never exported). */
   materialsPresent: boolean
   reviewPresent: boolean
+  /** Filled by the host after checking the file timestamps (optional in the pure status). */
+  materialsStale?: boolean
+  reviewStale?: boolean
   uploads: Array<{ version: string; at: string; note?: string }>
   blocked: Array<{ id: string; title: string; missing: string[] }>
 }
@@ -375,6 +380,8 @@ export async function updateRelease(
   patch: { step?: string; status?: ReleaseStepStatus; note?: string; appid?: string; gameName?: string; category?: string; ageRating?: AgeRating; monetization?: Monetization },
 ): Promise<{ state: ReleaseState; status: ReleaseStatus }> {
   const state = await loadRelease(dir)
+  const answerChanged = ['appid', 'gameName', 'category', 'ageRating', 'monetization'].some((key) => (patch as Record<string, unknown>)[key] !== undefined)
+  if (answerChanged) state.answersAt = now()
   if (patch.appid !== undefined) state.appid = patch.appid.trim()
   if (patch.gameName !== undefined) state.gameName = patch.gameName.trim()
   if (patch.category !== undefined) state.category = patch.category.trim()
@@ -393,6 +400,25 @@ export async function updateRelease(
   }
   await saveRelease(dir, state)
   return { state, status: releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')) }
+}
+
+/**
+ * Are the generated files older than the answers or the monetization settings?
+ * Returns both flags so the panel can say "regenerate" instead of showing a stale
+ * document as current.
+ */
+export async function releaseFreshness(
+  dir: string,
+  state: Pick<ReleaseState, 'materialsAt' | 'reviewAt' | 'answersAt'>,
+): Promise<{ materialsStale: boolean; reviewStale: boolean }> {
+  const commerceMtime = await stat(commerceFile(dir)).then((info) => info.mtimeMs).catch(() => 0)
+  const answersAt = state.answersAt ? Date.parse(state.answersAt) : 0
+  const materialsAt = state.materialsAt ? Date.parse(state.materialsAt) : 0
+  const reviewAt = state.reviewAt ? Date.parse(state.reviewAt) : 0
+  return {
+    materialsStale: materialsAt > 0 && (commerceMtime > materialsAt || answersAt > materialsAt),
+    reviewStale: reviewAt > 0 && answersAt > reviewAt,
+  }
 }
 
 /** Whether RELEASE.md / REVIEW.md still exist next to the export. */
