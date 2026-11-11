@@ -394,3 +394,29 @@ test('the review note never prints null when the rating is not chosen', async (t
   assert.match(afterText, /适龄提示 16\+/u)
   assert.match(afterText, /Age rating: 16\+/u)
 })
+
+test('the materials contain no placeholder leaks in any realistic state', async (t) => {
+  const unit = 'adunit-1234567890'
+  const cases = [
+    { label: 'collector-no-answers', template: 'collector', release: null, commerce: null },
+    { label: 'voxel-no-answers', template: 'voxel', release: null, commerce: null },
+    { label: 'ads', template: 'collector', release: { monetization: 'iaa' }, commerce: { enabled: true, interstitial: unit, rewarded: unit, analytics: true } },
+    { label: 'iap-demo', template: 'voxel', release: { monetization: 'iap', ageRating: '12+', category: '游戏 > 休闲游戏', appid: 'wx1234567890abcdef' }, commerce: { iapEnabled: true, licenseNumber: 'ISBN 978-7-498-12345-6', merchantId: '1900000109' } },
+    { label: 'both-paid', template: 'collector', release: { monetization: 'both', ageRating: '16+' }, commerce: { enabled: true, interstitial: unit, iapEnabled: true, licenseNumber: 'ISBN 978-7', merchantId: '1900000109', payUrl: 'https://pay.example.com/sign' } },
+  ]
+
+  for (const item of cases) {
+    const dir = join(await tempGame(t), item.label)
+    await createProject(dir, { title: `Probe ${item.label}`, template: item.template })
+    const exportDir = join(dir, 'export', 'wechat', 'g')
+    await mkdir(exportDir, { recursive: true })
+    if (item.release) await updateRelease(dir, item.release)
+    if (item.commerce) await updateCommerce(dir, item.commerce)
+    const materials = await releaseMaterials(dir, { exportDir, manifestTitle: `Probe ${item.label}` })
+    const text = await readFile(materials.file, 'utf8')
+    assert.ok(text.length > 1000, `${item.label}: the materials should have content`)
+    for (const token of ['undefined', 'null', 'NaN', 'Infinity', '[object Object]']) {
+      assert.ok(!text.includes(token), `${item.label}: "${token}" leaked into the materials`)
+    }
+  }
+})
