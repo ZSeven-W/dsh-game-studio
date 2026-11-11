@@ -350,5 +350,29 @@ test('the privacy draft says whether the console step is actually done', async (
   const after = await releaseMaterials(dir, { exportDir, manifestTitle: 'Privacy Game' })
   const afterText = await readFile(after.file, 'utf8')
   assert.match(afterText, /状态：已在后台完成「不收集」声明/u)
-  assert.doesNotMatch(afterText, /尚未完成/u)
+  assert.doesNotMatch(afterText, /状态：\*\*尚未完成\*\*/u, 'the privacy status is no longer the open one')
+})
+
+test('the filing section states whether each filing is done', async (t) => {
+  const dir = await tempGame(t)
+  const exportDir = join(dir, 'export', 'wechat', 'filing')
+  await mkdir(exportDir, { recursive: true })
+
+  const before = await releaseMaterials(dir, { exportDir, manifestTitle: 'Filing Game' })
+  const beforeText = await readFile(before.file, 'utf8')
+  assert.match(beforeText, /小游戏备案：\*\*尚未完成\*\*/u)
+  assert.match(beforeText, /小程序备案（ICP）：\*\*尚未确认\*\*/u)
+  // Both are real risks in the review at this point.
+  const risks = await reviewRisks(dir, await loadRelease(dir), { exportDir })
+  assert.ok(risks.some((risk) => risk.id === 'record'), 'record is a risk')
+  assert.ok(risks.some((risk) => risk.id === 'record-icp'), 'record-icp is a risk')
+
+  await updateRelease(dir, { step: 'record' })
+  await updateRelease(dir, { step: 'record-icp' })
+  const after = await releaseMaterials(dir, { exportDir, manifestTitle: 'Filing Game' })
+  const afterText = await readFile(after.file, 'utf8')
+  assert.match(afterText, /小游戏备案：已完成/u)
+  assert.match(afterText, /小程序备案（ICP）：已完成或已确认不适用/u)
+  assert.doesNotMatch(afterText, /小游戏备案：\*\*尚未完成\*\*/u)
+  assert.doesNotMatch(afterText, /小程序备案（ICP）：\*\*尚未确认\*\*/u)
 })

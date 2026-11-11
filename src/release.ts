@@ -492,6 +492,8 @@ export async function releaseMaterials(
   const is3d = runtimes.includes('three')
   const rating = state.ageRating ?? null
   const privacyDone = state.steps.privacy?.status === 'done'
+  const recordDone = state.steps.record?.status === 'done'
+  const recordIcpDone = state.steps['record-icp']?.status === 'done'
   const category = state.category || '游戏 > 休闲游戏（以微信后台可选项为准）'
   const monetization = state.monetization ?? 'none'
   const lines = [
@@ -538,6 +540,8 @@ export async function releaseMaterials(
     '- 主要内容：收集道具、躲避障碍，单局时长约 1 分钟。',
     `- 内容自查：无地图、无文字聊天、无真实货币兑换${hasIap ? '（内购为道具直购，不涉及兑换）' : ''}、无烟酒暴力元素。`,
     '- 备案提醒：小游戏备案与小程序（ICP）备案是两个入口，按后台提示把两条都完成再提交审核。',
+    `- 小游戏备案：${recordDone ? '已完成（向导里已打勾）。' : '**尚未完成**——后台「设置 → 基本设置 → 小游戏备案」提交并等通过。'}`,
+    `- 小程序备案（ICP）：${recordIcpDone ? '已完成或已确认不适用（向导里已打勾）。' : '**尚未确认**——先在后台确认是否需要，需要就提交。'}`,
     '',
     '## 5. 版本审核说明',
     '',
