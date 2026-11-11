@@ -103,6 +103,7 @@ function readme(manifest: GameManifest, appid: string): string {
     '- SVG 素材已转成 PNG，因为微信小游戏的 Image 不保证支持 SVG。',
     '- 音频目前静音（原游戏的 WebAudio 调用被安全跳过）；触摸/指针事件已适配。',
     '- 广告不强推：配置广告位后两局之间最多一次插屏，激励视频只由「看广告复活」触发；未配置则不加载广告代码。',
+    '- 内购需要版号与微信支付商户号才能开启；配了签名服务地址才会真正调 wx.requestVirtualPayment，否则只跑演示流程。',
     '- 微信的包体限制：主包 4MB、总包 30MB；导出时会在超过 4MB 时给出警告。',
     '',
     '## 注意',

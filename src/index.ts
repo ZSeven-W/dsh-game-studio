@@ -903,6 +903,10 @@ export function apply(ctx: any, config: Config = {}): void {
       interstitial: { type: 'string', description: '插屏广告位 ID (adunit-...), empty string to clear.' },
       rewarded: { type: 'string', description: '激励视频广告位 ID (adunit-...), empty string to clear.' },
       analytics: { type: 'boolean', description: 'Report round/round-end/ad events through wx.reportEvent.' },
+      iapEnabled: { type: 'boolean', description: 'Switch in-app purchases on. Requires a game licence number and a WeChat Pay merchant ID.' },
+      licenseNumber: { type: 'string', description: '游戏版号 / 审批文号. Required for IAP.' },
+      merchantId: { type: 'string', description: '微信支付商户号. Required for IAP.' },
+      payUrl: { type: 'string', description: 'https endpoint that returns signData/paySig/signature for wx.requestVirtualPayment. Without it IAP runs in demo mode.' },
     },
     output: {
       schema: json,
@@ -917,6 +921,10 @@ export function apply(ctx: any, config: Config = {}): void {
           interstitial: typeof args.interstitial === 'string' ? args.interstitial : undefined,
           rewarded: typeof args.rewarded === 'string' ? args.rewarded : undefined,
           analytics: typeof args.analytics === 'boolean' ? args.analytics : undefined,
+          iapEnabled: typeof args.iapEnabled === 'boolean' ? args.iapEnabled : undefined,
+          licenseNumber: typeof args.licenseNumber === 'string' ? args.licenseNumber : undefined,
+          merchantId: typeof args.merchantId === 'string' ? args.merchantId : undefined,
+          payUrl: typeof args.payUrl === 'string' ? args.payUrl : undefined,
         })
         return { project: dir, ...state, check: commerceCheck(state), embedded: embedCommerce(state) }
       }
@@ -1257,6 +1265,10 @@ export function apply(ctx: any, config: Config = {}): void {
                 interstitial: typeof payload.interstitial === 'string' ? payload.interstitial : undefined,
                 rewarded: typeof payload.rewarded === 'string' ? payload.rewarded : undefined,
                 analytics: typeof payload.analytics === 'boolean' ? payload.analytics : undefined,
+                iapEnabled: typeof payload.iapEnabled === 'boolean' ? payload.iapEnabled : undefined,
+                licenseNumber: typeof payload.licenseNumber === 'string' ? payload.licenseNumber : undefined,
+                merchantId: typeof payload.merchantId === 'string' ? payload.merchantId : undefined,
+                payUrl: typeof payload.payUrl === 'string' ? payload.payUrl : undefined,
               })
               : await loadCommerce(dir)
             result = { ...state, check: commerceCheck(state), embedded: embedCommerce(state) }
@@ -1350,6 +1362,7 @@ export function apply(ctx: any, config: Config = {}): void {
     })
   })
 }
+
 
 
 

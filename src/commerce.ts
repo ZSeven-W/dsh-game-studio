@@ -12,10 +12,21 @@ import { join } from 'node:path'
 import { paths } from './project.ts'
 import { readJson, StudioError, writeJson } from './util.ts'
 
+export interface IapConfig {
+  enabled: boolean
+  /** 版号 / 审批文号. Required to switch IAP on: virtual payment needs it. */
+  licenseNumber?: string
+  /** 微信支付商户号. Required to switch IAP on. */
+  merchantId?: string
+  /** Endpoint that returns the signed parameters for wx.requestVirtualPayment. */
+  payUrl?: string
+}
+
 export interface CommerceState {
   schema: 1
   enabled: boolean
   ads: { interstitial?: string; rewarded?: string }
+  iap: IapConfig
   analytics: boolean
   updatedAt: string
 }
@@ -35,8 +46,10 @@ export function commerceFile(dir: string): string {
 
 export async function loadCommerce(dir: string): Promise<CommerceState> {
   const saved = await readJson<CommerceState>(commerceFile(dir)).catch(() => null)
-  if (saved?.schema === 1) return { ...saved, ads: saved.ads ?? {} }
-  return { schema: 1, enabled: false, ads: {}, analytics: true, updatedAt: new Date().toISOString() }
+  if (saved?.schema === 1) {
+    return { ...saved, ads: saved.ads ?? {}, iap: saved.iap ?? { enabled: false } }
+  }
+  return { schema: 1, enabled: false, ads: {}, iap: { enabled: false }, analytics: true, updatedAt: new Date().toISOString() }
 }
 
 export async function saveCommerce(dir: string, state: CommerceState): Promise<CommerceState> {
@@ -65,12 +78,32 @@ export function commerceCheck(state: CommerceState): CommerceCheck {
     notes.push('导出的游戏只在两局之间展示一次插屏，激励视频只由玩家点「看广告复活」触发，不强制观看。')
   }
   if (state.ads.rewarded && !state.ads.interstitial) notes.push('只配置了激励视频：不会自动弹插屏。')
+
+  if (state.iap?.enabled) {
+    if (!state.iap.licenseNumber) problems.push('开通内购必须填写游戏版号（审批文号）；没有版号不能做虚拟支付。')
+    if (!state.iap.merchantId) problems.push('开通内购必须填写微信支付商户号。')
+    if (state.iap.payUrl && !/^https:\/\//iu.test(state.iap.payUrl)) problems.push('内购签名服务的地址必须是 https://（微信要求安全传输）。')
+    if (state.iap.licenseNumber && state.iap.merchantId) {
+      notes.push(state.iap.payUrl
+        ? '内购会先请求你的签名服务，再调用 wx.requestVirtualPayment；插件不代签、不代收款。'
+        : '没有配置签名服务地址：内购以「演示模式」运行，只验证流程，不会产生真实订单。')
+    }
+  }
   return { ok: problems.length === 0, problems, notes }
 }
 
 export async function updateCommerce(
   dir: string,
-  patch: { enabled?: boolean; interstitial?: string | null; rewarded?: string | null; analytics?: boolean },
+  patch: {
+    enabled?: boolean
+    interstitial?: string | null
+    rewarded?: string | null
+    analytics?: boolean
+    iapEnabled?: boolean
+    licenseNumber?: string | null
+    merchantId?: string | null
+    payUrl?: string | null
+  },
 ): Promise<CommerceState> {
   const state = await loadCommerce(dir)
   if (patch.enabled !== undefined) state.enabled = patch.enabled
@@ -85,21 +118,52 @@ export async function updateCommerce(
     if (value === '') delete state.ads.rewarded
     else state.ads.rewarded = value
   }
+  if (patch.iapEnabled !== undefined) state.iap.enabled = patch.iapEnabled
+  if (patch.licenseNumber !== undefined) {
+    const value = patch.licenseNumber === null ? '' : patch.licenseNumber.trim()
+    if (value === '') delete state.iap.licenseNumber
+    else state.iap.licenseNumber = value
+  }
+  if (patch.merchantId !== undefined) {
+    const value = patch.merchantId === null ? '' : patch.merchantId.trim()
+    if (value === '') delete state.iap.merchantId
+    else state.iap.merchantId = value
+  }
+  if (patch.payUrl !== undefined) {
+    const value = patch.payUrl === null ? '' : patch.payUrl.trim()
+    if (value === '') delete state.iap.payUrl
+    else state.iap.payUrl = value
+  }
   const check = commerceCheck(state)
   if (!check.ok) throw new StudioError(check.problems.join(' '), 'BAD_AD_UNIT')
   await saveCommerce(dir, state)
   return state
 }
 
+export interface EmbeddedCommerce {
+  enabled: true
+  interstitial?: string
+  rewarded?: string
+  analytics: boolean
+  iap?: { enabled: true; dryRun: boolean; payUrl?: string }
+}
+
 /** What the exporter embeds into window.GAME; null when monetization is off. */
-export function embedCommerce(state: CommerceState): { enabled: true; interstitial?: string; rewarded?: string; analytics: boolean } | null {
-  if (!state.enabled) return null
-  if (!state.ads.interstitial && !state.ads.rewarded) return null
-  const embedded: { enabled: true; interstitial?: string; rewarded?: string; analytics: boolean } = {
+export function embedCommerce(state: CommerceState): EmbeddedCommerce | null {
+  const iap = state.iap?.enabled && state.iap.licenseNumber && state.iap.merchantId
+    ? {
+        enabled: true as const,
+        dryRun: !state.iap.payUrl,
+        ...(state.iap.payUrl ? { payUrl: state.iap.payUrl } : {}),
+      }
+    : null
+  if (!state.enabled && !iap) return null
+  const embedded: EmbeddedCommerce = {
     enabled: true,
     analytics: state.analytics !== false,
   }
   if (state.ads.interstitial) embedded.interstitial = state.ads.interstitial
   if (state.ads.rewarded) embedded.rewarded = state.ads.rewarded
+  if (iap) embedded.iap = iap
   return embedded
 }

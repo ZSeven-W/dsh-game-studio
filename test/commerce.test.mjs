@@ -83,3 +83,26 @@ test('a game without ads carries no monetization payload at all', async (t) => {
   assert.doesNotMatch(await readFile(join(result.dir, 'game.js'), 'utf8'), /"monetization":\{/u)
 })
 
+
+test('in-app purchases stay off until a licence and a merchant ID are recorded', async (t) => {
+  const { dir } = await tempGame(t)
+  await assert.rejects(updateCommerce(dir, { iapEnabled: true }), /版号/u)
+  await assert.rejects(
+    updateCommerce(dir, { iapEnabled: true, licenseNumber: 'ISBN 978-7-498-12345-6' }),
+    /商户号/u,
+  )
+
+  const withLicence = await updateCommerce(dir, {
+    iapEnabled: true, licenseNumber: 'ISBN 978-7-498-12345-6', merchantId: '1900000109',
+  })
+  assert.deepEqual(embedCommerce(withLicence), {
+    enabled: true,
+    analytics: true,
+    iap: { enabled: true, dryRun: true },
+  })
+  assert.match(commerceCheck(withLicence).notes.join(' '), /演示模式/u)
+
+  await assert.rejects(updateCommerce(dir, { payUrl: 'http://insecure.example/pay' }), /https/u)
+  const withServer = await updateCommerce(dir, { payUrl: 'https://pay.example.com/sign' })
+  assert.deepEqual(embedCommerce(withServer).iap, { enabled: true, dryRun: false, payUrl: 'https://pay.example.com/sign' })
+})

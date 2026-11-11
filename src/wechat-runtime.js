@@ -438,10 +438,62 @@
     drawHud(state);
   }
 
+  /* ---- In-app purchases ----------------------------------------------------
+   * The plugin never signs a payment and never collects money. A configured
+   * payUrl is asked for the signed parameters and wx.requestVirtualPayment does
+   * the rest; without a payUrl the flow runs in dry-run mode so the client side
+   * can be tested. Enabling IAP without a licence number is refused upstream in
+   * commerceCheck(), because virtual payment requires one. */
+  function currentIap() {
+    var cfg = moneyConfig();
+    return cfg && cfg.iap && cfg.iap.enabled ? cfg.iap : null;
+  }
+
+  function buy(sku) {
+    var cfg = currentIap();
+    if (!cfg) return Promise.reject(new Error('iap_not_enabled'));
+    report('iap_order', { sku: String(sku || '') });
+    if (cfg.dryRun || !cfg.payUrl) {
+      report('iap_dry_run', { sku: String(sku || '') });
+      return Promise.resolve({ dryRun: true, sku: sku });
+    }
+    return new Promise(function (resolve, reject) {
+      if (!wx.request || !wx.requestVirtualPayment) {
+        reject(new Error('wx.requestVirtualPayment is unavailable on this base library'));
+        return;
+      }
+      wx.request({
+        url: cfg.payUrl,
+        method: 'POST',
+        data: { sku: sku, appid: (G.GAME && G.GAME.appid) || '' },
+        success: function (res) {
+          var body = res && res.data;
+          if (!body || !body.signData) {
+            report('iap_failed', { sku: sku });
+            reject(new Error('pay server returned no signData'));
+            return;
+          }
+          try {
+            wx.requestVirtualPayment({
+              signData: body.signData,
+              paySig: body.paySig,
+              signature: body.signature,
+              mode: 'game',
+              success: function (result) { report('iap_paid', { sku: sku }); resolve(result); },
+              fail: function (error) { report('iap_failed', { sku: sku }); reject(error); },
+            });
+          } catch (error) { reject(error); }
+        },
+        fail: function (error) { report('iap_failed', { sku: sku }); reject(error); },
+      });
+    });
+  }
+
   G.__commerce = {
     ads: ads,
     revive: revive,
     report: report,
+    iap: { buy: buy, config: currentIap },
     state: function () {
       return {
         enabled: Boolean(money && money.enabled),
