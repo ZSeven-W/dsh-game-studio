@@ -102,6 +102,8 @@ const MOCK_INJECT = `(function () {
     onTouchMove: function () {}, onTouchEnd: function () {}, onTouchCancel: function () {},
     onHide: function () {}, onShow: function () {}, onWindowResize: function () {},
     onError: function (fn) { window.__wxError = fn; },
+    onMemoryWarning: function (fn) { window.__wxMemoryWarning = fn; },
+    triggerGC: function () { window.__wxGc = (window.__wxGc || 0) + 1; },
     loadSubpackage: function (options) {
       window.__wxSubpackages.push(options.name);
       setTimeout(function () { if (options.success) options.success({ errMsg: 'loadSubpackage:ok' }); }, 30);
@@ -111,6 +113,7 @@ const MOCK_INJECT = `(function () {
     getRealtimeLogManager: function () {
       return {
         error: function () { window.__wxLogs.push([].slice.call(arguments)); },
+        warn: function () { window.__wxLogs.push([].slice.call(arguments)); },
         info: function () { window.__wxLogs.push([].slice.call(arguments)); }
       };
     },

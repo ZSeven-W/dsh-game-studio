@@ -397,6 +397,31 @@ test('an invalid AppID is refused before anything is written', async (t) => {
   assert.equal(config.appid, 'wx1234567890abcdef', 'the AppID is trimmed, not copied with spaces')
 })
 
+test('a memory warning is recorded, reported and triggers the GC hook', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  await updateCommerce(dir, { enabled: true, interstitial: 'adunit-123456', analytics: true })
+  const exported = await exportWechat(dir)
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    const result = await page.evaluate(() => {
+      window.__wxMemoryWarning({ level: 10 })
+      return {
+        memory: window.__G.__wechatRuntime.memory,
+        gc: window.__wxGc || 0,
+        events: window.__wxAds.events.map(entry => entry.id),
+        logs: window.__wxLogs.length,
+      }
+    })
+    assert.equal(result.memory.warnings, 1)
+    assert.equal(result.memory.lastLevel, 10)
+    assert.equal(result.gc, 1, 'triggerGC is called when the host provides it')
+    assert.ok(result.events.includes('game_memory_warning'))
+    assert.ok(result.logs >= 1, 'the warning also reaches the realtime log')
+    assert.deepEqual(errors, [])
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
 /** Open one exported project in a mock-wx page and hand it to `run`. False = no browser. */
 async function withMockWx(exportedDir, run, options = {}) {
   const mock = await openMockPage(exportedDir, options)

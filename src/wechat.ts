@@ -113,6 +113,7 @@ function readme(manifest: GameManifest, appid: string): string {
     '- 低端机会自动降级：按设备 benchmark 把渲染倍率限制在 1×（中端 1.5×、高端 2×），低端机帧率上限 30。',
     '- 导出结果里的 report 是包体报告：最大文件、是否超过 4 MB 主包、该压缩什么。',
     '- 运行时暴露 __wechatRuntime.metrics()（启动耗时、帧数、平均帧率）和 __wechatRuntime.quality（设备档位）；崩溃与未处理异常会写进 wx.getRealtimeLogManager。',
+    '- 内存告警（wx.onMemoryWarning）会记录等级、上报 game_memory_warning 并调用 wx.triggerGC（宿主支持时），可用 __wechatRuntime.memory 查看。',
     '- 素材超过 1.5 MB 时会自动放进 assets 分包（game.json 的 subpackages），游戏启动前先 wx.loadSubpackage 预下载，期间屏幕显示下载提示。',
     '- 微信的包体限制：主包 4MB、总包 30MB；导出时会在超过 4MB 时给出警告。',
     '',

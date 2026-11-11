@@ -48,7 +48,7 @@
 | 触摸 | 触摸→pointer/touch 事件映射 | `test/wechat.test.mjs::the exported 2D game boots` |
 | 音效 | WebAudio 子集→WAV→InnerAudioContext | `test/wechat.test.mjs::game sounds are synthesised` |
 | 60fps / 低端机性能 | 设备档位限制渲染倍率与帧率上限 | `test/wechat.test.mjs::a weak device gets a capped render scale` |
-| 启动/内存 | `metrics()` 给出 bootMs/frames/fps | `test/wechat.test.mjs::boot metrics are reported` |
+| 启动/内存 | `metrics()` 给出 bootMs/frames/fps；内存告警记录、上报并触发 GC | `test/wechat.test.mjs::boot metrics are reported`、`test/wechat.test.mjs::a memory warning` |
 | 隐私/适龄 | 向导步骤 + 材料模板 | `test/release.test.mjs::materials are written next to the export` |
 | 发布：向导、材料模板、状态记录 | `src/release.ts` | `test/release.test.mjs::marking steps moves progress and unblocks dependants` |
 | 驳回原因 | `src/review.ts` | `test/review.test.mjs::the ICP filing is a warning` |

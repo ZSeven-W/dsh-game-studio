@@ -29,6 +29,7 @@
   var safeTop = sys.safeArea && typeof sys.safeArea.top === 'number' ? sys.safeArea.top : 0;
   // In landscape the notch sits on a side, so the HUD also needs the left inset.
   var safeLeft = sys.safeArea && typeof sys.safeArea.left === 'number' ? sys.safeArea.left : 0;
+  var memory = { warnings: 0, lastLevel: 0, lastAt: 0 };
   if (quality === 'low' && wx.setPreferredFramesPerSecond) {
     // A steady 30 fps on a weak device feels better than a wobbling 45 and saves battery.
     try { wx.setPreferredFramesPerSecond(30); } catch (error) { /* optional */ }
@@ -762,6 +763,7 @@
     quality: { tier: quality, benchmarkLevel: benchmarkLevel, dprCap: dprCap },
     showLoading: showLoading,
     playTone: playTone,
+    memory: memory,
     audio: audioStats,
     metrics: function () {
       var elapsed = clockNow() - startedAt;
@@ -931,6 +933,22 @@
       reportRuntimeError('unhandledRejection', (event && (event.reason || event)) || 'unhandled rejection');
     });
   }
+  // Memory pressure is the one quality signal the device reports while playing.
+  // Record it, thin out the logs and let the GC run early; never change the game.
+  if (wx.onMemoryWarning) {
+    wx.onMemoryWarning(function (res) {
+      memory.warnings += 1;
+      memory.lastLevel = Number((res && res.level) || 0);
+      memory.lastAt = Date.now();
+      report('memory_warning', { level: memory.lastLevel });
+      try {
+        var log = realtimeLog();
+        if (log && typeof log.warn === 'function') log.warn('[dsh-game-studio]', 'memory warning level ' + memory.lastLevel);
+      } catch (ignored) { /* logging is optional */ }
+      if (wx.triggerGC) { try { wx.triggerGC(); } catch (error) { /* optional */ } }
+    });
+  }
+
   if (wx.onError) {
     wx.onError(function (error) {
       reportRuntimeError('wx.onError', error);
