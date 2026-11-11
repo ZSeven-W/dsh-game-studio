@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import {
   devtoolsArgs, devtoolsCandidates, findDevtools, findWechatExport, mapDevtoolsError,
-  requireDevtools, runDevtools,
+  readDevtoolsInfo, requireDevtools, runDevtools,
 } from '../src/devtools.ts'
 
 test('devtoolsArgs builds the documented CLI calls', () => {
@@ -28,6 +28,29 @@ test('devtoolsArgs builds the documented CLI calls', () => {
     devtoolsArgs('upload', 'C:/g/export/wechat/isle'),
     ['upload', '--project', 'C:/g/export/wechat/isle', '-v', '1.0.0', '-d', 'dsh-game-studio'],
   )
+  // --info-output is how the compiled package sizes come back from the IDE.
+  assert.deepEqual(
+    devtoolsArgs('preview', 'C:/g/export/wechat/isle', { info: 'C:/tmp/p.json' }),
+    ['preview', '--project', 'C:/g/export/wechat/isle', '--qr-format', 'image', '--info-output', 'C:/tmp/p.json'],
+  )
+  assert.deepEqual(
+    devtoolsArgs('upload', 'C:/g/export/wechat/isle', { version: '1.2.3', info: 'C:/tmp/u.json' }),
+    ['upload', '--project', 'C:/g/export/wechat/isle', '-v', '1.2.3', '-d', 'dsh-game-studio', '--info-output', 'C:/tmp/u.json'],
+  )
+})
+
+test('the IDE info file is parsed, and absence is not an error', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'devtools-info-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const good = join(dir, 'info.json')
+  await writeFile(good, JSON.stringify({ subPackageInfo: [{ name: 'main', size: 1234 }] }))
+  assert.deepEqual(readDevtoolsInfo(good), { subPackageInfo: [{ name: 'main', size: 1234 }] })
+
+  const empty = join(dir, 'empty.json')
+  await writeFile(empty, '  ')
+  assert.equal(readDevtoolsInfo(empty), null)
+  assert.equal(readDevtoolsInfo(join(dir, 'missing.json')), null)
+  assert.equal(readDevtoolsInfo(undefined), null)
 })
 
 test('the IDE messages become coded errors with a fix', () => {

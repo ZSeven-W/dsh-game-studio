@@ -860,7 +860,8 @@ export function apply(ctx: any, config: Config = {}): void {
   ctx.tools.register(defineTool({
     name: 'game_studio_wechat_devtools',
     description: 'Drive WeChat DevTools for the exported mini-game: "open" imports the export folder into the IDE, '
-      + '"preview" saves a device QR code next to the export, "upload" submits a version. Requires WeChat DevTools and its '
+      + '"preview" saves a device QR code next to the export, "upload" submits a version. Preview and upload also return '
+      + 'the IDE\'s compiled package sizes (--info-output) when the IDE writes them. Requires WeChat DevTools and its '
       + 'service port (工具 → 设置 → 安全设置 → 服务端口). The plugin never changes that setting; a closed port comes back '
       + 'as DEVTOOLS_PORT_CLOSED with the steps to open it.',
     parameters: {

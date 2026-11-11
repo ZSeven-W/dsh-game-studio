@@ -8,7 +8,7 @@
  * explains how to turn it on and stops.
  */
 import { spawn } from 'node:child_process'
-import { accessSync, constants, readdirSync, statSync } from 'node:fs'
+import { accessSync, constants, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { StudioError } from './util.ts'
 
@@ -27,6 +27,8 @@ export interface DevtoolsResult {
   project: string
   output: string
   qr: string | null
+  /** Parsed --info-output (compiled package sizes), when the IDE wrote one. */
+  info: unknown | null
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000
@@ -89,14 +91,36 @@ export function requireDevtools(configured?: string, platform: NodeJS.Platform =
 }
 
 /** The exact arguments passed to the IDE CLI; exported so tests can pin them. */
-export function devtoolsArgs(action: DevtoolsAction, projectDir: string, options: { qr?: string; version?: string; desc?: string } = {}): string[] {
+export function devtoolsArgs(
+  action: DevtoolsAction,
+  projectDir: string,
+  options: { qr?: string; info?: string; version?: string; desc?: string } = {},
+): string[] {
   if (action === 'open') return ['open', '--project', projectDir]
   if (action === 'preview') {
     const args = ['preview', '--project', projectDir, '--qr-format', 'image']
     if (options.qr) args.push('--qr-output', options.qr)
+    if (options.info) args.push('--info-output', options.info)
     return args
   }
-  return ['upload', '--project', projectDir, '-v', options.version ?? '1.0.0', '-d', options.desc ?? 'dsh-game-studio']
+  const args = ['upload', '--project', projectDir, '-v', options.version ?? '1.0.0', '-d', options.desc ?? 'dsh-game-studio']
+  if (options.info) args.push('--info-output', options.info)
+  return args
+}
+
+/**
+ * The IDE's --info-output JSON (compiled main/subpackage sizes). Older builds may
+ * not write it, so a missing or unparsable file is simply null.
+ */
+export function readDevtoolsInfo(path: string | undefined): unknown | null {
+  if (!path) return null
+  try {
+    const text = readFileSync(path, 'utf8').trim()
+    if (!text) return null
+    return JSON.parse(text) as unknown
+  } catch {
+    return null
+  }
 }
 
 /** Turn the IDE's own message into a coded error the agent can act on. */
@@ -164,6 +188,7 @@ export function findWechatExport(gameDir: string): string | undefined {
 }
 
 async function runAction(cli: string, action: DevtoolsAction, projectDir: string, args: string[], timeoutMs: number): Promise<DevtoolsResult> {
+  const infoPath = args.includes('--info-output') ? args[args.indexOf('--info-output') + 1] : undefined
   const { code, output } = await runDevtools(cli, args, timeoutMs)
   const mapped = mapDevtoolsError(output)
   if (mapped) throw mapped
@@ -171,7 +196,9 @@ async function runAction(cli: string, action: DevtoolsAction, projectDir: string
     throw new StudioError(`WeChat DevTools ${action} failed: ${tail(output) || `exit code ${code}`}`, 'DEVTOOLS_FAILED')
   }
   const qr = action === 'preview' ? args[args.indexOf('--qr-output') + 1] ?? null : null
-  return { action, project: projectDir, output: tail(output), qr: qr !== null && isFile(qr) ? qr : null }
+  const info = readDevtoolsInfo(infoPath)
+  if (infoPath) { try { rmSync(infoPath, { force: true }) } catch { /* optional */ } }
+  return { action, project: projectDir, output: tail(output), qr: qr !== null && isFile(qr) ? qr : null, info }
 }
 
 export async function openInDevtools(gameDir: string, options: DevtoolsOptions = {}): Promise<DevtoolsResult> {
@@ -186,14 +213,16 @@ export async function previewInDevtools(gameDir: string, options: DevtoolsOption
   if (!project) throw new StudioError('No WeChat mini-game export found; run the WeChat export first.', 'NO_WECHAT_EXPORT')
   const cli = requireDevtools(options.cli)
   const qr = join(project, 'preview.png')
-  return await runAction(cli, 'preview', project, devtoolsArgs('preview', project, { qr }), options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+  const info = join(project, '.devtools-preview.json')
+  return await runAction(cli, 'preview', project, devtoolsArgs('preview', project, { qr, info }), options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
 }
 
 export async function uploadFromDevtools(gameDir: string, options: DevtoolsOptions = {}): Promise<DevtoolsResult> {
   const project = findWechatExport(gameDir)
   if (!project) throw new StudioError('No WeChat mini-game export found; run the WeChat export first.', 'NO_WECHAT_EXPORT')
   const cli = requireDevtools(options.cli)
-  const args = devtoolsArgs('upload', project, { version: options.version, desc: options.desc })
+  const info = join(project, '.devtools-upload.json')
+  const args = devtoolsArgs('upload', project, { version: options.version, desc: options.desc, info })
   return await runAction(cli, 'upload', project, args, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
 }
 
