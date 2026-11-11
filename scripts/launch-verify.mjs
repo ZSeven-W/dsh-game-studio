@@ -36,8 +36,9 @@ export async function verifyLaunch({ project, skipDevtools = false, quiet = fals
   const projectJson = readJson(join(dir, 'project.config.json'))
   check('game.json 与 project.config.json 都在', Boolean(gameJson && projectJson),
     gameJson && projectJson ? 'ok' : 'missing', '重新导出一次；若刚移动过目录，请把 --project 指向新的导出目录')
-  check('game.json 声明了分包', Boolean(gameJson?.subpackages?.length),
-    gameJson?.subpackages ? JSON.stringify(gameJson.subpackages) : 'none', '用当前版本插件重新导出（旧导出可能没有分包字段）')
+  check('分包设置', true, gameJson?.subpackages?.length
+    ? JSON.stringify(gameJson.subpackages)
+    : '无需分包（素材较小）；素材超过 1.5 MB 时会自动分包')
 
   const appid = projectJson?.appid ?? ''
   check('AppID 不是 touristappid', Boolean(appid) && appid !== 'touristappid', appid || '(empty)',
