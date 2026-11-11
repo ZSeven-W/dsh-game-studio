@@ -482,6 +482,30 @@ test('a brand-new game goes from create to a WeChat export with no prior state',
   assert.equal(JSON.parse(commerce.text).enabled, false, 'a fresh game starts with monetization off')
 })
 
+test('WeChat actions called before the export say what to do first', async (t) => {
+  const { call, runCommand } = await harness(t)
+  await call('game_studio_create', { path: 'empty', title: 'Empty' })
+
+  for (const op of ['open', 'preview', 'upload']) {
+    const result = await runCommand(`wechat-devtools ${JSON.stringify({ project: 'empty', op })}`)
+    assert.equal(result.kind, 'error', op)
+    assert.match(result.text, /run the WeChat export first/u, op)
+  }
+  const ci = await runCommand(`wechat-ci ${JSON.stringify({ project: 'empty' })}`)
+  assert.equal(ci.kind, 'error')
+  assert.match(ci.text, /run the WeChat export first/u)
+
+  // Materials and the pre-review can be prepared before the export: they land in
+  // the game's export folder and the review names the missing export as a risk.
+  const materials = await runCommand(`wechat-release ${JSON.stringify({ project: 'empty', op: 'materials' })}`)
+  assert.equal(materials.kind, 'success', materials.text)
+  assert.match(JSON.parse(materials.text).file, /export/u)
+
+  const review = await runCommand(`wechat-release ${JSON.stringify({ project: 'empty', op: 'review' })}`)
+  assert.equal(review.kind, 'success', review.text)
+  assert.ok(JSON.parse(review.text).risks.some((risk) => risk.id === 'export'))
+})
+
 // ---------------------------------------------------------------- playtest
 
 /** Stand-ins for the Harness's attachment store and model catalog. */
