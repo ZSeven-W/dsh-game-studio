@@ -903,11 +903,22 @@
     }
     return logManager;
   }
+  // Realtime logs accept 5 KB per call, and an error storm (say, one per frame)
+  // would bury the first, useful entry. Keep the first 20 and fold the rest.
+  var logBudget = 20;
+  var logFolded = false;
   function reportRuntimeError(source, error) {
     var message = String((error && (error.message || error.errMsg)) || error || source).slice(0, 500);
     try {
       var log = realtimeLog();
-      if (log && typeof log.error === 'function') log.error('[dsh-game-studio]', source + ': ' + message);
+      if (!log || typeof log.error !== 'function') return;
+      if (logBudget > 0) {
+        log.error('[dsh-game-studio]', source + ': ' + message);
+        logBudget -= 1;
+      } else if (!logFolded) {
+        logFolded = true;
+        log.error('[dsh-game-studio]', '后续错误已折叠（每局最多上报 20 条），先看第一条');
+      }
     } catch (ignored) { /* logging is optional */ }
   }
 

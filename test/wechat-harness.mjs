@@ -31,6 +31,7 @@ const MOCK_INJECT = `(function () {
   window.__wxLogs = [];
   window.__wxSubpackages = [];
   window.__wxAudio = { files: [], played: [] };
+  window.__wxFps = [];
   var wx = {
     createCanvas: function () {
       if (!mainUsed) { mainUsed = true; return main; }
@@ -44,7 +45,7 @@ const MOCK_INJECT = `(function () {
         benchmarkLevel: typeof window.__benchmarkLevel === 'number' ? window.__benchmarkLevel : undefined
       };
     },
-    setPreferredFramesPerSecond: function () {},
+    setPreferredFramesPerSecond: function (fps) { window.__wxFps.push(fps); },
     env: { USER_DATA_PATH: '/wxdata' },
     getFileSystemManager: function () {
       return {
