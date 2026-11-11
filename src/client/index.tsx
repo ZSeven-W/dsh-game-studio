@@ -556,6 +556,7 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
   const pubInfo = publishState(published, state?.build?.buildId, t)
   const lang = t('tab.reload') === '重新载入' ? 'zh' : 'en'
   return <div style={s.root} data-plugin="dsh-game-studio">
+    <style>{STUDIO_CSS}</style>
     <div style={s.bar}>
       <span style={s.title} title={project}>{title}</span>
       {state?.build && <span style={s.small}>{t('tab.build', { id: state.build.buildId, size: `${Math.round(state.build.bytes / 1024)} KB` })}</span>}
@@ -615,6 +616,8 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
       {(release?.steps ?? []).filter(step => step.status !== 'skipped').map(step => <div key={step.id} style={s.releaseStep}>
         <button type="button" style={s.check} disabled={releaseBusy || step.blocked}
           title={step.blocked ? t('tab.releaseBlocked') : step.title}
+          aria-label={step.title}
+          aria-pressed={step.status === 'done'}
           onClick={() => { void toggleReleaseStep(step) }}>{step.status === 'done' ? '✓' : step.blocked ? '·' : '○'}</button>
         <span style={step.status === 'done'
           ? { ...s.small, ...s.doneTitle, flex: 1, minWidth: 0 }
@@ -794,6 +797,11 @@ const SHELF_CSS = `
 [data-view="shelf"] .dgs-chip[aria-pressed="true"] { background: var(--dsw-alias-label-primary, #222); color: var(--dsw-alias-bg-base, #fff); font-weight: 600; }
 [data-view="shelf"] .dgs-sort { color: var(--dsw-alias-label-secondary, #888); }
 [data-view="shelf"] .dgs-sort[aria-pressed="true"] { color: var(--dsw-alias-label-primary, inherit); font-weight: 600; }
+`
+
+const STUDIO_CSS = `
+[data-plugin="dsh-game-studio"] button:focus-visible,
+[data-plugin="dsh-game-studio"] input:focus-visible { outline: 2px solid var(--dsw-alias-interactive-border-focus, #4c8bf5); outline-offset: 2px; }
 `
 
 function when(iso: string): string {

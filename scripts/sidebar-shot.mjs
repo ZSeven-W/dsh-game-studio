@@ -175,6 +175,42 @@ try {
     process.exitCode = 1
   }
 
+  // Keyboard and screen-reader basics: every control needs a name, and Tab must
+  // land on a control with a visible focus ring.
+  const a11y = await page.evaluate(() => {
+    const controls = [...document.querySelectorAll('button, input, a[href], iframe')]
+      .filter((el) => el.offsetParent !== null || el.tagName === 'IFRAME')
+    const unnamed = controls
+      .filter((el) => !(el.textContent || '').trim() && !el.getAttribute('aria-label') && !el.getAttribute('title'))
+      .map((el) => el.outerHTML.slice(0, 70))
+    return { count: controls.length, unnamed }
+  })
+  console.log(`accessible names: ${a11y.count} controls, ${a11y.unnamed.length} unnamed`)
+  if (a11y.unnamed.length > 0) {
+    for (const snippet of a11y.unnamed) console.log(`  unnamed: ${snippet}`)
+    process.exitCode = 1
+  }
+
+  await page.evaluate(() => document.body.focus())
+  await page.keyboard.press('Tab')
+  const focus = await page.evaluate(() => {
+    const el = document.activeElement
+    if (!el) return null
+    const style = getComputedStyle(el)
+    return {
+      tag: el.tagName,
+      label: (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 24),
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+    }
+  })
+  const ringVisible = focus !== null && focus.outlineStyle !== 'none' && Number.parseFloat(focus.outlineWidth) >= 2
+  console.log(`tab focus: <${focus?.tag}> "${focus?.label}" outline ${focus?.outlineStyle} ${focus?.outlineWidth}`)
+  if (!ringVisible) {
+    console.error('Tab does not land on a control with a visible focus ring')
+    process.exitCode = 1
+  }
+
   // Preview writes a QR file; the panel shows it so the user can scan directly.
   const previewButton = await page.$('text=预览二维码')
   if (previewButton) {
