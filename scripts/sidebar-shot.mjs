@@ -18,7 +18,9 @@ import { launchBrowser } from '../test/wechat-harness.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..')
-const outDir = resolve(repo, '..', 'artifacts', 'sidebar')
+const args = process.argv.slice(2)
+const outIndex = args.indexOf('--out')
+const outDir = resolve(outIndex >= 0 ? args[outIndex + 1] : join(repo, '..', 'artifacts', 'sidebar'))
 await mkdir(outDir, { recursive: true })
 
 // Fixtures come from the real command layer so the panel renders real step titles.

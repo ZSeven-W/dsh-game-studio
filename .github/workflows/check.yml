@@ -37,17 +37,26 @@ jobs:
         run: npm test
       # Builds one 2D and one 3D game, exports both for WeChat, boots the
       # exported projects in the mock wx harness and checks the runtime
-      # (WebGL compositing, HUD, audio, ads, device tier). Browser checks are
-      # skipped, not failed, when the runner has no Chrome.
+      # (WebGL compositing, HUD, audio, ads, device tier) plus the schema drill
+      # (subpackages, payment API, package budget). Browser checks are skipped,
+      # not failed, when the runner has no Chrome.
       - name: WeChat acceptance run
-        run: npm run acceptance
+        run: npm run acceptance -- --out artifacts/acceptance
+      # Renders the sidebar panels from the real client source (headless Chrome).
+      - name: Sidebar screenshots
+        run: npm run shots -- --out artifacts/sidebar
       - name: Traceability table
         run: npm run trace
+      # A red run must explain itself in the log, not only in an artefact.
+      - name: Acceptance report tail
+        if: failure()
+        run: tail -n 40 artifacts/acceptance/REPORT.md 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: wechat-acceptance
-          path: ../artifacts/acceptance
-          if-no-files-found: ignore
+          name: wechat-evidence
+          path: |
+            artifacts/acceptance
+            artifacts/sidebar
+          if-no-files-found: warn
           retention-days: 7
-

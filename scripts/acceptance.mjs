@@ -25,7 +25,8 @@ const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..')
 const args = process.argv.slice(2)
 const outIndex = args.indexOf('--out')
-const outRoot = resolve(outIndex >= 0 ? args[outIndex + 1] : join(repo, '..', 'artifacts', 'acceptance'))
+const positional = args.find((arg) => !arg.startsWith('--'))
+const outRoot = resolve(outIndex >= 0 ? args[outIndex + 1] : positional ?? join(repo, '..', 'artifacts', 'acceptance'))
 
 const AD_UNITS = { interstitial: 'adunit-demo0001', rewarded: 'adunit-demo0002' }
 const GAMES = [
