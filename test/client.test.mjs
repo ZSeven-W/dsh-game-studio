@@ -44,7 +44,7 @@ test('the sidebar only calls command actions and ops that the host defines', () 
   }
 
   const ops = new Set([...source.matchAll(/\bop: '([a-z]+)'/gu)].map(match => match[1]))
-  const allowedOps = new Set(['status', 'update', 'materials', 'review', 'configure', 'open', 'preview', 'upload'])
+  const allowedOps = new Set(['status', 'update', 'materials', 'review', 'configure', 'open', 'preview', 'upload', 'doctor'])
   for (const op of ops) assert.ok(allowedOps.has(op), `the sidebar sends unknown op "${op}"`)
 })
 

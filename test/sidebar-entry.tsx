@@ -51,6 +51,18 @@ const readBytes = async (_session: string, path: string) => {
 const runCommand = async (_session: string, input: string) => {
   if (input.startsWith('wechat-release {')) return { ok: true, text: JSON.stringify(fixtures.release) }
   if (input.startsWith('wechat-commerce')) return { ok: true, text: JSON.stringify(fixtures.commerce) }
+  if (input.startsWith('wechat-devtools')) {
+    return {
+      ok: true,
+      text: JSON.stringify({
+        ready: false,
+        hints: [
+          'WeChat DevTools must have its service port on: 工具 → 设置 → 安全设置 → 服务端口 → 开启，然后重新运行。',
+          'The project uses the tourist AppID: preview works, but uploading needs the real mini-game AppID.',
+        ],
+      }),
+    }
+  }
   return { ok: true, text: '{}' }
 }
 

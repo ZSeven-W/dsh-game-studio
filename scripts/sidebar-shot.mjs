@@ -101,6 +101,14 @@ try {
     await page.screenshot({ path: join(outDir, 'sidebar-wizard-bottom.png'), fullPage: true })
   }
 
+  // The environment doctor's answer, as the panel shows it.
+  const doctorButton = await page.$('text=检查环境')
+  if (doctorButton) {
+    await doctorButton.click()
+    await page.waitForTimeout(500)
+    await page.screenshot({ path: join(outDir, 'sidebar-env.png'), fullPage: true })
+  }
+
   const commerceButton = await page.$('text=商业化')
   if (commerceButton) {
     await commerceButton.click()
