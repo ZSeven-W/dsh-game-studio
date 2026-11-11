@@ -30,6 +30,8 @@
   // In landscape the notch sits on a side, so the HUD also needs the left inset.
   var safeLeft = sys.safeArea && typeof sys.safeArea.left === 'number' ? sys.safeArea.left : 0;
   var memory = { warnings: 0, lastLevel: 0, lastAt: 0 };
+  // A tiny session ledger, so "did the thing actually happen?" has an answer.
+  var session = { rounds: 0, completed: 0, roundMs: 0, roundStartedAt: 0, adFailures: 0, purchases: 0, dryRuns: 0 };
   if (quality === 'low' && wx.setPreferredFramesPerSecond) {
     // A steady 30 fps on a weak device feels better than a wobbling 45 and saves battery.
     try { wx.setPreferredFramesPerSecond(30); } catch (error) { /* optional */ }
@@ -295,6 +297,7 @@
     ads.lastErrorCode = code;
     ads.lastErrorHint = hint;
     ads.lastErrorAt = Date.now();
+    session.adFailures += 1;
     report('ad_error', { kind: kind, code: code });
     return hint;
   }
@@ -402,8 +405,17 @@
     var previous = lastPhase;
     lastPhase = state.phase;
     reviveVisible = false;
-    if (state.phase === 'playing' && previous !== 'playing') report('round_start', {});
+    if (state.phase === 'playing' && previous !== 'playing') {
+      session.rounds += 1;
+      session.roundStartedAt = Date.now();
+      report('round_start', {});
+    }
     if ((state.phase === 'won' || state.phase === 'lost') && previous === 'playing') {
+      if (session.roundStartedAt) {
+        session.roundMs += Date.now() - session.roundStartedAt;
+        session.roundStartedAt = 0;
+        session.completed += 1;
+      }
       report('round_end', { score: Math.round(state.score || 0), result: state.phase === 'won' ? 'win' : 'lose' });
       if (money && money.interstitial && ads.interstitial) setTimeout(showInterstitial, 700);
       if (money && money.rewarded && ads.rewarded && state.phase === 'lost') reviveVisible = true;
@@ -709,6 +721,7 @@
     if (!cfg) return Promise.reject(new Error('iap_not_enabled'));
     report('iap_order', { sku: String(sku || '') });
     if (cfg.dryRun || !cfg.payUrl) {
+      session.dryRuns += 1;
       report('iap_dry_run', { sku: String(sku || '') });
       return Promise.resolve({ dryRun: true, sku: sku });
     }
@@ -736,7 +749,7 @@
               signData: body.signData,
               paySig: body.paySig,
               signature: body.signature,
-              success: function (result) { report('iap_paid', { sku: sku }); resolve(result); },
+              success: function (result) { session.purchases += 1; report('iap_paid', { sku: sku }); resolve(result); },
               fail: function (error) {
                 report('iap_failed', { sku: sku, errCode: error && error.errCode });
                 reject(error);
@@ -796,6 +809,23 @@
           : 0,
         ageMs: Math.round(clockNow() - startedAt),
         tier: quality,
+      };
+    },
+    // Per-session numbers: proof the plumbing works before the console shows anything.
+    summary: function () {
+      return {
+        rounds: session.rounds,
+        completedRounds: session.completed,
+        avgRoundSeconds: session.completed ? Math.round(session.roundMs / session.completed / 100) / 10 : 0,
+        adShows: ads.shown + ads.rewardedShown,
+        adFailures: session.adFailures,
+        purchases: session.purchases,
+        dryRuns: session.dryRuns,
+        memoryWarnings: memory.warnings,
+        bootMs: firstFrameAt === null ? null : Math.round(firstFrameAt - startedAt),
+        fps: frameTimes.length >= 2
+          ? Math.round((frameTimes.length - 1) * 1000 / Math.max(1, frameTimes[frameTimes.length - 1] - frameTimes[0]))
+          : 0,
       };
     },
     canvas: gameCanvas, screen: mainCanvas,

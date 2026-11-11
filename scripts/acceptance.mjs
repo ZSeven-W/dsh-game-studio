@@ -51,8 +51,8 @@ function check(name, ok, detail = '', skipped = false) {
 async function prepareGame(spec, dir) {
   await rm(dir, { recursive: true, force: true })
   const project = await createProject(dir, { title: spec.title, template: spec.template, orientation: spec.orientation })
-  // Short round so the acceptance run does not wait a minute.
-  project.rules = { ...project.rules, duration: 6 }
+  // Short round so the run can reach the end screen even on software-rendered 3D.
+  project.rules = { ...project.rules, duration: 2 }
   await writeJson(paths.manifest(dir), project)
   await updateRelease(dir, { ageRating: '8+', category: '游戏 > 休闲游戏', monetization: 'both', gameName: spec.title })
   // The licence and merchant ID are recorded above, so the wizard step is done too.
@@ -107,6 +107,11 @@ async function playExported(spec, exportedDir, shotsDir) {
       }
     })
     await page.screenshot({ path: shot('playing') })
+    // Let the round actually finish: that is what makes round_end and the
+    // between-rounds interstitial observable instead of merely configured.
+    await page.waitForFunction('window.__G.__gameState().phase !== "playing"', undefined, { timeout: 20000 }).catch(() => undefined)
+    await page.waitForTimeout(1500)
+    const summary = await page.evaluate(() => window.__G.__wechatRuntime.summary())
     return {
       skipped: false,
       titlePhase: titleState.phase,
@@ -116,6 +121,7 @@ async function playExported(spec, exportedDir, shotsDir) {
       quality,
       probe,
       iap,
+      summary,
       errors: mock.errors,
       shots: [shot('title'), shot('playing')],
     }
@@ -153,6 +159,11 @@ for (const spec of GAMES) {
       play.probe.ads !== null && play.probe.ads.interstitial === 0 && play.probe.ads.rewarded === 0,
       JSON.stringify(play.probe.ads))
     check(`${spec.id}: demo purchase returns dryRun`, play.iap.dryRun === true, play.iap.error || 'dryRun')
+    check(`${spec.id}: a finished round is counted`,
+      play.summary.rounds >= 1 && play.summary.completedRounds >= 1 && play.summary.avgRoundSeconds >= 1.5,
+      'rounds ' + play.summary.rounds + ', completed ' + play.summary.completedRounds + ', avg ' + play.summary.avgRoundSeconds + 's')
+    check(`${spec.id}: interstitial follows a finished round`, play.summary.adShows >= 1, 'shows ' + play.summary.adShows)
+    check(`${spec.id}: the dry-run purchase is counted`, play.summary.dryRuns >= 1, 'dryRuns ' + play.summary.dryRuns)
     check(`${spec.id}: device tier reported`, Boolean(play.quality?.tier), `${play.quality?.tier} · cap ${play.quality?.dprCap}x`)
     if (spec.renderer) {
       check(`${spec.id}: renders through WebGL`, play.state.renderer === spec.renderer, play.state.renderer)
