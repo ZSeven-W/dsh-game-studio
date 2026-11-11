@@ -1,11 +1,15 @@
 /* dsh-game-studio — WeChat mini-game runtime adapter (classic script).
  *
- * The exporter inlines this file before the original 2D game.js, then sets
+ * The exporter inlines this file before the original game.js and then sets
  * window.GAME. It gives the browser-style game a minimal window/document/
  * canvas/Image/localStorage/pointer environment on top of wx.*.
  *
- * Scope: 2D games following the dsh-game-studio contract (collector template
- * and custom canvas games). Three.js/WebGL games are not supported yet.
+ * Two rendering modes share one on-screen canvas:
+ *  - 2D games get the screen canvas's 2D context and draw straight to it.
+ *  - three.js games get an offscreen canvas with a WebGL2 context; each frame is
+ *    copied onto the screen canvas, which then also draws the HUD. Mini-games
+ *    have no DOM and only one on-screen canvas, so this is what makes a DOM HUD
+ *    (the voxel template's score, hearts, timer and title card) visible at all.
  */
 (function () {
   'use strict';
@@ -16,10 +20,13 @@
   var cssW = Math.max(1, sys.windowWidth || 375);
   var cssH = Math.max(1, sys.windowHeight || 667);
   var dpr = Math.min(2, sys.pixelRatio || 1);
+  var safeTop = sys.safeArea && typeof sys.safeArea.top === 'number' ? sys.safeArea.top : 0;
   var mainCanvas = wx.createCanvas();
   var canvasEvents = {};
   var windowEvents = {};
   var documentEvents = {};
+  /** How many nodes the game appended to document.body: a DOM HUD exists. */
+  var uiNodes = 0;
 
   function on(map, type, fn) {
     if (typeof fn !== 'function') return;
@@ -60,22 +67,77 @@
   mainCanvas = decorateCanvas(mainCanvas, true);
   mainCanvas.width = Math.round(cssW * dpr);
   mainCanvas.height = Math.round(cssH * dpr);
-  // Ask for the 2D context only when a 2D game actually reads it: taking it
-  // eagerly would make getContext('webgl2') return null for three.js games.
+
+  // The screen canvas is always a 2D canvas. It is asked for lazily: taking the
+  // 2D context eagerly would be fine here, but keeping it lazy avoids allocating
+  // it for games that end up failing before their first frame.
   var mainCtx = null;
   function mainContext() {
-    if (!mainCtx) mainCtx = mainCanvas.getContext('2d');
+    if (!mainCtx) { try { mainCtx = mainCanvas.getContext('2d'); } catch (error) { mainCtx = null; } }
     return mainCtx;
   }
 
+  /** Offscreen canvas three.js renders into; copied onto the screen each frame. */
+  var webglCanvas = null;
+  var blitFailed = false;
+
+  // What the game sees as document.getElementById('game'): a canvas that hands
+  // out either the screen 2D context or an offscreen WebGL2 context.
+  var gameCanvas = (function () {
+    var mode = null;
+    var proxy = {
+      id: 'game',
+      tabIndex: 0,
+      style: {},
+      setPointerCapture: function () {},
+      releasePointerCapture: function () {},
+      focus: function () {},
+      getBoundingClientRect: function () {
+        return { left: 0, top: 0, right: cssW, bottom: cssH, width: cssW, height: cssH };
+      },
+      addEventListener: function (type, fn) { on(canvasEvents, type, fn); },
+      removeEventListener: function (type, fn) { off(canvasEvents, type, fn); },
+      getContext: function (type) {
+        var name = String(type || '').toLowerCase();
+        if (name === 'webgl2' || name === 'webgl' || name === 'experimental-webgl') {
+          if (!webglCanvas) {
+            webglCanvas = wx.createCanvas();
+            webglCanvas.width = mainCanvas.width;
+            webglCanvas.height = mainCanvas.height;
+          }
+          mode = 'webgl';
+          return webglCanvas.getContext(name);
+        }
+        mode = '2d';
+        return mainContext();
+      }
+    };
+    // Width/height describe whichever canvas the context came from, so three's
+    // setSize() lands on the offscreen buffer and 2D games resize the screen.
+    Object.defineProperty(proxy, 'width', {
+      get: function () { return mode === 'webgl' ? webglCanvas.width : mainCanvas.width; },
+      set: function (value) { if (mode === 'webgl') webglCanvas.width = value; else mainCanvas.width = value; }
+    });
+    Object.defineProperty(proxy, 'height', {
+      get: function () { return mode === 'webgl' ? webglCanvas.height : mainCanvas.height; },
+      set: function (value) { if (mode === 'webgl') webglCanvas.height = value; else mainCanvas.height = value; }
+    });
+    Object.defineProperty(proxy, 'clientWidth', { get: function () { return cssW; } });
+    Object.defineProperty(proxy, 'clientHeight', { get: function () { return cssH; } });
+    return proxy;
+  })();
+
   function newCanvas() {
-    // First wx.createCanvas() call is the on-screen canvas; later calls are offscreen.
+    // The first wx.createCanvas() call is the on-screen canvas; later calls are offscreen.
     var canvas = wx.createCanvas();
     decorateCanvas(canvas, false);
     return canvas;
   }
 
-  var body = { style: {}, clientWidth: cssW, clientHeight: cssH, appendChild: function () {} };
+  var body = {
+    style: {}, clientWidth: cssW, clientHeight: cssH,
+    appendChild: function (node) { uiNodes++; return node; }
+  };
   var documentElement = { style: {}, clientWidth: cssW, clientHeight: cssH, appendChild: function () {} };
 
   var doc = {
@@ -83,7 +145,7 @@
     visibilityState: 'visible',
     body: body,
     documentElement: documentElement,
-    getElementById: function (id) { return id === 'game' ? mainCanvas : null; },
+    getElementById: function (id) { return id === 'game' ? gameCanvas : null; },
     createElement: function (tag) {
       var name = String(tag || '').toLowerCase();
       if (name === 'canvas') return newCanvas();
@@ -118,10 +180,136 @@
     length: 0
   };
 
-  var raf = G.requestAnimationFrame || function (callback) {
+  var nativeRaf = G.requestAnimationFrame || function (callback) {
     return setTimeout(function () { callback(Date.now()); }, 16);
   };
-  var caf = G.cancelAnimationFrame || function (id) { clearTimeout(id); };
+  var nativeCaf = G.cancelAnimationFrame || function (id) { clearTimeout(id); };
+
+  /** Copy the offscreen WebGL frame onto the screen canvas. */
+  function blit() {
+    if (blitFailed || !webglCanvas) return;
+    var ctx = mainContext();
+    if (!ctx) { blitFailed = true; return; }
+    try {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(webglCanvas, 0, 0, mainCanvas.width, mainCanvas.height);
+      ctx.restore();
+    } catch (error) {
+      // A device that cannot draw a canvas into a canvas still plays the game;
+      // it just shows the raw WebGL surface underneath.
+      blitFailed = true;
+    }
+  }
+
+  /* ---- HUD -----------------------------------------------------------------
+   * Mini-games have no DOM, so the text a game would have put into div/span
+   * elements has to be drawn. Games following the studio contract expose
+   * window.__gameState(); the HUD is only drawn when the game actually built a
+   * DOM HUD (uiNodes > 0), so canvas-drawn 2D HUDs are never duplicated. */
+  function font(size) {
+    return 'bold ' + Math.round(size) + 'px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+  }
+  function repeat(text, count) {
+    var out = '';
+    for (var i = 0; i < count; i++) out += text;
+    return out;
+  }
+  function pill(ctx, text, x, y, align, size, color) {
+    ctx.font = font(size);
+    var width = ctx.measureText(text).width + size * 1.35;
+    var height = Math.round(size * 1.9);
+    var left = align === 'right' ? x - width : align === 'center' ? x - width / 2 : x;
+    ctx.fillStyle = 'rgba(10,14,32,0.45)';
+    ctx.fillRect(left, y, width, height);
+    ctx.fillStyle = color || '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(text, left + width / 2, y + height / 2);
+  }
+  function centerText(ctx, text, x, y, size, color) {
+    ctx.font = font(size);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.fillText(text, x, y);
+  }
+
+  function drawHud() {
+    if (!uiNodes) return;
+    var state = null;
+    try { state = G.__gameState ? G.__gameState() : null; } catch (error) { state = null; }
+    if (!state) return;
+    var ctx = mainContext();
+    if (!ctx) return;
+    var W = cssW;
+    var H = cssH;
+    var top = Math.max(10, safeTop + 10);
+    var scale = dpr;
+    ctx.save();
+    try {
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.textBaseline = 'middle';
+      if (state.phase === 'error') {
+        ctx.fillStyle = 'rgba(10,14,32,0.78)';
+        ctx.fillRect(0, 0, W, H);
+        centerText(ctx, '这台设备暂时跑不了 3D', W / 2, H * 0.40, 22, '#ffe9a8');
+        centerText(ctx, '需要支持 WebGL2 的微信版本', W / 2, H * 0.40 + 32, 14, '#ffffff');
+        centerText(ctx, '请更新微信，或换一台较新的手机', W / 2, H * 0.40 + 56, 14, '#ffffff');
+        return;
+      }
+      if (state.phase === 'title') {
+        var title = (G.GAME && G.GAME.title) || '';
+        if (title) centerText(ctx, title, W / 2, H * 0.40, Math.round(H * 0.042), '#ffffff');
+        pill(ctx, '点击开始 / Tap to start', W / 2, Math.round(H * 0.44), 'center', 15, '#ffe9a8');
+        return;
+      }
+      if (typeof state.hearts === 'number' && state.hearts >= 0) {
+        pill(ctx, repeat('♥', Math.max(0, Math.round(state.hearts))), 12, top, 'left', 15, '#ff8a9a');
+      }
+      if (typeof state.score === 'number') {
+        pill(ctx, '✦ ' + Math.round(state.score), 12 + 86, top, 'left', 15, '#ffe9a8');
+      }
+      if (typeof state.time === 'number' && state.phase === 'playing') {
+        pill(ctx, Math.ceil(state.time) + 's', W - 12, top, 'right', 15, '#ffffff');
+      }
+      if (state.phase === 'won' || state.phase === 'lost') {
+        ctx.fillStyle = 'rgba(10,14,32,0.55)';
+        ctx.fillRect(0, H * 0.34, W, H * 0.26);
+        centerText(ctx, state.phase === 'won' ? '通关！' : '游戏结束', W / 2, H * 0.40, 24, '#ffe9a8');
+        centerText(ctx, '得分 ' + Math.round(state.score || 0), W / 2, H * 0.40 + 34, 16, '#ffffff');
+        pill(ctx, '点击重新开始', W / 2, Math.round(H * 0.40) + 54, 'center', 14, '#ffffff');
+      }
+    } finally {
+      ctx.restore();
+    }
+  }
+
+  function afterFrame() {
+    if (webglCanvas) blit();
+    drawHud();
+  }
+
+  // Every frame the game asks for ends with a blit and a HUD paint.
+  G.requestAnimationFrame = function (callback) {
+    return nativeRaf(function (timestamp) {
+      try {
+        callback(timestamp);
+      } finally {
+        afterFrame();
+      }
+    });
+  };
+  G.cancelAnimationFrame = function (id) { nativeCaf(id); };
+  G.__wechatRuntime = {
+    width: cssW, height: cssH, dpr: dpr, safeTop: safeTop,
+    canvas: gameCanvas, screen: mainCanvas,
+    get ctx() { return mainContext(); },
+    get webgl() { return webglCanvas; },
+  };
+
+  // A 3D game that found no WebGL2 never starts its loop, so paint the error
+  // card on a timer as well.
+  setTimeout(drawHud, 900);
+  setTimeout(drawHud, 2500);
 
   // The original game references these as free globals; window === GameGlobal.
   G.window = G;
@@ -138,8 +326,6 @@
   G.navigator = { userAgent: 'wechat-minigame', platform: 'wechat' };
   G.location = { href: '', search: '', hash: '' };
   G.screen = { width: cssW, height: cssH };
-  G.requestAnimationFrame = raf;
-  G.cancelAnimationFrame = caf;
   G.addEventListener = function (type, fn) { on(windowEvents, type, fn); };
   G.removeEventListener = function (type, fn) { off(windowEvents, type, fn); };
   G.dispatchEvent = function (event) { if (event && event.type) emit(windowEvents, event.type, event); };
@@ -147,10 +333,6 @@
   G.focus = function () {};
   G.blur = function () {};
   G.alert = function () {};
-  G.__wechatRuntime = {
-    width: cssW, height: cssH, dpr: dpr, canvas: mainCanvas,
-    get ctx() { return mainContext(); },
-  };
 
   function pointerEvent(touch, type) {
     return {
@@ -163,8 +345,8 @@
       pageY: touch.clientY,
       x: touch.clientX,
       y: touch.clientY,
-      target: mainCanvas,
-      currentTarget: mainCanvas,
+      target: gameCanvas,
+      currentTarget: gameCanvas,
       preventDefault: function () {},
       stopPropagation: function () {},
       stopImmediatePropagation: function () {}
@@ -207,6 +389,7 @@
     cssW = Math.max(1, next.windowWidth || cssW);
     cssH = Math.max(1, next.windowHeight || cssH);
     dpr = Math.min(2, next.pixelRatio || dpr);
+    safeTop = next.safeArea && typeof next.safeArea.top === 'number' ? next.safeArea.top : safeTop;
     G.innerWidth = cssW;
     G.innerHeight = cssH;
     G.devicePixelRatio = dpr;

@@ -41,7 +41,7 @@
 | 🤖 **自动试玩** | `game_studio_playtest` 在无界面的 Chrome 或 Edge 里玩最新代码，报告阶段、得分、帧率、脚本错误并附截图。不靠方向键操作的游戏（格子、卡牌、瞄准、节奏……）定义 `window.__autoplay`，试玩就能玩到真正的玩法。 |
 | 🕰️ **版本历史** | 每次让游戏发生变化的构建都会保存；`game_studio_restore_version` 把代码、规则和美术一起恢复。 |
 | 📦 **单文件导出** | `game_studio_export` 生成一个不联网、自包含的 HTML 文件，用任何浏览器打开，或放到任意静态托管上。 |
-| 🟢 **导出微信小游戏** | `game_studio_export_wechat` 在 `export/wechat/<slug>/` 下生成可直接导入微信开发者工具的工程（`game.js`、`game.json`、`project.config.json`、`assets/*.png`）。游戏代码不改，由内置的 `wx.*` 运行时适配层跑起来；SVG 素材自动转成 PNG。支持 2D canvas 与 3D three.js/voxel 游戏（3D 模板的 HTML HUD 暂时不在微信端显示）。 |
+| 🟢 **导出微信小游戏** | `game_studio_export_wechat` 在 `export/wechat/<slug>/` 下生成可直接导入微信开发者工具的工程（`game.js`、`game.json`、`project.config.json`、`assets/*.png`）。游戏代码不改，由内置的 `wx.*` 运行时适配层跑起来；SVG 素材自动转成 PNG。2D canvas 与 3D three.js/voxel 都可用：WebGL 渲染到离屏画布再合成到上屏画布，HUD 按 `__gameState` 用 canvas 重绘（小游戏没有 DOM）。 |
 | 📱 **在手机上试玩** | `game_studio_share` 在本地网络上开一个临时只读链接（或通过 `cloudflared` 开启 Cloudflare 临时公网链接，发给任何网络下的朋友都能玩），侧栏里会显示二维码。 |
 | 🌐 **发布到 GitHub Pages** | `game_studio_publish` 用本机已登录的 `gh` 把构建好的 HTML（或整面游戏墙）推到你名下的公开仓库并开启 GitHub Pages，生成关掉电脑也能长期游玩的网址。 |
 | 🗂️ **游戏墙** | 点右栏的 **+**，选 **游戏工坊 · 游戏墙**：工作区里做过的游戏铺满一面墙，封面是最近一次试玩的画面，可按 2D/3D 筛选，按最近修改、版本数或名称排序。点一下就能玩，不经过 agent，也不花 token。你还可以订阅在线游戏源（`owner/repo`、GitHub 仓库地址或 GitHub Pages 网址），把别人发布的游戏合入墙内直接游玩。**导出游戏墙**会把本地游戏打包成一个离线网页，发给朋友就能玩。 |
@@ -88,7 +88,7 @@
 | `game_studio_versions` | 列出已保存的版本，最新的在前。 |
 | `game_studio_restore_version` | 把整个游戏恢复到较早的版本。 |
 | `game_studio_export` | 导出一个自包含、可离线游玩的 HTML 文件。 |
-| `game_studio_export_wechat` | 把游戏导出成微信小游戏工程（`game.js`/`game.json`/`project.config.json` + `wx.*` 运行时）到 `<游戏>/export/wechat/<slug>/`，在微信开发者工具里导入该目录即可。游戏代码不改，SVG 素材自动转 PNG，three.js 游戏会把引擎内联进去。支持 2D 与 3D；3D 模板的 HTML HUD 暂时不在微信端显示。 |
+| `game_studio_export_wechat` | 把游戏导出成微信小游戏工程（`game.js`/`game.json`/`project.config.json` + `wx.*` 运行时）到 `<游戏>/export/wechat/<slug>/`，在微信开发者工具里导入该目录即可。游戏代码不改，SVG 素材自动转 PNG，three.js 游戏会把引擎内联进去。支持 2D 与 3D；WebGL 逐帧合成到上屏画布，HUD 按 `__gameState` 重绘。 |
 | `game_studio_share` | 在本地网络开启（或关闭）一个临时只读链接让手机试玩；传 `public: true` 则通过 `cloudflared` 生成任何网络都能打开的临时公网链接。 |
 | `game_studio_list` | 列出工作区里的游戏（标题、2D/3D、是否已构建、版本数），agent 能按名字找到「那个企鹅游戏」。 |
 | `game_studio_export_wall` | 导出游戏墙：一个离线 HTML 页面，每个已构建的游戏一个格子，点格子就能玩。 |

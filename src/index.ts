@@ -832,8 +832,8 @@ export function apply(ctx: any, config: Config = {}): void {
     name: 'game_studio_export_wechat',
     description: 'Export the game as a WeChat mini-game project (game.js/game.json/project.config.json + wx runtime) '
       + 'into the project\'s export/wechat/<slug>/ folder. The user imports that folder in WeChat DevTools; '
-      + 'this is not a web page. 2D canvas and 3D three.js/voxel games are supported (the 3D template\'s HTML HUD '
-      + 'is not drawn on WeChat yet); SVG art is rasterised to PNG.',
+      + 'this is not a web page. 2D canvas and 3D three.js/voxel games are supported: the engine is inlined, WebGL '
+      + 'frames are composited onto the screen canvas and the HUD is redrawn from __gameState. SVG art is rasterised to PNG.',
     parameters: {
       path: projectParam,
       appid: { type: 'string', description: 'WeChat mini-game AppID. Defaults to touristappid; use the user\'s AppID for preview/upload.' },

@@ -250,8 +250,13 @@ test('the exported 2D game boots on a mocked wx and starts on a tap', async (t) 
   await rasterSlots(dir)
   const exported = await exportWechat(dir)
   const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
-    const boot = await page.evaluate(() => ({ runtime: Boolean(window.__G.__wechatRuntime), phase: window.__G.__gameState().phase }))
+    const boot = await page.evaluate(() => ({
+      runtime: Boolean(window.__G.__wechatRuntime),
+      webgl: window.__G.__wechatRuntime.webgl,
+      phase: window.__G.__gameState().phase,
+    }))
     assert.equal(boot.runtime, true, 'the adapter installed its runtime globals')
+    assert.equal(boot.webgl, null, 'a 2D game keeps drawing on the screen canvas')
     assert.equal(boot.phase, 'title')
     await page.evaluate(() => window.__touch({ changedTouches: [{ identifier: 1, clientX: 250, clientY: 720 }] }))
     await page.waitForFunction('window.__G.__gameState().phase === "playing"', undefined, { timeout: 10000 })
@@ -272,6 +277,18 @@ test('the exported 3D game renders through WebGL on a mocked wx', async (t) => {
     const boot = await page.evaluate(() => window.__G.__gameState())
     assert.equal(boot.renderer, 'webgl', 'three.js got a WebGL context from the adapter canvas')
     assert.equal(boot.phase, 'title')
+    // Mini-games have one on-screen canvas, so the adapter renders WebGL offscreen
+    // and composites it: the screen canvas must hold painted pixels.
+    const painted = await page.waitForFunction(() => {
+      const canvas = window.__G.__wechatRuntime.screen
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
+      let seen = 0
+      for (let index = 3; index < data.length; index += 4 * 997) if (data[index] > 0) seen++
+      return seen > 0
+    }, undefined, { timeout: 8000 }).then(() => true, () => false)
+    assert.equal(painted, true, 'the WebGL frame is composited onto the screen canvas')
+    // The 3D template builds its HUD from div/span elements; the adapter draws it.
+    assert.equal(await page.evaluate(() => Boolean(window.__G.__wechatRuntime.webgl)), true)
     // The 3D template ignores taps for 600 ms after the title card appears.
     await page.waitForTimeout(900)
     await page.evaluate(() => window.__touch({ changedTouches: [{ identifier: 1, clientX: 250, clientY: 700 }] }))
