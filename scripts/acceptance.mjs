@@ -196,6 +196,15 @@ async function runGame(spec) {
       ? 'missing from export or materials: ' + missing.join(', ')
       : ratingOk ? units.length + ' ad units' + (rating ? ', rating ' + rating : '') : 'rating ' + rating + ' missing from the materials')
 
+  // The upgrade notes promise these; check them on every exported game too.
+  check(spec.id + ': the age rating is embedded in the export', /"ageRating":"\d\+"/u.test(gameJs),
+    (gameJs.match(/"ageRating":"([^"]+)"/u) ?? [])[1] ?? 'missing')
+  const events = ['round_start', 'round_end', 'ad_interstitial', 'ad_rewarded', 'ad_error',
+    'iap_order', 'iap_dry_run', 'iap_paid', 'iap_failed', 'memory_warning']
+  const missingEvents = events.filter((event) => !gameJs.includes("report('" + event + "'"))
+  check(spec.id + ': all ten analytics events are reported', missingEvents.length === 0,
+    missingEvents.length ? missingEvents.join(', ') : events.length + ' events')
+
   report.games.push({
     id: spec.id,
     title: spec.title,
@@ -227,6 +236,52 @@ for (const spec of GAMES) {
 
 // A failure drill: one failing check must still produce REPORT.md and exit 1.
 if (process.env.ACCEPTANCE_FORCE_FAIL === '1') check('drill: forced failure', false, 'ACCEPTANCE_FORCE_FAIL=1')
+
+/**
+ * Schema drill: the upgrade notes say rebuilding fixes the game.json schema, the
+ * purchase API and the package budget. Rebuild one game with incompressible art
+ * big enough to split and check those claims on the artefact.
+ */
+async function schemaDrill() {
+  const { randomFillSync } = await import('node:crypto')
+  const { PNG } = await import('pngjs')
+  const dir = join(outRoot, 'games', 'schema')
+  await rm(dir, { recursive: true, force: true })
+  await createProject(dir, { title: 'Schema Check', template: 'collector' })
+  const manifest = JSON.parse(await readFile(join(dir, 'game.json'), 'utf8'))
+  for (const slot of ['hero', 'enemy']) {
+    const size = [900, 900]
+    const png = new PNG({ width: size[0], height: size[1] })
+    randomFillSync(png.data)
+    for (let i = 3; i < png.data.length; i += 4) png.data[i] = 255
+    const file = 'assets/' + slot + '.png'
+    await writeFile(join(dir, file), PNG.sync.write(png))
+    manifest.slots[slot].file = file
+    manifest.slots[slot].size = size
+  }
+  await writeJson(paths.manifest(dir), manifest)
+  const exported = await exportWechat(dir, { appid: 'touristappid' })
+  const gameJson = JSON.parse(await readFile(join(exported.dir, 'game.json'), 'utf8'))
+  const gameJs = await readFile(join(exported.dir, 'game.js'), 'utf8')
+
+  check('schema: game.json uses subpackages with a slashed root',
+    Array.isArray(gameJson.subpackages) && gameJson.subpackages[0]?.root === 'assets/' && gameJson.subPackages === undefined,
+    JSON.stringify(gameJson.subpackages ?? null))
+  check('schema: purchases use the mini-game payment API', gameJs.includes('requestMidasPaymentGameItem'))
+  check('schema: the 4 MB check ignores subpackage art',
+    exported.report.mainBytes < 4 * 1024 * 1024 && exported.report.totalBytes > 4 * 1024 * 1024,
+    'main ' + (exported.report.mainBytes / 1048576).toFixed(2) + ' MB / total ' + (exported.report.totalBytes / 1048576).toFixed(2) + ' MB')
+  check('schema: no false main-package warning',
+    !exported.report.warnings.some((warning) => warning.includes('4 MB 主包')),
+    exported.report.warnings.join(' | ') || 'no warnings')
+  report.schema = { dir: exported.dir, mainBytes: exported.report.mainBytes, totalBytes: exported.report.totalBytes }
+}
+
+try {
+  await schemaDrill()
+} catch (error) {
+  check('schema: drill ran', false, String((error && error.message) || error).slice(0, 300))
+}
 
 report.finishedAt = new Date().toISOString()
 const counted = report.checks.filter((entry) => !entry.skipped)
