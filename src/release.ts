@@ -547,7 +547,7 @@ export async function releaseMaterials(
     '',
     `- 版本：${state.appid ? `AppID ${state.appid}` : '（上传时使用真实 AppID）'}`,
     `- 游戏名称：${title}`,
-    `- 审核路径：启动即进入标题页（底部显示「适龄提示 ${rating}」）→ 点击/轻触开始 → 单局约 ${roundSeconds} 秒 → 结算页可直接重开。`,
+    `- 审核路径：启动即进入标题页（底部显示「适龄提示 ${rating ?? '待选定'}」）→ 点击/轻触开始 → 单局约 ${roundSeconds} 秒 → 结算页可直接重开。`,
     `- 玩法概述：${style ? `${style} 风格；` : ''}收集道具、躲避障碍的轻度玩法，无文字聊天、无用户生成内容。`,
     ...(monetization === 'iaa' || monetization === 'both' ? ['- 广告位置：两局之间最多展示一次插屏；激励视频只在失败后主动点击「看广告复活」时出现。'] : []),
     ...(monetization === 'iap' || monetization === 'both' ? ['- 虚拟支付：仅道具直购，版号与商户号需在后台开通后才能使用。'] : []),
@@ -618,7 +618,7 @@ export async function releaseMaterials(
     '',
     `- Game: ${title} — ${is3d ? '3D (three.js, WebGL2)' : '2D canvas'}, ${orientation === 'landscape' ? 'landscape' : 'portrait'}, one round ≈ ${roundSeconds} s.`,
     `- Category: ${category}`,
-    `- Age rating: ${rating}; the badge is shown on the title screen and must not cover the start button.`,
+    `- Age rating: ${rating ?? 'not chosen yet (the export embeds a draft 8+)'}; the badge is shown on the title screen and must not cover the start button.`,
     '- Privacy: the game collects no personal data; scores and mute state stay in wx.setStorage.',
     monetization === 'none'
       ? '- Monetization: off — nothing is billed or shown.'

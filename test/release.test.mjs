@@ -376,3 +376,21 @@ test('the filing section states whether each filing is done', async (t) => {
   assert.doesNotMatch(afterText, /小游戏备案：\*\*尚未完成\*\*/u)
   assert.doesNotMatch(afterText, /小程序备案（ICP）：\*\*尚未确认\*\*/u)
 })
+
+test('the review note never prints null when the rating is not chosen', async (t) => {
+  const dir = await tempGame(t)
+  const exportDir = join(dir, 'export', 'wechat', 'reviewnote')
+  await mkdir(exportDir, { recursive: true })
+
+  const before = await releaseMaterials(dir, { exportDir, manifestTitle: 'Note Game' })
+  const beforeText = await readFile(before.file, 'utf8')
+  assert.doesNotMatch(beforeText, /null/u, 'no raw null leaks into the document')
+  assert.match(beforeText, /适龄提示 待选定/u)
+  assert.match(beforeText, /Age rating: not chosen yet \(the export embeds a draft 8\+\)/u)
+
+  await updateRelease(dir, { ageRating: '16+' })
+  const after = await releaseMaterials(dir, { exportDir, manifestTitle: 'Note Game' })
+  const afterText = await readFile(after.file, 'utf8')
+  assert.match(afterText, /适龄提示 16\+/u)
+  assert.match(afterText, /Age rating: 16\+/u)
+})
