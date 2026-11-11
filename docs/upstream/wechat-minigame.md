@@ -40,7 +40,7 @@ Base commit: `93459aafc9436d66364f05b804a7841d399c2594` (current `main`).
 
 ## Commits
 
-One small commit per change (86 on this branch, so a reviewer can take them
+One small commit per change (128 on this branch, so a reviewer can take them
 apart); the patch series in `artifacts/upstream-pr/` is the authoritative list.
 The capabilities, in order:
 
@@ -83,7 +83,7 @@ repository's existing `release: 0.1.0-rc.N` convention.
 
 ## Testing
 
-- `npm test`: 211 tests, 158 pass. The 49 failures are environmental on this
+- `npm test`: 238 tests, 185 pass. The 49 failures are environmental on this
   Windows machine and identical before this series (no `gh` CLI, no `cloudflared`,
   Codex CLI tests, path-separator assertions); 4 tests skip without a browser.
 - New suites: `test/wechat.test.mjs` (23), `test/devtools.test.mjs` (6),
