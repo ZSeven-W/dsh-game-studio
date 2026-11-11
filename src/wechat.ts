@@ -1,0 +1,230 @@
+/**
+ * WeChat mini-game export target.
+ *
+ * The plugin's normal build is one self-contained browser HTML file. A WeChat
+ * mini-game is a different runtime: game.js (CommonJS entry), game.json,
+ * project.config.json, no DOM/HTML, and wx.* APIs. This module keeps the game
+ * project's game.js unchanged and wraps it with a browser-like runtime
+ * (wechat-runtime.js) on top of wx.*, then writes an importable project.
+ *
+ * P0 scope: 2D canvas games (collector template and custom 2D games). SVG art
+ * is rasterized to PNG because WeChat image loading does not support SVG.
+ * Three.js/WebGL projects are rejected with a clear error for now.
+ */
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { extname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { loadLedger, loadManifest, paths, type GameManifest } from './project.ts'
+import { StudioError, writeJson } from './util.ts'
+
+const RUNTIME_FILE = fileURLToPath(new URL('./wechat-runtime.js', import.meta.url))
+const MAX_MAIN_BYTES = 4 * 1024 * 1024
+const MAX_TOTAL_BYTES = 30 * 1024 * 1024
+const SUPPORTED_RASTER = new Set(['.png', '.jpg', '.jpeg', '.webp'])
+
+export interface WechatExportOptions {
+  /** WeChat mini-game AppID; defaults to the DevTools tourist AppID. */
+  appid?: string
+  signal?: AbortSignal
+}
+
+export interface WechatExportResult {
+  dir: string
+  files: string[]
+  bytes: number
+  appid: string
+  warnings: string[]
+}
+
+function slugify(value: string): string {
+  return value.normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/gu, '').toLowerCase().slice(0, 40) || 'game'
+}
+
+async function launchBrowser(): Promise<any> {
+  let chromium: any
+  try { ({ chromium } = await import('playwright-core')) }
+  catch { throw new StudioError('playwright-core is missing from this dsh-game-studio install', 'NO_BROWSER') }
+  const tried: string[] = []
+  for (const channel of ['chrome', 'msedge']) {
+    try { return await chromium.launch({ channel, headless: true }) }
+    catch (error) {
+      tried.push(`${channel}: ${String((error as Error).message ?? error).split('\n')[0]}`)
+    }
+  }
+  throw new StudioError(
+    'WeChat export needs Google Chrome or Microsoft Edge to rasterize SVG assets to PNG; neither could be started '
+    + `(${tried.join('; ')}). Install one, or replace the SVG slot art with PNG and export again.`,
+    'NO_BROWSER',
+  )
+}
+
+async function rasterizeSvg(page: any, bytes: Buffer, width: number, height: number): Promise<Buffer> {
+  const svgBase64 = bytes.toString('base64')
+  const pngBase64 = await page.evaluate(async (args: { svgBase64: string; width: number; height: number }) => {
+    const image = new Image()
+    image.src = `data:image/svg+xml;base64,${args.svgBase64}`
+    await image.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = args.width
+    canvas.height = args.height
+    const context = canvas.getContext('2d')
+    context.clearRect(0, 0, args.width, args.height)
+    context.drawImage(image, 0, 0, args.width, args.height)
+    return canvas.toDataURL('image/png').split(',')[1]
+  }, { svgBase64, width, height })
+  return Buffer.from(pngBase64, 'base64')
+}
+
+function readme(manifest: GameManifest, appid: string): string {
+  return [
+    `# ${manifest.title} — 微信小游戏工程`,
+    '',
+    '由 dsh-game-studio 的微信小游戏导出 target 生成。',
+    '',
+    '## 运行',
+    '',
+    '1. 打开微信开发者工具，导入本目录，项目类型选「小游戏」。',
+    `2. AppID：当前是 \`${appid}\`；如果有自己的小游戏 AppID，替换 \`project.config.json\` 里的 \`appid\`，或在导入时选择测试号。`,
+    '3. 点击编译；模拟器里应该直接进入游戏。',
+    '4. 真机预览用「预览 / 真机调试」。',
+    '',
+    '## 这一版的范围',
+    '',
+    '- 支持 2D canvas 游戏（collector 模板和自定义 2D game.js）。',
+    '- SVG 素材已转成 PNG，因为微信小游戏的 Image 不保证支持 SVG。',
+    '- 音频目前静音（原游戏的 WebAudio 调用被安全跳过）；触摸/指针事件已适配。',
+    '- 暂不支持 three.js / WebGL 3D 工程；这类工程会导出失败并给出提示。',
+    '- 微信的包体限制：主包 4MB、总包 30MB；导出时会在超过 4MB 时给出警告。',
+    '',
+    '## 注意',
+    '',
+    '- 这是发布产物，不要直接改这里的 game.js；改原游戏工程后重新导出。',
+    '- `game.json` 只放微信小游戏的运行时配置，不是插件的 game.json。',
+    '',
+  ].join('\n')
+}
+
+/**
+ * Export a dsh-game-studio project as a WeChat mini-game project under
+ * <project>/export/wechat/<slug>/.
+ */
+export async function exportWechat(dir: string, options: WechatExportOptions = {}): Promise<WechatExportResult> {
+  if (options.signal?.aborted) throw new StudioError('WeChat export was cancelled', 'CANCELLED')
+  const manifest = await loadManifest(dir)
+  if ((manifest.runtime ?? []).length > 0) {
+    throw new StudioError(
+      `WeChat export currently supports 2D canvas games only; "${manifest.title}" uses runtime ${manifest.runtime!.join(', ')}. `
+      + 'Three.js/WebGL needs a separate adapter and is not part of this P0 target.',
+      'WECHAT_3D_UNSUPPORTED',
+    )
+  }
+
+  let code: string
+  try { code = await readFile(paths.code(dir), 'utf8') }
+  catch { throw new StudioError(`game.js is missing in ${dir}`, 'MISSING_CODE') }
+  const runtime = await readFile(RUNTIME_FILE, 'utf8')
+  const ledger = await loadLedger(dir).catch(() => undefined)
+  const slug = slugify(manifest.title)
+  const outDir = join(paths.exportDir(dir), 'wechat', slug)
+  const assetDir = join(outDir, 'assets')
+  await rm(outDir, { recursive: true, force: true })
+  await mkdir(assetDir, { recursive: true })
+
+  const warnings: string[] = []
+  const assets: Record<string, string> = {}
+  const files: string[] = []
+  const written: Array<{ file: string; bytes: number }> = []
+  let browser: any
+  let page: any
+
+  try {
+    for (const [slot, spec] of Object.entries(manifest.slots)) {
+      if (options.signal?.aborted) throw new StudioError('WeChat export was cancelled', 'CANCELLED')
+      const sourcePath = join(dir, spec.file)
+      let bytes: Buffer
+      try { bytes = await readFile(sourcePath) }
+      catch { throw new StudioError(`Asset for slot "${slot}" is missing: ${spec.file}`, 'MISSING_ASSET') }
+
+      let ext = extname(sourcePath).toLowerCase()
+      if (ext === '.svg') {
+        if (!browser) {
+          browser = await launchBrowser()
+          page = await browser.newPage()
+        }
+        bytes = await rasterizeSvg(page, bytes, spec.size[0], spec.size[1])
+        ext = '.png'
+      } else if (!SUPPORTED_RASTER.has(ext)) {
+        throw new StudioError(
+          `WeChat export does not support "${ext}" for slot "${slot}"; use png, jpg, webp or svg.`,
+          'BAD_ASSET',
+        )
+      }
+      const fileName = `${slugify(slot) || 'slot'}${ext}`
+      const relativePath = `assets/${fileName}`
+      await writeFile(join(assetDir, fileName), bytes)
+      assets[slot] = relativePath
+      files.push(relativePath)
+      written.push({ file: relativePath, bytes: bytes.length })
+    }
+  } finally {
+    if (page) await page.close().catch(() => undefined)
+    if (browser) await browser.close().catch(() => undefined)
+  }
+
+  const game = {
+    title: manifest.title,
+    rules: manifest.rules,
+    slots: Object.fromEntries(Object.entries(manifest.slots).map(([slot, spec]) => [slot, {
+      tile: spec.tile === true,
+      custom: ledger?.assets[slot] !== undefined && ledger.assets[slot]!.source !== 'template',
+    }])),
+    assets,
+  }
+
+  const gameJs = [
+    '/* Generated by dsh-game-studio — WeChat mini-game export. Edit the game project, not this file. */',
+    runtime,
+    `window.GAME=${JSON.stringify(game)};`,
+    code,
+    '',
+  ].join('\n')
+  await writeFile(join(outDir, 'game.js'), gameJs, 'utf8')
+  files.push('game.js')
+  written.push({ file: 'game.js', bytes: Buffer.byteLength(gameJs) })
+
+  const orientation = manifest.orientation === 'landscape' ? 'landscape' : 'portrait'
+  const gameJson = { deviceOrientation: orientation }
+  await writeJson(join(outDir, 'game.json'), gameJson)
+  files.push('game.json')
+  written.push({ file: 'game.json', bytes: Buffer.byteLength(`${JSON.stringify(gameJson, undefined, 2)}\n`) })
+
+  const appid = String(options.appid ?? '').trim() || 'touristappid'
+  const projectConfig = {
+    appid,
+    projectname: slug,
+    compileType: 'game',
+    libVersion: '3.0.0',
+    setting: { es6: true, minified: false, urlCheck: false },
+  }
+  await writeJson(join(outDir, 'project.config.json'), projectConfig)
+  files.push('project.config.json')
+  written.push({ file: 'project.config.json', bytes: Buffer.byteLength(`${JSON.stringify(projectConfig, undefined, 2)}\n`) })
+
+  const readmeText = readme(manifest, appid)
+  await writeFile(join(outDir, 'README.md'), readmeText, 'utf8')
+  files.push('README.md')
+  written.push({ file: 'README.md', bytes: Buffer.byteLength(readmeText) })
+
+  const bytes = written.reduce((sum, entry) => sum + entry.bytes, 0)
+  if (bytes > MAX_MAIN_BYTES) {
+    warnings.push(`主包约 ${(bytes / 1048576).toFixed(1)} MB，超过微信小游戏 4 MB 主包限制；请压缩素材或使用分包。`)
+  }
+  if (bytes > MAX_TOTAL_BYTES) {
+    warnings.push(`总包约 ${(bytes / 1048576).toFixed(1)} MB，超过 30 MB 总包限制。`)
+  }
+  if (manifest.slots && Object.keys(manifest.slots).length === 0) {
+    warnings.push('这个工程没有素材槽位；游戏代码需要自己绘制画面。')
+  }
+
+  return { dir: outDir, files, bytes, appid, warnings }
+}

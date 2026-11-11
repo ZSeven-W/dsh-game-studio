@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Describe a small game in one sentence — play it in the sidebar of a <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> conversation, swap in AI art, export one HTML file.</strong><br />
-  <sub>10 agent tools &bull; live sidebar preview &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art with a cost check first &bull; self-playing playtests &bull; version history &bull; one-file export</sub>
+  <sub>11 agent tools &bull; live sidebar preview &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art with a cost check first &bull; self-playing playtests &bull; version history &bull; one-file HTML export &bull; WeChat mini-game export</sub>
 </p>
 
 <p align="center">
@@ -41,6 +41,7 @@ Ask the agent for a game in plain words — "a 3D game: a red panda collects bam
 | 🤖 **Self-playing playtests** | `game_studio_playtest` plays the latest code in a headless Chrome or Edge and reports phases, score, frame rate, script errors and screenshots. Games that are not steered with arrow keys (grids, cards, aiming, rhythm…) define `window.__autoplay`, so the playtest plays their real loop. |
 | 🕰️ **Version history** | Every build that changed the game is saved; `game_studio_restore_version` brings back code, rules and art together. |
 | 📦 **One-file export** | `game_studio_export` writes a self-contained HTML file with no network access — open it in any browser or put it on any static host. |
+| 🟢 **WeChat mini-game export** | `game_studio_export_wechat` writes an importable 微信小游戏 project (`game.js`, `game.json`, `project.config.json`, `assets/*.png`) under `export/wechat/<slug>/`. The game code is left untouched and boots on the bundled `wx.*` runtime adapter; SVG art is rasterised to PNG. P0 covers 2D canvas games. |
 | 📱 **Try it on your phone** | `game_studio_share` opens a temporary read-only link on your local network — or a temporary public link via a Cloudflare Quick Tunnel (`cloudflared`) so friends on any network can play — with a QR code in the sidebar. |
 | 🌐 **Publish to GitHub Pages** | `game_studio_publish` pushes the built HTML (or the whole game wall) to a public repository under your signed-in `gh` account and enables GitHub Pages for a permanent link that stays live after you close your computer. |
 | 🗂️ **My games** | Open the sidebar's **+** and pick **Game Studio · My games**: every game in the workspace as a tile with its latest playtest picture, filtered by 2D/3D and sorted by recency, versions or name. Click one to play it — no agent, no tokens. You can also subscribe to online game sources (`owner/repo`, GitHub repository URL, or GitHub Pages URL) to browse and play published games alongside your own. **Export wall** packs your local games into one offline page to send to friends. |
@@ -87,12 +88,13 @@ Measured in a real DSH with DeepSeek-V4.1-Flash, each game made from one sentenc
 | `game_studio_versions` | List saved versions, newest first. |
 | `game_studio_restore_version` | Restore an earlier version of the whole game. |
 | `game_studio_export` | Export one self-contained, offline HTML file. |
+| `game_studio_export_wechat` | Export the game as a WeChat mini-game project (`game.js`/`game.json`/`project.config.json` + the `wx.*` runtime) into `<game>/export/wechat/<slug>/`, ready to import in WeChat DevTools. The game code is unchanged; SVG art is rasterised to PNG. P0 supports 2D canvas games; three.js projects are refused with a clear error. |
 | `game_studio_share` | Open (or close) a temporary read-only link on the local network, or pass `public: true` for a temporary public link via `cloudflared` so anyone with the link can play. |
 | `game_studio_list` | List the games in the working directory with title, 2D/3D, build state and versions, so the agent finds "the penguin game" by name. |
 | `game_studio_export_wall` | Export the game wall: one offline HTML page with a tile per built game; click a tile to play it. |
 | `game_studio_publish` | Publish the built game (or `wall: true` for the game wall) to GitHub Pages via the local signed-in `gh` CLI, or pass `remove: true` to delete it. Asks for approval first and only writes to repositories carrying its `.dsh-game-studio.json` marker. |
 
-The sidebar's buttons (apply, revert, build, export, restore, share, publish) call the same operations through the `/game-studio` command.
+The sidebar's buttons (apply, revert, build, export, export WeChat, restore, share, publish) call the same operations through the `/game-studio` command.
 
 ## Image services and spending
 
@@ -115,7 +117,7 @@ The sidebar's buttons (apply, revert, build, export, restore, share, publish) ca
 ## Requirements
 
 - DeepSeek Harness `0.2.1` or later (web or desktop), Node.js `24.11` or later.
-- Google Chrome or Microsoft Edge on the same computer for playtests.
+- Google Chrome or Microsoft Edge on the same computer for playtests, and for rasterising SVG art when exporting a WeChat mini-game.
 - For AI art, either an OpenAI API key or the Codex CLI signed in. Without either, games still work with their code-drawn characters.
 - Optional: `cloudflared` (`brew install cloudflared` on macOS) for temporary public share links; `gh` (`brew install gh` and `gh auth login`) for publishing to GitHub Pages.
 
@@ -175,7 +177,7 @@ Each game is a plain folder in your workspace:
 ```sh
 npm ci
 npm run build   # lib/index.js, lib/client.js and the bundled three.js runtime
-npm test        # node --test; playtest tests are skipped when no Chrome or Edge is found
+npm test        # node --test; browser tests are skipped when no Chrome or Edge is found
 ```
 
 ## Ecosystem

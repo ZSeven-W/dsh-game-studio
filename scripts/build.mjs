@@ -1,7 +1,7 @@
 // Build the Host entry (lib/index.js, ESM, host packages external) and the
 // browser module (lib/client.js) in the loader shape dsh-web requires:
 // `window.__ModuleLoader__.load({ id, factory })`, React from the host.
-import { readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
@@ -22,6 +22,20 @@ await build({
   external: ['@deepseek-ai/*', 'pngjs', 'undici', 'playwright-core'],
   logLevel: 'warning',
 })
+
+// Separate entry so the WeChat exporter can be tested (and imported) without
+// the DSH host packages that lib/index.js imports.
+await build({
+  entryPoints: [join(root, 'src/wechat.ts')],
+  outfile: join(root, 'lib/wechat.js'),
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node24',
+  external: ['playwright-core'],
+  logLevel: 'warning',
+})
+await copyFile(join(root, 'src/wechat-runtime.js'), join(root, 'lib/wechat-runtime.js'))
 
 const client = await build({
   entryPoints: [join(root, 'src/client/index.tsx')],
@@ -62,4 +76,4 @@ await build({
   logLevel: 'warning',
 })
 await writeFile(join(root, 'lib/vendor/three.LICENSE.txt'), await readFile(join(root, 'node_modules/three/LICENSE'), 'utf8'))
-console.log(`built lib/index.js, lib/client.js and lib/vendor/three.js (three ${three.version})`)
+console.log(`built lib/index.js, lib/wechat.js, lib/wechat-runtime.js, lib/client.js and lib/vendor/three.js (three ${three.version})`)

@@ -11,6 +11,7 @@ import {
   type CandidateMeta, type Generation, type ImageGenerator,
 } from './assets.ts'
 import { buildProject } from './build.ts'
+import { exportWechat } from './wechat.ts'
 import { runCodexBatch, type CodexBatch } from './generation.ts'
 import {
   createRepo, DEFAULT_GITHUB_REPO, DEFAULT_PAGES_TIMEOUT_MS, emptyRepoManifest, ensurePages,
@@ -828,6 +829,26 @@ export function apply(ctx: any, config: Config = {}): void {
   }))
 
   ctx.tools.register(defineTool({
+    name: 'game_studio_export_wechat',
+    description: 'Export the game as a WeChat mini-game project (game.js/game.json/project.config.json + wx runtime) '
+      + 'into the project\'s export/wechat/<slug>/ folder. The user imports that folder in WeChat DevTools; '
+      + 'this is not a web page. P0 supports 2D canvas games only; SVG art is rasterized to PNG.',
+    parameters: {
+      path: projectParam,
+      appid: { type: 'string', description: 'WeChat mini-game AppID. Defaults to touristappid; use the user\'s AppID for preview/upload.' },
+    },
+    output: {
+      schema: json,
+      render: (_args: any, value: any) => [{ type: 'text', text: JSON.stringify(value) }],
+      presentationMeta: (_args: any, value: any) => presentation('export', value.project, { file: value.dir, wechat: true }),
+    },
+    async execute(args: any, exec: any) {
+      const dir = await projectDir(exec, args.path)
+      return { project: dir, ...(await exportWechat(dir, { appid: args.appid })) }
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'game_studio_versions',
     description: 'List the saved versions of the game, newest first. Every build that changed the game is a version '
       + '(code, rules and art together); the user can go back to any of them with game_studio_restore_version.',
@@ -1044,8 +1065,8 @@ export function apply(ctx: any, config: Config = {}): void {
   ctx.inject(['commands'], (child: any) => {
     child.commands.register({
       name: 'game-studio',
-      description: 'Game Studio sidebar actions (apply, revert, build, export, restore, share, unshare, status, wall, publish, unpublish)',
-      input: { hint: '<apply|revert|build|export|restore|share|unshare|status|wall|publish|unpublish> {"project": "...", ...}' },
+      description: 'Game Studio sidebar actions (apply, revert, build, export, export-wechat, restore, share, unshare, status, wall, publish, unpublish)',
+      input: { hint: '<apply|revert|build|export|export-wechat|restore|share|unshare|status|wall|publish|unpublish> {"project": "...", ...}' },
       async handler({ agent, rawInput }: any) {
         try {
           // The Harness passes everything after `/game-studio`, leading whitespace included.
@@ -1083,6 +1104,7 @@ export function apply(ctx: any, config: Config = {}): void {
           else if (action === 'revert') result = await revertSlot(dir, String(payload.slot))
           else if (action === 'build') { const build = await buildProject(dir, 'Rebuilt from the sidebar'); await writeState(dir, build); result = build }
           else if (action === 'export') result = await exportGame(dir)
+          else if (action === 'export-wechat') result = await exportWechat(dir, { appid: typeof payload.appid === 'string' ? payload.appid : undefined })
           else if (action === 'restore') result = await restoreVersion(dir, Math.trunc(Number(payload.version)))
           // The user pressed the button themselves, so no further approval is asked.
           else if (action === 'share') result = await shareGame(dir, Number(payload.minutes ?? 30), payload.scope === 'public' ? 'public' : 'lan')

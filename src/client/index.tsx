@@ -290,6 +290,10 @@ function StudioTab(props: any): ReactNode {
         const file = (JSON.parse(result.text) as { file?: string }).file ?? ''
         setNotice({ kind: 'info', text: t('tab.exported', { file }) })
       }
+      if (action === 'export-wechat') {
+        const dir = (JSON.parse(result.text) as { dir?: string }).dir ?? ''
+        setNotice({ kind: 'info', text: t('tab.exportedWechat', { dir }) })
+      }
       reload()
     } finally {
       setOpeningPublic(false)
@@ -310,6 +314,7 @@ function StudioTab(props: any): ReactNode {
       <button type="button" style={s.button} onClick={reload} disabled={busy}>{t('tab.reload')}</button>
       <button type="button" style={s.button} onClick={() => { void run('build', {}) }} disabled={busy}>{t('tab.rebuild')}</button>
       <button type="button" style={s.button} onClick={() => { void run('export', {}) }} disabled={busy}>{t('tab.export')}</button>
+      <button type="button" style={s.button} onClick={() => { void run('export-wechat', {}) }} disabled={busy}>{t('tab.exportWechat')}</button>
       <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30' }) }} disabled={busy}>{t('tab.share')}</button>
       <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30', scope: 'public' }) }} disabled={busy}>
         {openingPublic ? t('tab.shareOpening') : t('tab.sharePublic')}
