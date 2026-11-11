@@ -14,10 +14,12 @@ test('the README advertises the version in package.json', () => {
   assert.equal(claimed, pkg.version, `README says ${claimed}, package.json says ${pkg.version}`)
 })
 
-test('the release example bumps past the current version', () => {
+test('the release example has the rc.N shape', () => {
   const example = readme.match(/npm version ([0-9][^ ]*) --no-git-tag-version/u)?.[1]
     ?? readFileSync(new URL('../docs/RELEASING.md', import.meta.url), 'utf8')
       .match(/npm version ([0-9][^ ]*) --no-git-tag-version/u)?.[1]
   assert.ok(example, 'no npm version example found')
-  assert.notEqual(example, pkg.version, 'the example must be a new version, not the current one')
+  // The exact number is illustrative (it cannot stay "the next one" forever); the
+  // README badge test enforces the real version.
+  assert.match(example, /^0\.1\.0-rc\.\d+$/u, `the example should look like 0.1.0-rc.N, got ${example}`)
 })

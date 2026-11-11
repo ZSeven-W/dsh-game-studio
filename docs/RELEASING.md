@@ -21,7 +21,7 @@ no bump; anything that changes `lib/` does.
 
 ```sh
 cd dsh-game-studio-fork
-npm version 0.1.0-rc.73 --no-git-tag-version   # the next increment
+npm version 0.1.0-rc.74 --no-git-tag-version   # adjust to this release's number
 # then update the README badge (`Current plugin release`) to the same version: the
 # version-doc test and the package check both compare it with package.json
 ```
