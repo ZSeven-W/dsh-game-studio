@@ -159,6 +159,22 @@ try {
   if (lightColours.muted) expectContrast('light muted hint', lightColours.muted, lightColours.background, 4.5)
   if (lightColours.danger) expectContrast('light error notice', lightColours.danger, lightColours.background, 4.5)
 
+  // Touch targets: the sidebar is also used on a tablet/phone-sized surface, so
+  // every button should reach the 24x24 px minimum.
+  const targets = await page.evaluate(() => [...document.querySelectorAll('button')]
+    .filter((button) => button.offsetParent !== null)
+    .map((button) => {
+      const rect = button.getBoundingClientRect()
+      return { label: (button.textContent || button.getAttribute('aria-label') || '?').trim().slice(0, 24), width: Math.round(rect.width), height: Math.round(rect.height) }
+    }))
+  const small = targets.filter((target) => target.width < 24 || target.height < 24)
+  const shortest = targets.reduce((min, target) => Math.min(min, target.height), Infinity)
+  console.log(`touch targets: ${targets.length} buttons, shortest ${shortest}px, ${small.length} below 24px`)
+  if (small.length > 0) {
+    for (const target of small) console.log(`  small: ${target.label} ${target.width}x${target.height}`)
+    process.exitCode = 1
+  }
+
   // Preview writes a QR file; the panel shows it so the user can scan directly.
   const previewButton = await page.$('text=预览二维码')
   if (previewButton) {
