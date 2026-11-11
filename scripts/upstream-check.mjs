@@ -277,7 +277,8 @@ if (asJson) {
 // A green run means the applied tree built, passed the WeChat tests and packed
 // cleanly. Reporting those in the JSON but exiting 0 would let the nightly job go
 // green while the fork is broken on upstream.
-const regressed = report.applied === true && (
+const built = process.argv.includes('--build')
+const regressed = report.applied === true && built && (
   report.build !== 'ok'
   || (report.tests?.fail ?? 0) > 0
   || report.pack?.ok === false
