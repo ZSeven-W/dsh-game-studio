@@ -56,7 +56,7 @@
 | CI 上传 | `src/ci.ts` 生成 miniprogram-ci + Actions | `test/ci.test.mjs::the CI kit writes an upload script` |
 | 商业化：广告、内购、埋点；材料与导出逐项一致 | `src/commerce.ts`、运行时、`src/release.ts` | `test/commerce.test.mjs::the exporter embeds the ad unit IDs`、`test/consistency.test.mjs::the release materials agree with what the exported game actually embeds` |
 | 体验：小白按向导、失败有提示、步骤无死胡同 | 侧栏向导 + 编码错误（`DEVTOOLS_*`、`CI_NEEDS_APPID`、`BAD_AD_UNIT`） | `test/host.test.mjs::/game-studio wechat-commerce stores ad unit IDs`、`test/journey.test.mjs::a user can walk the whole wizard`、`test/host.test.mjs::/game-studio without an action explains itself` |
-| 侧栏面板不静默消失、文案不缺 | `src/client/index.tsx`、`src/client/locales.ts` | `test/client.test.mjs::the WeChat export button` |
+| 侧栏面板不静默消失、文案不缺 | `src/client/index.tsx`、`src/client/locales.ts` | `test/client.test.mjs::the WeChat export button`、`test/client.test.mjs::the sidebar only calls command actions` |
 
 ## 四、验收
 

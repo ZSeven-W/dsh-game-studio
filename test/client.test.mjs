@@ -28,6 +28,26 @@ test('the two dictionaries carry exactly the same keys, and neither is a copy', 
   assert.deepEqual(untranslated, [], `these keys were never translated: ${untranslated.join(', ')}`)
 })
 
+test('the sidebar only calls command actions and ops that the host defines', () => {
+  const hostSource = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
+  const block = hostSource.slice(hostSource.indexOf('const COMMAND_ACTIONS'))
+  const tableStart = block.indexOf('= [')
+  const tableEnd = block.indexOf('\n]', tableStart)
+  assert.ok(tableStart > 0 && tableEnd > tableStart, 'the host action table must be a literal list')
+  const declared = new Set([...block.slice(tableStart, tableEnd).matchAll(/\['([a-z-]+)'/gu)].map(match => match[1]))
+  assert.ok(declared.size > 10, 'the host action table must have been found')
+
+  const called = new Set([...source.matchAll(/runCommand\(sessionId, `([a-z][a-z-]+)/gu)].map(match => match[1]))
+  assert.ok(called.size > 3)
+  for (const action of called) {
+    assert.ok(declared.has(action), `the sidebar calls unknown action "${action}"`)
+  }
+
+  const ops = new Set([...source.matchAll(/\bop: '([a-z]+)'/gu)].map(match => match[1]))
+  const allowedOps = new Set(['status', 'update', 'materials', 'review', 'configure', 'open', 'preview', 'upload'])
+  for (const op of ops) assert.ok(allowedOps.has(op), `the sidebar sends unknown op "${op}"`)
+})
+
 test('the WeChat export button, the launch wizard and the monetization panel are wired in', () => {
   // A key that exists but is never referenced means the panel was removed while
   // the copy stayed behind; referencing it without copy shows the raw key.
