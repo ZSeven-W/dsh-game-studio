@@ -11,7 +11,8 @@ import {
   type CandidateMeta, type Generation, type ImageGenerator,
 } from './assets.ts'
 import { buildProject } from './build.ts'
-import { openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
+import { findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
+import { loadRelease, markReleaseDone, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
 import { exportWechat } from './wechat.ts'
 import { runCodexBatch, type CodexBatch } from './generation.ts'
 import {
@@ -846,7 +847,9 @@ export function apply(ctx: any, config: Config = {}): void {
     },
     async execute(args: any, exec: any) {
       const dir = await projectDir(exec, args.path)
-      return { project: dir, ...(await exportWechat(dir, { appid: args.appid })) }
+      const result = await exportWechat(dir, { appid: args.appid })
+      await markReleaseDone(dir, 'export', `wechat export: ${result.dir}`).catch(() => undefined)
+      return { project: dir, ...result }
     },
   }))
 
@@ -870,12 +873,68 @@ export function apply(ctx: any, config: Config = {}): void {
     async execute(args: any, exec: any) {
       const dir = await projectDir(exec, args.path)
       const action = String(args.action ?? 'open')
-      if (action === 'open') return { project: dir, ...(await openInDevtools(dir)) }
+      if (action === 'open') {
+        const result = await openInDevtools(dir)
+        await markReleaseDone(dir, 'devtools', 'opened in WeChat DevTools').catch(() => undefined)
+        return { project: dir, ...result }
+      }
       if (action === 'preview') return { project: dir, ...(await previewInDevtools(dir)) }
       if (action === 'upload') {
-        return { project: dir, ...(await uploadFromDevtools(dir, { version: args.version, desc: args.desc })) }
+        const result = await uploadFromDevtools(dir, { version: args.version, desc: args.desc })
+        await markReleaseDone(dir, 'upload', `uploaded ${args.version ?? '1.0.0'}`).catch(() => undefined)
+        return { project: dir, ...result }
       }
       throw new StudioError(`Unknown DevTools action "${action}"; use open, preview or upload.`, 'BAD_ACTION')
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'game_studio_wechat_release',
+    description: 'The WeChat mini-game release wizard: every step from registering the mini-game to publishing it, with '
+      + 'who does it (WeChat console / the plugin / the user), what it unblocks, and copy-paste materials. '
+      + '"status" returns the checklist and the next 3 things to do; "update" records a step and the AppID, name, '
+      + 'category, age rating and monetization choice; "materials" writes RELEASE.md next to the export with the texts '
+      + 'to paste into the console. Steps marked "需在微信后台完成" cannot be automated by the plugin.',
+    parameters: {
+      path: projectParam,
+      action: { type: 'string', enum: ['status', 'update', 'materials'], description: 'Defaults to status.' },
+      step: { type: 'string', description: 'Step id for update: register, verify, appid, basic-info, category, age-rating, privacy, record, export, devtools, upload, submit, publish, analytics, iaa, iap.' },
+      status: { type: 'string', enum: ['todo', 'done', 'skipped'], description: 'New status for the step; defaults to done.' },
+      note: { type: 'string', description: 'Short note stored with the step (certificate number, rejection reason, ...).' },
+      appid: { type: 'string', description: 'The real mini-game AppID from the WeChat console.' },
+      gameName: { type: 'string', description: 'Name registered in the WeChat console.' },
+      category: { type: 'string', description: 'Service category chosen in the console.' },
+      ageRating: { type: 'string', enum: ['8+', '12+', '16+'], description: 'Age rating for the 适龄提示.' },
+      monetization: { type: 'string', enum: ['none', 'iaa', 'iap', 'both'], description: 'none, iaa (ads), iap (in-app purchases) or both.' },
+    },
+    output: {
+      schema: json,
+      render: (_args: any, value: any) => [{ type: 'text', text: JSON.stringify(value) }],
+      presentationMeta: (_args: any, value: any) => presentation('export', value.project, { file: value.file ?? value.game, wechat: true }),
+    },
+    async execute(args: any, exec: any) {
+      const dir = await projectDir(exec, args.path)
+      const action = String(args.action ?? 'status')
+      if (action === 'materials') {
+        const manifest = await loadManifest(dir)
+        const materials = await releaseMaterials(dir, {
+          exportDir: findWechatExport(dir),
+          manifestTitle: manifest.title,
+          style: manifest.style,
+          orientation: manifest.orientation,
+          slots: Object.keys(manifest.slots).length,
+        })
+        return { project: dir, file: materials.file, markdown: materials.markdown }
+      }
+      if (action === 'update') {
+        const result = await updateRelease(dir, {
+          step: args.step, status: args.status, note: args.note, appid: args.appid,
+          gameName: args.gameName, category: args.category, ageRating: args.ageRating, monetization: args.monetization,
+        })
+        return { project: dir, ...result.status }
+      }
+      const state = await loadRelease(dir)
+      return { project: dir, ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')) }
     },
   }))
 
@@ -1096,8 +1155,8 @@ export function apply(ctx: any, config: Config = {}): void {
   ctx.inject(['commands'], (child: any) => {
     child.commands.register({
       name: 'game-studio',
-      description: 'Game Studio sidebar actions (apply, revert, build, export, export-wechat, wechat-devtools, restore, share, unshare, status, wall, publish, unpublish)',
-      input: { hint: '<apply|revert|build|export|export-wechat|wechat-devtools|restore|share|unshare|status|wall|publish|unpublish> {"project": "...", ...}' },
+      description: 'Game Studio sidebar actions (apply, revert, build, export, export-wechat, wechat-devtools, wechat-release, restore, share, unshare, status, wall, publish, unpublish)',
+      input: { hint: '<apply|revert|build|export|export-wechat|wechat-devtools|wechat-release|restore|share|unshare|status|wall|publish|unpublish> {"project": "...", ...}' },
       async handler({ agent, rawInput }: any) {
         try {
           // The Harness passes everything after `/game-studio`, leading whitespace included.
@@ -1135,12 +1194,42 @@ export function apply(ctx: any, config: Config = {}): void {
           else if (action === 'revert') result = await revertSlot(dir, String(payload.slot))
           else if (action === 'build') { const build = await buildProject(dir, 'Rebuilt from the sidebar'); await writeState(dir, build); result = build }
           else if (action === 'export') result = await exportGame(dir)
-          else if (action === 'export-wechat') result = await exportWechat(dir, { appid: typeof payload.appid === 'string' ? payload.appid : undefined })
+          else if (action === 'export-wechat') {
+            result = await exportWechat(dir, { appid: typeof payload.appid === 'string' ? payload.appid : undefined })
+            await markReleaseDone(dir, 'export', 'exported from the sidebar').catch(() => undefined)
+          }
           else if (action === 'wechat-devtools') {
             const op = String(payload.op ?? 'open')
             if (op === 'preview') result = await previewInDevtools(dir)
-            else if (op === 'upload') result = await uploadFromDevtools(dir, { version: typeof payload.version === 'string' ? payload.version : undefined, desc: typeof payload.desc === 'string' ? payload.desc : undefined })
-            else result = await openInDevtools(dir)
+            else if (op === 'upload') {
+              result = await uploadFromDevtools(dir, { version: typeof payload.version === 'string' ? payload.version : undefined, desc: typeof payload.desc === 'string' ? payload.desc : undefined })
+              await markReleaseDone(dir, 'upload', `uploaded ${String(payload.version ?? '1.0.0')}`).catch(() => undefined)
+            } else {
+              result = await openInDevtools(dir)
+              await markReleaseDone(dir, 'devtools', 'opened in WeChat DevTools').catch(() => undefined)
+            }
+          }
+          else if (action === 'wechat-release') {
+            const op = String(payload.op ?? 'status')
+            if (op === 'materials') {
+              const manifest = await loadManifest(dir)
+              result = await releaseMaterials(dir, { exportDir: findWechatExport(dir), manifestTitle: manifest.title, style: manifest.style, orientation: manifest.orientation })
+            } else if (op === 'update') {
+              const updated = await updateRelease(dir, {
+                step: typeof payload.step === 'string' ? payload.step : undefined,
+                status: typeof payload.status === 'string' ? payload.status as any : undefined,
+                note: typeof payload.note === 'string' ? payload.note : undefined,
+                appid: typeof payload.appid === 'string' ? payload.appid : undefined,
+                gameName: typeof payload.gameName === 'string' ? payload.gameName : undefined,
+                category: typeof payload.category === 'string' ? payload.category : undefined,
+                ageRating: typeof payload.ageRating === 'string' ? payload.ageRating as any : undefined,
+                monetization: typeof payload.monetization === 'string' ? payload.monetization as any : undefined,
+              })
+              result = updated.status
+            } else {
+              const state = await loadRelease(dir)
+              result = releaseStatus(dir, state, releasePlan(state.monetization ?? 'none'))
+            }
           }
           else if (action === 'restore') result = await restoreVersion(dir, Math.trunc(Number(payload.version)))
           // The user pressed the button themselves, so no further approval is asked.
@@ -1206,4 +1295,5 @@ export function apply(ctx: any, config: Config = {}): void {
     })
   })
 }
+
 
