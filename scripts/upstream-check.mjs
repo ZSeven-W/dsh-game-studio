@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { readSeries } from './series.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..')
@@ -128,19 +129,14 @@ async function applySeries() {  const patchDir = await mkdtemp(join(tmpdir(), 'd
       report.message += `; could not create a worktree at ${report.upstream.slice(0, 12)}`
       return
     }
-    // The series is now over 1 MB of UTF-8 (Chinese commit messages), past spawnSync's
-    // 1 MB default: without a larger maxBuffer the output is truncated and git am
-    // silently applies only the first part, which then looks like a tree mismatch.
-    const patches = spawnSync('git', ['format-patch', '--stdout', `${report.base}..HEAD`], {
-      cwd: repo, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
-    })
-    if (patches.error || patches.status !== 0) {
+    const series = readSeries(repo, report.base)
+    if (!series.ok) {
       report.applied = false
-      report.message += `; could not read the patch series (${patches.error?.code ?? patches.status})`
+      report.message += `; could not read the patch series (${series.error})`
       return
     }
     const am = spawnSync('git', ['am', '--3way'], {
-      cwd: worktree, input: patches.stdout, encoding: 'utf8',
+      cwd: worktree, input: series.text, encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     })
     report.applied = am.status === 0
