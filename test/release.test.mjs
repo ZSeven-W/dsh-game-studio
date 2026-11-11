@@ -449,6 +449,30 @@ test('the step count follows the monetization choice, and old answers survive a 
   assert.equal(back.steps.find((step) => step.id === 'iaa').status, 'done', 'the earlier tick is still there')
 })
 
+test('editing the game after exporting makes the export stale', async (t) => {
+  const dir = await tempGame(t)
+  await writeFile(join(dir, 'game.js'), '// v1\n')
+  await writeFile(join(dir, 'game.json'), '{}\n')
+  await utimes(join(dir, 'game.js'), new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'))
+  await utimes(join(dir, 'game.json'), new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'))
+  await mkdir(join(dir, '.studio'), { recursive: true })
+  const commerce = join(dir, '.studio', 'wechat-commerce.json')
+  await writeFile(commerce, '{}\n')
+  await utimes(commerce, new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'))
+
+  const fresh = await releaseFreshness(dir, { exportAt: '2021-01-01T00:00:00.000Z', answersAt: '2020-06-01T00:00:00.000Z' })
+  assert.equal(fresh.exportStale, false)
+
+  // A later edit to game.js is enough: the exporter copies that file verbatim.
+  await utimes(join(dir, 'game.js'), new Date('2022-01-01T00:00:00Z'), new Date('2022-01-01T00:00:00Z'))
+  const edited = await releaseFreshness(dir, { exportAt: '2021-01-01T00:00:00.000Z', answersAt: '2020-06-01T00:00:00.000Z' })
+  assert.equal(edited.exportStale, true, 'game.js changed after the export')
+
+  // Re-exporting after the edit clears it.
+  const after = await releaseFreshness(dir, { exportAt: '2023-01-01T00:00:00.000Z', answersAt: '2020-06-01T00:00:00.000Z' })
+  assert.equal(after.exportStale, false)
+})
+
 test('the export goes stale when the answers or settings change after it', async (t) => {
   const dir = await tempGame(t)
   await mkdir(join(dir, '.studio'), { recursive: true })

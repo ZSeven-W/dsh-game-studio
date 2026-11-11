@@ -420,10 +420,16 @@ export async function releaseFreshness(
   const materialsAt = state.materialsAt ? Date.parse(state.materialsAt) : 0
   const reviewAt = state.reviewAt ? Date.parse(state.reviewAt) : 0
   const exportAt = state.exportAt ? Date.parse(state.exportAt) : 0
+  // The exporter reads game.js and game.json straight from the project, so editing
+  // the game after exporting leaves the WeChat project with the old code.
+  const sourceMtime = Math.max(
+    await stat(paths.code(dir)).then((info) => info.mtimeMs).catch(() => 0),
+    await stat(paths.manifest(dir)).then((info) => info.mtimeMs).catch(() => 0),
+  )
   return {
     materialsStale: materialsAt > 0 && (commerceMtime > materialsAt || answersAt > materialsAt),
     reviewStale: reviewAt > 0 && answersAt > reviewAt,
-    exportStale: exportAt > 0 && (commerceMtime > exportAt || answersAt > exportAt),
+    exportStale: exportAt > 0 && (commerceMtime > exportAt || answersAt > exportAt || sourceMtime > exportAt),
   }
 }
 
