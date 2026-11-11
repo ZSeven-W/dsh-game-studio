@@ -72,6 +72,9 @@ produced by the installed plugin.
 npm run upstream   # is upstream still at the base commit, and does the series still apply?
 npm run upstream -- --build   # also apply the series in a worktree, build it and run the WeChat tests there
 
+A failure drill checks the acceptance report itself: run `ACCEPTANCE_FORCE_FAIL=1 npm run acceptance`
+(it must finish every check, write REPORT.md with the failing row, and exit 1).
+
 Expected output when the fork is healthy:
 
 ```text

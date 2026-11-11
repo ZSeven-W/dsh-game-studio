@@ -134,7 +134,7 @@ await rm(outRoot, { recursive: true, force: true })
 const shotsDir = join(outRoot, 'screens')
 await mkdir(shotsDir, { recursive: true })
 
-for (const spec of GAMES) {
+async function runGame(spec) {
   const dir = join(outRoot, 'games', spec.title.toLowerCase().replace(/[^a-z0-9]+/gu, '-'))
   await prepareGame(spec, dir)
   const exported = await exportWechat(dir, { appid: 'touristappid' })
@@ -187,10 +187,14 @@ for (const spec of GAMES) {
   const materialsText = await readFile(materials.file, 'utf8')
   const units = [exported.monetization?.interstitial, exported.monetization?.rewarded].filter(Boolean)
   const rating = (gameJs.match(/"ageRating":"([^"]+)"/u) ?? [])[1]
-  const agree = units.every((id) => gameJs.includes(id) && materialsText.includes(id))
-    && (!rating || materialsText.includes('适龄级别：' + rating))
+  // Name the offending value: "2 ad units" does not tell anyone what to fix.
+  const missing = units.filter((id) => !gameJs.includes(id) || !materialsText.includes(id))
+  const ratingOk = !rating || materialsText.includes('适龄级别：' + rating)
+  const agree = missing.length === 0 && ratingOk
   check(spec.id + ': materials match the export (ads, age rating)', agree,
-    units.length + ' ad units' + (rating ? ', rating ' + rating : ''))
+    missing.length > 0
+      ? 'missing from export or materials: ' + missing.join(', ')
+      : ratingOk ? units.length + ' ad units' + (rating ? ', rating ' + rating : '') : 'rating ' + rating + ' missing from the materials')
 
   report.games.push({
     id: spec.id,
@@ -210,6 +214,19 @@ for (const spec of GAMES) {
     review: { file: review.file, risks: review.risks },
   })
 }
+
+for (const spec of GAMES) {
+  try {
+    await runGame(spec)
+  } catch (error) {
+    const message = String((error && error.message) || error).slice(0, 300)
+    check(spec.id + ': game pipeline ran', false, message)
+    report.games.push({ id: spec.id, title: spec.title, template: spec.template, error: message })
+  }
+}
+
+// A failure drill: one failing check must still produce REPORT.md and exit 1.
+if (process.env.ACCEPTANCE_FORCE_FAIL === '1') check('drill: forced failure', false, 'ACCEPTANCE_FORCE_FAIL=1')
 
 report.finishedAt = new Date().toISOString()
 const counted = report.checks.filter((entry) => !entry.skipped)
