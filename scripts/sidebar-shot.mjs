@@ -144,6 +144,39 @@ try {
   if (overflow > 0) process.exitCode = 1
   if (narrowErrors.length > 0) process.exitCode = 1
 
+  // The panel takes its colours from host CSS variables; check that a dark theme
+  // really reaches it instead of being overridden by hard-coded colours.
+  const dark = await browser.newPage({ viewport: { width: 400, height: 900 }, deviceScaleFactor: 2 })
+  const darkErrors = []
+  dark.on('pageerror', (error) => darkErrors.push(String(error)))
+  await dark.addInitScript((data) => { window.__FIXTURES__ = data.fixtures; window.__WIDTH__ = data.width }, { fixtures, width: 372 })
+  await dark.goto(`file:///${pageFile.replace(/\\/gu, '/')}`)
+  await dark.waitForSelector('text=上线向导', { timeout: 20000 })
+  await dark.click('text=上线向导')
+  await dark.waitForSelector('text=注册小游戏账号', { timeout: 20000 })
+  await dark.evaluate(() => {
+    const root = document.documentElement
+    root.style.setProperty('--dsw-alias-label-primary', 'rgb(232, 236, 245)')
+    root.style.setProperty('--dsw-alias-label-secondary', 'rgb(158, 168, 186)')
+    root.style.setProperty('--dsw-alias-border-l2', 'rgba(255, 255, 255, 0.18)')
+    root.style.setProperty('--dsw-alias-label-danger', 'rgb(255, 128, 128)')
+    document.body.style.background = '#11151c'
+    document.body.style.margin = '0'
+  })
+  await dark.waitForTimeout(400)
+  const themed = await dark.evaluate(() => {
+    const heading = [...document.querySelectorAll('strong')].find((node) => node.textContent.includes('上线向导'))
+    return heading ? getComputedStyle(heading).color : null
+  })
+  console.log(`dark theme heading colour: ${themed} (${darkErrors.length} page errors)`)
+  await dark.screenshot({ path: join(outDir, 'sidebar-dark.png'), fullPage: true })
+  await dark.close()
+  if (themed !== 'rgb(232, 236, 245)') {
+    console.error('the panel ignores the host label colour in a dark theme')
+    process.exitCode = 1
+  }
+  if (darkErrors.length > 0) process.exitCode = 1
+
   const commerceButton = await page.$('text=商业化')
   if (commerceButton) {
     await commerceButton.click()

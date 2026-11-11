@@ -114,5 +114,5 @@ const props = {
 }
 
 const root = createRoot(document.getElementById('root') as HTMLElement)
-root.render(createElement('div', { style: { width: containerWidth, maxWidth: '100%', boxSizing: 'border-box', padding: 12, fontFamily: 'system-ui, "Segoe UI", sans-serif', background: '#ffffff' } },
+root.render(createElement('div', { style: { width: containerWidth, maxWidth: '100%', boxSizing: 'border-box', padding: 12, fontFamily: 'system-ui, "Segoe UI", sans-serif', background: 'transparent' } },
   createElement(Tab as never, props as never)))
