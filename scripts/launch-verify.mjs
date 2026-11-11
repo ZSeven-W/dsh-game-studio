@@ -20,6 +20,8 @@ const readJson = (path) => {
  * @param {{ project: string, skipDevtools?: boolean }} options
  * @returns {Promise<{ ok: boolean, checks: Array<{ name: string, ok: boolean, detail: string, next?: string }> }>}
  */
+const BOUNDARY = '自检通过只代表工程可导入、AppID 与材料就绪、开发者工具可用；过审、备案与上线由微信决定，自检不承诺通过。'
+
 export async function verifyLaunch({ project, skipDevtools = false, quiet = false }) {
   const dir = resolve(project)
   const checks = []
@@ -77,10 +79,10 @@ export async function verifyLaunch({ project, skipDevtools = false, quiet = fals
   const blockers = checks.filter((entry) => !entry.ok).length
   if (!quiet) {
     console.log(blockers === 0
-      ? '\n可以上传：下一步在侧栏点「上传版本」，然后去微信后台提交审核'
+      ? '\n可以上传：下一步在侧栏点「上传版本」，然后去微信后台提交审核\n说明：' + BOUNDARY
       : `\n还有 ${blockers} 项要处理，按每条的「下一步」做`)
   }
-  return { ok: blockers === 0, checks }
+  return { ok: blockers === 0, boundary: BOUNDARY, checks }
 }
 
 const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href
