@@ -86,6 +86,14 @@ test('the release materials agree with what the exported game actually embeds', 
   for (const event of new Set(listed)) {
     assert.ok(runtime.includes(`report('${event}'`), `the runtime never reports game_${event}`)
   }
+
+  // And the other way round: every event the runtime emits must be documented,
+  // otherwise the user never registers it and the dashboard silently drops it.
+  const emitted = new Set([...runtime.matchAll(/report\('([a-z_]+)'/gu)].map((match) => match[1]))
+  assert.ok(emitted.size >= 10, `expected the runtime to emit many events, found ${emitted.size}`)
+  for (const event of emitted) {
+    assert.ok(text.includes(`game_${event}`), `materials never mention game_${event}`)
+  }
 })
 
 test('materials do not claim ads the game does not carry', async (t) => {
