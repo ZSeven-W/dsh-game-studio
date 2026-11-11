@@ -506,6 +506,44 @@ test('WeChat actions called before the export say what to do first', async (t) =
   assert.ok(JSON.parse(review.text).risks.some((risk) => risk.id === 'export'))
 })
 
+test('the JSON the sidebar renders still carries every field it reads', async (t) => {
+  const { call, runCommand } = await harness(t)
+  await call('game_studio_create', { path: 'panel', title: 'Panel' })
+
+  const status = JSON.parse((await runCommand(`wechat-release ${JSON.stringify({ project: 'panel', op: 'status' })}`)).text)
+  for (const field of ['progress', 'steps', 'next', 'blocked', 'appid', 'ageRating', 'monetization']) {
+    assert.ok(field in status, `status must carry ${field}`)
+  }
+  assert.deepEqual(Object.keys(status.progress).sort(), ['done', 'percent', 'total'])
+  const step = status.steps[0]
+  for (const field of ['id', 'title', 'owner', 'status', 'blocked']) {
+    assert.ok(field in step, `a step must carry ${field}`)
+  }
+
+  const updated = JSON.parse((await runCommand(`wechat-release ${JSON.stringify({ project: 'panel', op: 'update', step: 'register' })}`)).text)
+  assert.ok('progress' in updated && 'steps' in updated, 'the update reply is rendered as a status')
+
+  const commerce = JSON.parse((await runCommand(`wechat-commerce ${JSON.stringify({ project: 'panel', op: 'status' })}`)).text)
+  for (const field of ['enabled', 'ads', 'iap', 'analytics', 'check']) {
+    assert.ok(field in commerce, `commerce must carry ${field}`)
+  }
+  assert.ok('problems' in commerce.check && 'notes' in commerce.check)
+
+  const configured = JSON.parse((await runCommand(`wechat-commerce ${JSON.stringify({ project: 'panel', op: 'configure', enabled: true, interstitial: 'adunit-123456', rewarded: 'adunit-654321' })}`)).text)
+  assert.equal(configured.enabled, true)
+  assert.equal(configured.ads.interstitial, 'adunit-123456')
+
+  const review = JSON.parse((await runCommand(`wechat-release ${JSON.stringify({ project: 'panel', op: 'review' })}`)).text)
+  // Without an export these land in the game's export folder with a fallback name.
+  assert.match(review.file, /review\.md$/iu)
+  for (const field of ['id', 'severity', 'title', 'fix']) {
+    assert.ok(field in review.risks[0], `a risk must carry ${field}`)
+  }
+
+  const materials = JSON.parse((await runCommand(`wechat-release ${JSON.stringify({ project: 'panel', op: 'materials' })}`)).text)
+  assert.match(materials.file, /release\.md$/iu)
+})
+
 // ---------------------------------------------------------------- playtest
 
 /** Stand-ins for the Harness's attachment store and model catalog. */
