@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { readSeries } from './series.mjs'
+import { readSeries, recoveryHint } from './series.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..')
@@ -53,6 +53,7 @@ const report = {
   head: null,
   patchCount: 0,
   seriesBytes: 0,
+  recovery: '',
   applied: null,
   conflicts: [],
   message: '',
@@ -220,6 +221,8 @@ try {
   report.message = String((error && error.message) || error)
 }
 
+report.recovery = recoveryHint(report)
+
 if (OUT) {
   const outPath = resolve(repo, OUT)
   mkdirSync(dirname(outPath), { recursive: true })
@@ -239,7 +242,8 @@ if (asJson) {
   if (report.tests) console.log(`  tests     ${report.tests.pass} pass, ${report.tests.fail} fail, ${report.tests.skipped} skipped`)
   if (report.conflicts.length > 0) console.log(`  conflicts ${report.conflicts.join(', ')}`)
   if (report.message) console.log(`  ${report.message}`)
-  if (report.status === 'upstream-moved' && report.applied) {
+  if (report.recovery) console.log(`  next      ${report.recovery}`)
+  else if (report.status === 'upstream-moved' && report.applied) {
     console.log('  next      git rebase --onto origin/main <base> main   (or cherry-pick the series)')
   }
 }

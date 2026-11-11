@@ -22,3 +22,15 @@ export function readSeries(repo, base, { git = 'git' } = {}) {
 export function countPatches(series) {
   return (series.match(/^From [0-9a-f]{40} /gmu) || []).length
 }
+
+/**
+ * What to do when the series no longer applies on top of upstream: rebase the
+ * branch onto upstream's tip, resolve the listed files, then rerun the check.
+ * Kept pure so the text can be tested and printed by both the CLI and the report.
+ */
+export function recoveryHint({ upstream, base, applied, conflicts = [] }) {
+  if (applied !== false || conflicts.length === 0) return ''
+  const onto = upstream ? upstream.slice(0, 12) : 'origin/main'
+  const from = base ? base.slice(0, 12) : '<base>'
+  return `git rebase --onto ${onto} ${from} main  # then resolve ${conflicts.join(', ')} and rerun npm run upstream -- --build`
+}

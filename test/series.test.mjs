@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { countPatches, readSeries } from '../scripts/series.mjs'
+import { countPatches, readSeries, recoveryHint } from '../scripts/series.mjs'
 
 const git = (cwd, argv) => execFileSync('git', argv, {
   cwd,
@@ -51,4 +51,20 @@ test('readSeries reports a bad revision instead of an empty series', async (t) =
   const result = readSeries(root, 'does-not-exist')
   assert.equal(result.ok, false)
   assert.match(result.error, /unknown revision|bad revision|not a valid/iu)
+})
+
+test('a conflict carries the rebase command with the real commits', () => {
+  const hint = recoveryHint({
+    upstream: 'aaaaaaaaaaaa1111',
+    base: 'bbbbbbbbbbbb2222',
+    applied: false,
+    conflicts: ['src/index.ts', 'src/wx.ts'],
+  })
+  assert.match(hint, /git rebase --onto aaaaaaaaaaaa bbbbbbbbbbbb main/u)
+  assert.match(hint, /src\/index\.ts, src\/wx\.ts/u)
+  assert.match(hint, /rerun npm run upstream -- --build/u)
+
+  // No hint when it applied, or when nothing specific conflicted.
+  assert.equal(recoveryHint({ upstream: 'a', base: 'b', applied: true, conflicts: ['x'] }), '')
+  assert.equal(recoveryHint({ upstream: 'a', base: 'b', applied: false, conflicts: [] }), '')
 })
