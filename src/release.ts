@@ -15,6 +15,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { loadManifest, paths } from './project.ts'
+import { loadCommerce } from './commerce.ts'
 import { readJson, StudioError, writeJson } from './util.ts'
 
 export type ReleaseStage = 'account' | 'material' | 'compliance' | 'build' | 'review' | 'launch' | 'growth'
@@ -411,6 +412,7 @@ export async function releaseMaterials(
   const style = options.style ?? manifest?.style
   const orientation = options.orientation ?? manifest?.orientation
   const roundSeconds = Math.max(1, Math.round(Number(manifest?.rules?.duration ?? 60)))
+  const commerce = await loadCommerce(dir).catch(() => null)
   const runtimes = Array.isArray(manifest?.runtime) ? manifest.runtime : []
   const is3d = runtimes.includes('three')
   const rating = state.ageRating ?? '8+'
@@ -468,12 +470,25 @@ export async function releaseMaterials(
     '',
     '## 6. 变现（当前选择：' + monetization + '）',
     '',
-    monetization === 'iaa' || monetization === 'both'
-      ? '- IAA：需要先在后台开通流量主并满足 UV 门槛，再创建广告位并把广告位 ID 填进游戏。'
-      : '- 未选择广告变现。',
-    monetization === 'iap' || monetization === 'both'
-      ? '- IAP：需要《网络游戏电子出版物审批》（版号）、企业主体与微信支付商户号，三样缺一不可。'
-      : '- 未选择内购变现。',
+    ...(monetization === 'iaa' || monetization === 'both'
+      ? [
+        '- 广告：需要先在后台开通流量主并满足 UV 门槛，再创建广告位并把 ID 填进商业化面板。',
+        `  - 插屏广告位：${commerce?.ads?.interstitial || '未填写'}`,
+        `  - 激励视频广告位：${commerce?.ads?.rewarded || '未填写'}`,
+        ...(commerce?.enabled ? [] : ['  - 注意：商业化面板里广告总开关还没打开，导出后不会展示广告。']),
+      ]
+      : ['- 未选择广告变现。']),
+    ...(monetization === 'iap' || monetization === 'both'
+      ? [
+        '- 内购：需要《网络游戏电子出版物审批》（版号）、企业主体与微信支付商户号，三样缺一不可。',
+        `  - 版号：${commerce?.iap?.licenseNumber || '未填写'}`,
+        `  - 商户号：${commerce?.iap?.merchantId || '未填写'}`,
+        `  - 签名服务：${commerce?.iap?.payUrl ? '已配置' : '未配置（内购跑演示模式，不会产生真实订单）'}`,
+      ]
+      : ['- 未选择内购变现。']),
+    ...(commerce?.enabled && monetization === 'none'
+      ? ['- 注意：向导选择「不变现」，但商业化面板已开启广告/内购；导出按面板配置生效，提交审核前请统一。']
+      : []),
     '- 插件只做接入骨架与合规检查，不承诺过审、备案或收入。',
     '',
     '## 7. 数据事件（可选）',

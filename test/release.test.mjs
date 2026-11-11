@@ -9,6 +9,7 @@ import {
   loadRelease, markReleaseDone, releaseFile, releaseMaterials, releasePlan, releaseStatus, updateRelease,
 } from '../src/release.ts'
 import { createProject } from '../src/project.ts'
+import { updateCommerce } from '../src/commerce.ts'
 
 async function tempGame(t) {
   const root = await mkdtemp(join(tmpdir(), 'wechat-release-'))
@@ -106,6 +107,20 @@ test('materials are written next to the export with everything the console asks 
   assert.match(text, /游戏名称：Lantern Isle/u)
   assert.match(text, /单局约 \d+ 秒 → 结算页可直接重开/u)
   assert.match(text, /广告位置：/u)
+  assert.match(text, /插屏广告位：未填写/u)
+  assert.match(text, /版号：未填写/u)
+  assert.match(text, /签名服务：未配置（内购跑演示模式/u)
+  assert.match(text, /注意：商业化面板里广告总开关还没打开/u)
+
+  // The section must follow the real commerce config once it is filled in.
+  await updateCommerce(dir, { enabled: true, interstitial: 'adunit-123456', rewarded: 'adunit-654321', analytics: true })
+  await updateCommerce(dir, { iapEnabled: true, licenseNumber: 'ISBN 978-7-498-12345-6', merchantId: '1900000109', payUrl: 'https://pay.example.com/sign' })
+  const configured = await releaseMaterials(dir, { exportDir, manifestTitle: 'Lantern Isle' })
+  const configuredText = await readFile(configured.file, 'utf8')
+  assert.match(configuredText, /插屏广告位：adunit-123456/u)
+  assert.match(configuredText, /版号：ISBN 978-7-498-12345-6/u)
+  assert.match(configuredText, /商户号：1900000109/u)
+  assert.match(configuredText, /签名服务：已配置/u)
   assert.match(text, /虚拟支付：仅道具直购/u)
   assert.match(text, /voxel island 风格/u)
   assert.match(text, /已知限制：无特殊权限要求/u)
