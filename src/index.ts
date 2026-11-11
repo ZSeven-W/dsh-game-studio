@@ -11,6 +11,7 @@ import {
   type CandidateMeta, type Generation, type ImageGenerator,
 } from './assets.ts'
 import { buildProject } from './build.ts'
+import { openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
 import { exportWechat } from './wechat.ts'
 import { runCodexBatch, type CodexBatch } from './generation.ts'
 import {
@@ -850,6 +851,35 @@ export function apply(ctx: any, config: Config = {}): void {
   }))
 
   ctx.tools.register(defineTool({
+    name: 'game_studio_wechat_devtools',
+    description: 'Drive WeChat DevTools for the exported mini-game: "open" imports the export folder into the IDE, '
+      + '"preview" saves a device QR code next to the export, "upload" submits a version. Requires WeChat DevTools and its '
+      + 'service port (工具 → 设置 → 安全设置 → 服务端口). The plugin never changes that setting; a closed port comes back '
+      + 'as DEVTOOLS_PORT_CLOSED with the steps to open it.',
+    parameters: {
+      path: projectParam,
+      action: { type: 'string', enum: ['open', 'preview', 'upload'], description: 'What to do in the IDE. Defaults to open.' },
+      version: { type: 'string', description: 'Upload version, e.g. "1.0.0". Defaults to 1.0.0.' },
+      desc: { type: 'string', description: 'Upload description shown in the WeChat admin version list.' },
+    },
+    output: {
+      schema: json,
+      render: (_args: any, value: any) => [{ type: 'text', text: JSON.stringify(value) }],
+      presentationMeta: (_args: any, value: any) => presentation('export', value.project, { file: value.project, wechat: true }),
+    },
+    async execute(args: any, exec: any) {
+      const dir = await projectDir(exec, args.path)
+      const action = String(args.action ?? 'open')
+      if (action === 'open') return { project: dir, ...(await openInDevtools(dir)) }
+      if (action === 'preview') return { project: dir, ...(await previewInDevtools(dir)) }
+      if (action === 'upload') {
+        return { project: dir, ...(await uploadFromDevtools(dir, { version: args.version, desc: args.desc })) }
+      }
+      throw new StudioError(`Unknown DevTools action "${action}"; use open, preview or upload.`, 'BAD_ACTION')
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'game_studio_versions',
     description: 'List the saved versions of the game, newest first. Every build that changed the game is a version '
       + '(code, rules and art together); the user can go back to any of them with game_studio_restore_version.',
@@ -1066,8 +1096,8 @@ export function apply(ctx: any, config: Config = {}): void {
   ctx.inject(['commands'], (child: any) => {
     child.commands.register({
       name: 'game-studio',
-      description: 'Game Studio sidebar actions (apply, revert, build, export, export-wechat, restore, share, unshare, status, wall, publish, unpublish)',
-      input: { hint: '<apply|revert|build|export|export-wechat|restore|share|unshare|status|wall|publish|unpublish> {"project": "...", ...}' },
+      description: 'Game Studio sidebar actions (apply, revert, build, export, export-wechat, wechat-devtools, restore, share, unshare, status, wall, publish, unpublish)',
+      input: { hint: '<apply|revert|build|export|export-wechat|wechat-devtools|restore|share|unshare|status|wall|publish|unpublish> {"project": "...", ...}' },
       async handler({ agent, rawInput }: any) {
         try {
           // The Harness passes everything after `/game-studio`, leading whitespace included.
@@ -1106,6 +1136,12 @@ export function apply(ctx: any, config: Config = {}): void {
           else if (action === 'build') { const build = await buildProject(dir, 'Rebuilt from the sidebar'); await writeState(dir, build); result = build }
           else if (action === 'export') result = await exportGame(dir)
           else if (action === 'export-wechat') result = await exportWechat(dir, { appid: typeof payload.appid === 'string' ? payload.appid : undefined })
+          else if (action === 'wechat-devtools') {
+            const op = String(payload.op ?? 'open')
+            if (op === 'preview') result = await previewInDevtools(dir)
+            else if (op === 'upload') result = await uploadFromDevtools(dir, { version: typeof payload.version === 'string' ? payload.version : undefined, desc: typeof payload.desc === 'string' ? payload.desc : undefined })
+            else result = await openInDevtools(dir)
+          }
           else if (action === 'restore') result = await restoreVersion(dir, Math.trunc(Number(payload.version)))
           // The user pressed the button themselves, so no further approval is asked.
           else if (action === 'share') result = await shareGame(dir, Number(payload.minutes ?? 30), payload.scope === 'public' ? 'public' : 'lan')
@@ -1170,3 +1206,4 @@ export function apply(ctx: any, config: Config = {}): void {
     })
   })
 }
+
