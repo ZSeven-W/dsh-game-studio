@@ -79,6 +79,16 @@ test('the release materials agree with what the exported game actually embeds', 
   assert.match(game, /"iap":\{"enabled":true/u)
   assert.match(text, /签名服务：已配置/u)
 
+  // The English summary must repeat the same facts, or an English-speaking reviewer
+  // gets a different game description than a Chinese one.
+  assert.match(text, /## English summary/u)
+  assert.ok(text.includes(`Game: ${manifest.title}`), 'English summary names the game')
+  assert.ok(text.includes('Age rating: 12+'), 'English summary repeats the age rating')
+  assert.match(text, /3D \(three\.js|2D canvas/u)
+  assert.match(text, /one round ≈ 45 s/u)
+  for (const id of ['adunit-123456', 'adunit-654321']) assert.ok(text.includes(id), `English summary names ${id}`)
+  assert.match(text, /Monetization: both/u)
+
   // Every event the materials tell the user to register must really be reported.
   const runtime = await readFile(new URL('../src/wechat-runtime.js', import.meta.url), 'utf8')
   const listed = [...text.matchAll(/`game_([a-z_]+)`/gu)].map((match) => match[1])

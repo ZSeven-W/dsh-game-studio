@@ -526,6 +526,25 @@ export async function releaseMaterials(
     '- [ ] 要看的埋点事件已在后台建好（见上一节）。',
     '- [ ] 在开发者工具里打过一局，`__wechatRuntime.summary()` 的 rounds/completedRounds/adShows 都在动。',
     '',
+    '---',
+    '',
+    '## English summary',
+    '',
+    `- Game: ${title} — ${is3d ? '3D (three.js, WebGL2)' : '2D canvas'}, ${orientation === 'landscape' ? 'landscape' : 'portrait'}, one round ≈ ${roundSeconds} s.`,
+    `- Category: ${category}`,
+    `- Age rating: ${rating}; the badge is shown on the title screen and must not cover the start button.`,
+    '- Privacy: the game collects no personal data; scores and mute state stay in wx.setStorage.',
+    monetization === 'none'
+      ? '- Monetization: off — nothing is billed or shown.'
+      : `- Monetization: ${monetization}; interstitial at most once between rounds, rewarded video only when the player taps "watch to revive".`,
+    ...(commerce?.ads?.interstitial || commerce?.ads?.rewarded
+      ? [`- Ad units: ${[commerce?.ads?.interstitial, commerce?.ads?.rewarded].filter(Boolean).join(', ')}`]
+      : []),
+    '- Analytics: ten wx.reportEvent events named game_* (section 7); register them first or the dashboard stays empty.',
+    '- Console steps: register, verify, AppID, name/category, age rating, privacy guide, mini-game record, ICP record, review, publish.',
+    '',
+    '> Review and filings are decided by WeChat and the competent authorities; this file only prepares the text.',
+    '',
   ]
   const markdown = lines.join('\n')
   const target = options.exportDir ? join(options.exportDir, 'RELEASE.md') : join(paths.exportDir(dir), 'wechat-release.md')
