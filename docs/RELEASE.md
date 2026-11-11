@@ -39,7 +39,7 @@ acceptance run covers most of them end to end.
 | Launch wizard + RELEASE.md | `test/release.test.mjs`, `test/journey.test.mjs` | ✅ |
 | Pre-review risks | `test/review.test.mjs` | ✅ |
 | CI upload kit | `test/ci.test.mjs` | — |
-| Sidebar export button, wizard, monetization panel | `test/client.test.mjs` | — |
+| Sidebar export button, wizard, monetization panel (bundle loads, tabs register) | `test/client.test.mjs`, `test/client-runtime.test.mjs` | — |
 | Materials match the exported game (ad units, rating, round, events) | `test/consistency.test.mjs` | ✅ (`materials match the export`) |
 | Demo purchase runs without a signing endpoint | `test/wechat.test.mjs` | ✅ (`demo purchase returns dryRun`) |
 
