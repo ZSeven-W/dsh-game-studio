@@ -281,7 +281,7 @@ test('large art goes into an assets subpackage and the game waits for it', async
   const exported = await exportWechat(dir)
   assert.equal(exported.subpackage, true)
   const gameJson = JSON.parse(await readFile(join(exported.dir, 'game.json'), 'utf8'))
-  assert.deepEqual(gameJson.subpackages, [{ name: 'assets', root: 'assets' }])
+  assert.deepEqual(gameJson.subpackages, [{ name: 'assets', root: 'assets/' }])
   const game = await readFile(join(exported.dir, 'game.js'), 'utf8')
   assert.match(game, /"subpackage":\{"name":"assets"\}/u)
   assert.match(game, /wx\.loadSubpackage/u)
@@ -404,6 +404,7 @@ test('the exported 3D game renders through WebGL on a mocked wx', async (t) => {
   })
   if (!ran) return t.skip('no Chrome or Edge here')
 })
+
 
 
 

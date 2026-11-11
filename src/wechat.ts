@@ -249,8 +249,10 @@ export async function exportWechat(dir: string, options: WechatExportOptions = {
   written.push({ file: 'game.js', bytes: Buffer.byteLength(gameJs) })
 
   const orientation = manifest.orientation === 'landscape' ? 'landscape' : 'portrait'
+  // WeChat mini-games declare `subpackages` (the docs also tolerate `subPackages`);
+  // `root` keeps the trailing slash of the official 分包加载 example.
   const gameJson = useSubpackage
-    ? { deviceOrientation: orientation, subpackages: [{ name: 'assets', root: 'assets' }] }
+    ? { deviceOrientation: orientation, subpackages: [{ name: 'assets', root: 'assets/' }] }
     : { deviceOrientation: orientation }
   await writeJson(join(outDir, 'game.json'), gameJson)
   files.push('game.json')
@@ -287,6 +289,8 @@ export async function exportWechat(dir: string, options: WechatExportOptions = {
   const report = await analyzeWechatPackage(outDir)
   return { dir: outDir, files, bytes, appid, runtimes, monetization: commerce, subpackage: useSubpackage, report, warnings }
 }
+
+
 
 
 
