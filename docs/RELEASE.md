@@ -77,6 +77,7 @@ the exported game in the mock-wx harness (10 checks; `--path` for another instal
 ```sh
 npm run upstream   # is upstream still at the base commit, and does the series still apply?
 npm run upstream -- --build   # also apply the series in a worktree, build it and run the WeChat tests there
+npm run upstream -- --json --no-apply   # fast: fork vs upstream only, no worktree (used by the contract test)
 
 A failure drill checks the acceptance report itself: run `ACCEPTANCE_FORCE_FAIL=1 npm run acceptance`
 (it must finish every check, write REPORT.md with the failing row, and exit 1).
