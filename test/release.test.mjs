@@ -1,7 +1,7 @@
 // The WeChat release wizard: checklist integrity, state persistence, what is
 // blocked, and the copy-paste materials handed to the console.
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -524,4 +524,15 @@ test('an upload goes stale when the export or the settings move past it', async 
     answersAt: '2022-06-01T00:00:00.000Z',
   })
   assert.equal(reuploaded.uploadStale, false)
+})
+
+
+test('a corrupt release file is moved aside and reported, not silently reset', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wechat-release-bad-'))
+  await mkdir(join(root, '.studio'), { recursive: true })
+  await writeFile(releaseFile(root), '{ not json')
+  await assert.rejects(loadRelease(root), /发布进度文件无法解析/u)
+  const files = await readdir(join(root, '.studio'))
+  assert.ok(files.some((name) => name.startsWith('wechat-release.json.corrupt-')), files.join(', '))
+  await rm(root, { recursive: true, force: true })
 })

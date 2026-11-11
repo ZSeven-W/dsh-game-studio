@@ -2,7 +2,7 @@
 // runtime is allowed to do with it.
 import assert from 'node:assert/strict'
 import { commerceFormHints } from '../src/commerce-hints.ts'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -128,4 +128,15 @@ test('the form says what is missing before anything is saved', () => {
   const demo = commerceFormHints({ ...empty, iapOn: true, licence: 'ISBN 978-7', merchant: '1900000109' })
   assert.deepEqual(demo.problems, [])
   assert.match(demo.notes.join(' '), /演示模式/u)
+})
+
+
+test('a corrupt commerce file keeps the ad units recoverable instead of resetting', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wechat-commerce-bad-'))
+  await mkdir(join(root, '.studio'), { recursive: true })
+  await writeFile(commerceFile(root), '{ not json')
+  await assert.rejects(loadCommerce(root), /商业化配置文件无法解析/u)
+  const files = await readdir(join(root, '.studio'))
+  assert.ok(files.some((name) => name.startsWith('wechat-commerce.json.corrupt-')), files.join(', '))
+  await rm(root, { recursive: true, force: true })
 })

@@ -17,7 +17,7 @@ import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { loadManifest, paths } from './project.ts'
 import { commerceFile, loadCommerce } from './commerce.ts'
-import { readJson, StudioError, writeJson } from './util.ts'
+import { backupBrokenJson, readJson, StudioError, writeJson } from './util.ts'
 import { findWechatExport } from './devtools.ts'
 
 export type ReleaseStage = 'account' | 'material' | 'compliance' | 'build' | 'review' | 'launch' | 'growth'
@@ -331,8 +331,21 @@ export function releaseFile(dir: string): string {
 }
 
 export async function loadRelease(dir: string): Promise<ReleaseState> {
-  const saved = await readJson<ReleaseState>(releaseFile(dir)).catch(() => null)
-  if (saved?.schema === 1 && saved.steps) return saved
+  const file = releaseFile(dir)
+  if (existsSync(file)) {
+    let saved: ReleaseState | null = null
+    try {
+      saved = await readJson<ReleaseState>(file)
+    } catch {
+      const backup = await backupBrokenJson(file)
+      throw new StudioError(`发布进度文件无法解析，已备份为 ${backup.split(/[\\/]/u).at(-1)}。修好或删除它后重试；侧栏会重新生成默认进度。`, 'BAD_RELEASE_STATE')
+    }
+    if (!saved || saved.schema !== 1 || !saved.steps) {
+      const backup = await backupBrokenJson(file)
+      throw new StudioError(`发布进度文件内容不是发布状态，已备份为 ${backup.split(/[\\/]/u).at(-1)}。删除它后重试即可重建。`, 'BAD_RELEASE_STATE')
+    }
+    return saved
+  }
   const stamp = now()
   return { schema: 1, steps: {}, createdAt: stamp, updatedAt: stamp }
 }

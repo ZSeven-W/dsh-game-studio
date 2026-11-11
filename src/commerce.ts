@@ -10,7 +10,8 @@
  */
 import { join } from 'node:path'
 import { paths } from './project.ts'
-import { readJson, StudioError, writeJson } from './util.ts'
+import { existsSync } from 'node:fs'
+import { backupBrokenJson, readJson, StudioError, writeJson } from './util.ts'
 
 export interface IapConfig {
   enabled: boolean
@@ -45,8 +46,19 @@ export function commerceFile(dir: string): string {
 }
 
 export async function loadCommerce(dir: string): Promise<CommerceState> {
-  const saved = await readJson<CommerceState>(commerceFile(dir)).catch(() => null)
-  if (saved?.schema === 1) {
+  const file = commerceFile(dir)
+  if (existsSync(file)) {
+    let saved: CommerceState | null = null
+    try {
+      saved = await readJson<CommerceState>(file)
+    } catch {
+      const backup = await backupBrokenJson(file)
+      throw new StudioError(`商业化配置文件无法解析，已备份为 ${backup.split(/[\\/]/u).at(-1)}。修好或删除它后重试；不要直接覆盖，否则广告位 ID 会丢失。`, 'BAD_COMMERCE_STATE')
+    }
+    if (!saved || saved.schema !== 1) {
+      const backup = await backupBrokenJson(file)
+      throw new StudioError(`商业化配置文件内容不是预期格式，已备份为 ${backup.split(/[\\/]/u).at(-1)}。删除它后重试即可重建。`, 'BAD_COMMERCE_STATE')
+    }
     return { ...saved, ads: saved.ads ?? {}, iap: saved.iap ?? { enabled: false } }
   }
   return { schema: 1, enabled: false, ads: {}, iap: { enabled: false }, analytics: true, updatedAt: new Date().toISOString() }

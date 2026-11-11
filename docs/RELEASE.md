@@ -88,7 +88,7 @@ Expected output when the fork is healthy:
 upstream origin/main: up-to-date
   series    applies cleanly
   build     ok
-  tests     85 pass, 0 fail, 0 skipped
+  tests     87 pass, 0 fail, 0 skipped
   pack      ok (468 KB, 40 files)   # sources/tests/docs never enter the tarball
 
 `--no-apply` skips the worktree and reports only the fork/upstream relationship
@@ -143,6 +143,8 @@ If DevTools is installed somewhere unusual, pass its CLI path with the `cli` par
 | `BAD_AD_UNIT` | An ad unit ID is not `adunit-…` | Copy it from 流量主 → 广告位管理 |
 | `BAD_RELEASE_STEP` | A wizard step id does not exist | Use the ids from `wechat-release status` |
 | `BAD_RELEASE_STATUS` | A step status is not todo/done/skipped | Use todo, done or skipped |
+| `BAD_RELEASE_STATE` | .studio/wechat-release.json cannot be parsed or is not a release state | It was moved aside as *.corrupt-<time>.json; fix or delete it, then retry |
+| `BAD_COMMERCE_STATE` | .studio/wechat-commerce.json cannot be parsed or is not a commerce state | It was moved aside as *.corrupt-<time>.json; recreate the ad unit config |
 | `BAD_ACTION` | The command action is not one of the known ones | Run `/game-studio` with no action for the list |
 
 ## 7. What a release must not claim

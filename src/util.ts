@@ -13,6 +13,13 @@ export class StudioError extends Error {
   }
 }
 
+/** Move an unreadable state file aside instead of letting the next save overwrite it. */
+export async function backupBrokenJson(path: string): Promise<string> {
+  const backup = `${path}.corrupt-${Date.now()}.json`
+  await rename(path, backup)
+  return backup
+}
+
 export async function readJson<T>(path: string): Promise<T> {
   let raw: string
   try { raw = await readFile(path, 'utf8') }
