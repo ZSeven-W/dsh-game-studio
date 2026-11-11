@@ -343,6 +343,59 @@ test('a 3D game with large art waits for its subpackage before it renders', asyn
   if (!ran) return t.skip('no Chrome or Edge here')
 })
 
+test('a 3D game with ads, IAP and a subpackage keeps every feature at once', async (t) => {
+  const { dir } = await tempProject(t, { template: 'voxel' })
+  await rasterSlots(dir)
+  const manifest = await loadManifest(dir)
+  const slot = Object.keys(manifest.slots)[0]
+  const png = new PNG({ width: 900, height: 900 })
+  randomFillSync(png.data)
+  for (let i = 3; i < png.data.length; i += 4) png.data[i] = 255
+  await writeFile(join(dir, manifest.slots[slot].file), PNG.sync.write(png))
+  await updateCommerce(dir, {
+    enabled: true,
+    interstitial: 'adunit-111111',
+    rewarded: 'adunit-222222',
+    analytics: true,
+    iapEnabled: true,
+    licenseNumber: 'ISBN 978-7-498-12345-6',
+    merchantId: '1900000109',
+  })
+  await updateRelease(dir, { ageRating: '12+' })
+
+  const exported = await exportWechat(dir, { appid: 'wx1234567890abcdef' })
+  assert.equal(exported.subpackage, true)
+  assert.equal(exported.monetization?.iap?.dryRun, true)
+  const game = await readFile(join(exported.dir, 'game.js'), 'utf8')
+  for (const marker of ['"subpackage":{"name":"assets"}', 'adunit-111111', 'adunit-222222', '"ageRating":"12+"', 'wx.loadSubpackage']) {
+    assert.ok(game.includes(marker), `the export must carry ${marker}`)
+  }
+  assert.ok(exported.report.mainBytes < 4 * 1024 * 1024, 'the subpackage keeps the main package small')
+
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    await page.waitForFunction('window.__wxSubpackages.length > 0', undefined, { timeout: 20000 })
+    await page.waitForFunction('window.__G.__gameState && window.__G.__gameState().phase === "title"', undefined, { timeout: 20000 })
+    const state = await page.evaluate(() => window.__G.__gameState())
+    assert.equal(state.renderer, 'webgl')
+    assert.equal(await page.evaluate(() => window.__G.__wechatRuntime.ageRating()), '12+')
+
+    // The demo purchase still works while the art came from a subpackage.
+    const purchase = await page.evaluate(() => window.__G.__commerce.iap.buy('gem-10'))
+    assert.deepEqual(purchase, { dryRun: true, sku: 'gem-10' })
+    // And an ad failure is still explained by code.
+    await page.waitForFunction('typeof window.__wxAds.failRewarded === "function"', undefined, { timeout: 10000 })
+    const ads = await page.evaluate(() => {
+      window.__wxAds.failRewarded(1002)
+      return window.__G.__commerce.state()
+    })
+    assert.equal(ads.lastErrorCode, 1002)
+    const events = await page.evaluate(() => window.__wxAds.events.map((entry) => entry.id))
+    for (const id of ['game_iap_order', 'game_iap_dry_run', 'game_ad_error']) assert.ok(events.includes(id), id)
+    assert.deepEqual(errors, [])
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
 test('game sounds are synthesised to a wav and played through InnerAudioContext', async (t) => {
   const { dir } = await tempProject(t)
   await rasterSlots(dir)

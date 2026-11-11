@@ -42,7 +42,7 @@
 | wx 适配（window/document/canvas/触摸） | 运行时适配层 | `test/wechat.test.mjs::the exported 2D game boots` |
 | SVG→PNG | `src/wechat.ts` 用浏览器栅格化 | `test/wechat.test.mjs::SVG slot art is rasterised to PNG` |
 | 纹理/包体 | `src/size.ts` 包体报告 | `test/size.test.mjs::an export over 4 MB is blocked` |
-| 分包 | 素材 > 1.5 MB 自动 assets 分包 + 启动前预下载 | `test/wechat.test.mjs::large art goes into an assets subpackage` |、`test/wechat.test.mjs::a 3D game with large art`
+| 分包 | 素材 > 1.5 MB 自动 assets 分包 + 启动前预下载 | `test/wechat.test.mjs::large art goes into an assets subpackage` |、`test/wechat.test.mjs::a 3D game with large art`、`test/wechat.test.mjs::a 3D game with ads, IAP and a subpackage`
 | AppID 可配 | 导出参数 `appid` 写入 project.config.json | `test/wechat.test.mjs::the AppID and the orientation reach project.config.json` |
 | 安全区 | 运行时读取 `safeArea.top` 用于 HUD | `test/wechat.test.mjs::the exported 3D game renders through WebGL` |
 | 触摸 | 触摸→pointer/touch 事件映射 | `test/wechat.test.mjs::the exported 2D game boots` |
