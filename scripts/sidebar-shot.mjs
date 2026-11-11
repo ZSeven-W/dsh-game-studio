@@ -322,6 +322,22 @@ try {
       await page.waitForTimeout(200)
     }
   }
+  // A wizard step must respond to a click: the panel sends an update and the
+  // progress line moves (a rendered-but-dead button is a silent failure).
+  const stepButton = await page.$('button[aria-label="注册小游戏账号"]')
+  if (!stepButton) {
+    console.error('the wizard step button did not render')
+    process.exitCode = 1
+  } else {
+    const before = await page.evaluate(() => document.body.innerText)
+    await stepButton.click()
+    await page.waitForTimeout(500)
+    const after = await page.evaluate(() => document.body.innerText)
+    const moved = /已完成 [1-9]\d*\/15/u.test(after) && before !== after
+    console.log(`wizard step toggle: ${moved ? 'progress moved' : 'NO CHANGE'}`)
+    if (!moved) process.exitCode = 1
+  }
+
   console.log(`screenshots written to ${outDir} (${errors.length} page errors)`)
   for (const error of errors) console.log(`  ${error}`)
 } finally {

@@ -74,6 +74,13 @@ const runCommand = async (_session: string, input: string) => {
   // host's markReleaseDone does.
   if (input.startsWith('wechat-release {')) {
     const base = fixtures.release as { steps?: Array<{ id: string; status: string }>; progress?: unknown }
+    // A step click sends an update: flip that step so the panel really re-renders.
+    if (Array.isArray(base.steps) && input.includes('"step"')) {
+      const payload = JSON.parse(input.slice('wechat-release '.length)) as { step?: string }
+      const steps = base.steps.map((step) => (step.id === payload.step ? { ...step, status: step.status === 'done' ? 'todo' : 'done' } : step))
+      const done = steps.filter((step) => step.status === 'done').length
+      return { ok: true, text: JSON.stringify({ ...base, steps, progress: { done, total: steps.length, percent: Math.round((done * 100) / steps.length) } }) }
+    }
     if (!uploaded || !Array.isArray(base.steps)) return { ok: true, text: JSON.stringify(fixtures.release) }
     const steps = base.steps.map((step) => (step.id === 'upload' ? { ...step, status: 'done' } : step))
     const done = steps.filter((step) => step.status === 'done').length
