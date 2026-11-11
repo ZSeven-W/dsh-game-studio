@@ -56,6 +56,7 @@
 | CI 上传 | `src/ci.ts` 生成 miniprogram-ci + Actions | `test/ci.test.mjs::the CI kit writes an upload script` |
 | 商业化：广告、内购、埋点 | `src/commerce.ts`、运行时 | `test/commerce.test.mjs::the exporter embeds the ad unit IDs` |
 | 体验：小白按向导、失败有提示 | 侧栏向导 + 编码错误（`DEVTOOLS_*`、`CI_NEEDS_APPID`、`BAD_AD_UNIT`） | `test/host.test.mjs::/game-studio wechat-commerce stores ad unit IDs` |
+| 侧栏面板不静默消失、文案不缺 | `src/client/index.tsx`、`src/client/locales.ts` | `test/client.test.mjs::the WeChat export button` |
 
 ## 四、验收
 

@@ -346,6 +346,8 @@ test('an ad error is turned into a code and a fix for the player', async (t) => 
   await updateCommerce(dir, { enabled: true, interstitial: 'adunit-123456', rewarded: 'adunit-654321', analytics: true })
   const exported = await exportWechat(dir)
   const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    // Ads are created on the first animation frame, not at boot.
+    await page.waitForFunction('typeof window.__wxAds.failRewarded === "function"', undefined, { timeout: 10000 })
     const result = await page.evaluate(() => {
       window.__wxAds.failRewarded(1004)
       return { state: window.__G.__commerce.state(), events: window.__wxAds.events.map(entry => entry.id) }

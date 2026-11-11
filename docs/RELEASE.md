@@ -39,6 +39,7 @@ acceptance run covers most of them end to end.
 | Launch wizard + RELEASE.md | `test/release.test.mjs` | ✅ |
 | Pre-review risks | `test/review.test.mjs` | ✅ |
 | CI upload kit | `test/ci.test.mjs` | — |
+| Sidebar export button, wizard, monetization panel | `test/client.test.mjs` | — |
 
 ## 3. Version and package
 
