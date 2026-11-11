@@ -31,3 +31,11 @@ test('the DSH host requirement is declared and documented', () => {
   assert.ok(documented, 'the README should state the DSH requirement')
   assert.equal(range, `>=${documented}`, `README says ${documented}, engines.dsh says ${range}`)
 })
+
+test('the lower bound is the DSH version the plugin is tested with', () => {
+  // Refusing hosts older than the one actually tested is honest; refusing newer ones
+  // (or claiming support below the tested version) is not.
+  const tested = readme.match(/Tested with DSH <code>([\d.]+(?:-rc\.\d+)?)<\/code>/u)?.[1]
+  assert.ok(tested, 'the README should state the tested DSH version')
+  assert.equal(pkg.engines?.dsh, `>=${tested}`, `engines.dsh is ${pkg.engines?.dsh}, tested is ${tested}`)
+})
