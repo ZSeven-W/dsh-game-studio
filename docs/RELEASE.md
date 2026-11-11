@@ -8,8 +8,9 @@ Run this before tagging a release or opening a pull request.
 ```sh
 npm ci
 npm run build
-npm test            # 158 tests; 49 fail on a Windows box without gh/cloudflared/Codex
+npm test            # 159 tests; 49 fail on a Windows box without gh/cloudflared/Codex
 npm run acceptance  # 21 checks; browser checks skip when no Chrome is installed
+npm run trace       # the requirement→evidence table still points at real tests
 ```
 
 `npm test` is the source of truth for behaviour. On a machine without `gh`,

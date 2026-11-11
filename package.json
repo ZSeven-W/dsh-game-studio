@@ -51,7 +51,8 @@
     "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.mjs",
     "acceptance": "node scripts/acceptance.mjs",
-    "upstream": "node scripts/upstream-check.mjs"
+    "upstream": "node scripts/upstream-check.mjs",
+    "trace": "node scripts/trace-check.mjs"
   },
   "dsh": {
     "bundle": {
