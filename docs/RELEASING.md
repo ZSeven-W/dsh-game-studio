@@ -3,6 +3,13 @@
 How to ship a new build of this fork, in order. The order matters: nothing is
 packed until the checks pass, and nothing is installed until the tarball exists.
 
+## 0. Evidence index
+
+`node artifacts/evidence-index.mjs` lists every evidence class (acceptance,
+sidebar shots, rehearsal, clean clone, package, upstream drill, upgrade drill,
+bench, GUI mount, patch series, snapshot) with its file, freshness and status. It
+fails when one is missing, so run it before touching the version.
+
 ## 1. Decide the version
 
 `0.1.0-rc.N` — one increment per shipped change. Documentation-only changes need
