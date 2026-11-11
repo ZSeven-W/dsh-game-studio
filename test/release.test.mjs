@@ -19,6 +19,32 @@ async function tempGame(t) {
   return dir
 }
 
+test('the materials number their sections and every section has content', async (t) => {
+  const dir = await tempGame(t)
+  const exportDir = join(dir, 'export', 'wechat', 'docs')
+  await mkdir(exportDir, { recursive: true })
+  const materials = await releaseMaterials(dir, { exportDir, manifestTitle: 'Doc Game' })
+  const text = await readFile(materials.file, 'utf8')
+
+  const headings = [...text.matchAll(/^## (\d+)\. (.+)$/gmu)].map((match) => ({ number: Number(match[1]), title: match[2].trim() }))
+  assert.ok(headings.length >= 9, `expected the full set of sections, found ${headings.length}`)
+  assert.deepEqual(headings.map((heading) => heading.number), headings.map((_, index) => index + 1), 'sections are numbered 1..N in order')
+  assert.match(headings[0].title, /基本信息/u)
+  assert.match(headings[headings.length - 1].title, /上线前检查/u)
+
+  // Every section must say something: a heading followed by an empty line and a heading is a copy bug.
+  const bodies = text.split(/^## \d+\. .+$/gmu).slice(1)
+  for (const [index, body] of bodies.entries()) {
+    assert.ok(body.replace(/\s/gu, '').length > 20, `section ${headings[index].title} is empty`)
+  }
+
+  // Internal references ("第 N 节") must point at a section that exists.
+  const references = [...text.matchAll(/第 (\d+) 节/gu)].map((match) => Number(match[1]))
+  for (const reference of references) {
+    assert.ok(headings.some((heading) => heading.number === reference), `references missing section ${reference}`)
+  }
+})
+
 test('the plan is coherent and gates monetization steps', () => {
   const plan = releasePlan('none')
   const ids = plan.map(step => step.id)
