@@ -356,6 +356,23 @@ test('/game-studio wechat-devtools says to export first instead of guessing a pa
   assert.match(result.text, /run the WeChat export first/u)
 })
 
+test('/game-studio wechat-commerce stores ad unit IDs and refuses a bad one', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const project = join(root, 'game')
+
+  const initial = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'status' })}`)
+  assert.equal(initial.kind, 'success', initial.text)
+  assert.equal(JSON.parse(initial.text).embedded, null)
+
+  const refused = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'configure', enabled: true, interstitial: 'oops' })}`)
+  assert.equal(refused.kind, 'error')
+  assert.match(refused.text, /adunit-/u)
+
+  const configured = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'configure', enabled: true, interstitial: 'adunit-abc123def456' })}`)
+  assert.equal(configured.kind, 'success', configured.text)
+  assert.equal(JSON.parse(configured.text).embedded.interstitial, 'adunit-abc123def456')
+})
+
 // ---------------------------------------------------------------- playtest
 
 /** Stand-ins for the Harness's attachment store and model catalog. */

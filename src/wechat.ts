@@ -14,6 +14,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadLedger, loadManifest, paths, RUNTIMES, type GameManifest, type RuntimeId } from './project.ts'
+import { embedCommerce, loadCommerce } from './commerce.ts'
 import { StudioError, writeJson } from './util.ts'
 
 const RUNTIME_FILE = fileURLToPath(new URL('./wechat-runtime.js', import.meta.url))
@@ -37,6 +38,7 @@ export interface WechatExportResult {
   bytes: number
   appid: string
   runtimes: string[]
+  monetization: { enabled: true; interstitial?: string; rewarded?: string; analytics: boolean } | null
   warnings: string[]
 }
 
@@ -100,6 +102,7 @@ function readme(manifest: GameManifest, appid: string): string {
     '- 小游戏没有 DOM，3D 模板的分数/血量/计时与开始、结束卡片由适配层按 window.__gameState() 用 canvas 重绘。',
     '- SVG 素材已转成 PNG，因为微信小游戏的 Image 不保证支持 SVG。',
     '- 音频目前静音（原游戏的 WebAudio 调用被安全跳过）；触摸/指针事件已适配。',
+    '- 广告不强推：配置广告位后两局之间最多一次插屏，激励视频只由「看广告复活」触发；未配置则不加载广告代码。',
     '- 微信的包体限制：主包 4MB、总包 30MB；导出时会在超过 4MB 时给出警告。',
     '',
     '## 注意',
@@ -183,9 +186,11 @@ export async function exportWechat(dir: string, options: WechatExportOptions = {
     if (browser) await browser.close().catch(() => undefined)
   }
 
+  const commerce = embedCommerce(await loadCommerce(dir))
   const game = {
     title: manifest.title,
     rules: manifest.rules,
+    ...(commerce ? { monetization: commerce } : {}),
     slots: Object.fromEntries(Object.entries(manifest.slots).map(([slot, spec]) => [slot, {
       tile: spec.tile === true,
       custom: ledger?.assets[slot] !== undefined && ledger.assets[slot]!.source !== 'template',
@@ -239,5 +244,7 @@ export async function exportWechat(dir: string, options: WechatExportOptions = {
     warnings.push('这个工程没有素材槽位；游戏代码需要自己绘制画面。')
   }
 
-  return { dir: outDir, files, bytes, appid, runtimes, warnings }
+  return { dir: outDir, files, bytes, appid, runtimes, monetization: commerce, warnings }
 }
+
+

@@ -11,6 +11,7 @@ import {
   type CandidateMeta, type Generation, type ImageGenerator,
 } from './assets.ts'
 import { buildProject } from './build.ts'
+import { commerceCheck, embedCommerce, loadCommerce, updateCommerce } from './commerce.ts'
 import { findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
 import { loadRelease, markReleaseDone, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
 import { exportWechat } from './wechat.ts'
@@ -889,6 +890,41 @@ export function apply(ctx: any, config: Config = {}): void {
   }))
 
   ctx.tools.register(defineTool({
+    name: 'game_studio_wechat_commerce',
+    description: 'WeChat monetization: store the ad unit IDs from the mini-game console (流量主 → 广告位管理), switch ads '
+      + 'and analytics on or off, and report what the next export will do. Ads are never forced: one interstitial between '
+      + 'two rounds, and a rewarded video only when the player taps 看广告复活. Needs the 流量主 capability first; the '
+      + 'plugin never claims that a game is allowed to monetize.',
+    parameters: {
+      path: projectParam,
+      action: { type: 'string', enum: ['status', 'configure'], description: 'Defaults to status.' },
+      enabled: { type: 'boolean', description: 'Turn ads on or off.' },
+      interstitial: { type: 'string', description: '插屏广告位 ID (adunit-...), empty string to clear.' },
+      rewarded: { type: 'string', description: '激励视频广告位 ID (adunit-...), empty string to clear.' },
+      analytics: { type: 'boolean', description: 'Report round/round-end/ad events through wx.reportEvent.' },
+    },
+    output: {
+      schema: json,
+      render: (_args: any, value: any) => [{ type: 'text', text: JSON.stringify(value) }],
+      presentationMeta: (_args: any, value: any) => presentation('export', value.project, { wechat: true }),
+    },
+    async execute(args: any, exec: any) {
+      const dir = await projectDir(exec, args.path)
+      if (String(args.action ?? 'status') === 'configure') {
+        const state = await updateCommerce(dir, {
+          enabled: typeof args.enabled === 'boolean' ? args.enabled : undefined,
+          interstitial: typeof args.interstitial === 'string' ? args.interstitial : undefined,
+          rewarded: typeof args.rewarded === 'string' ? args.rewarded : undefined,
+          analytics: typeof args.analytics === 'boolean' ? args.analytics : undefined,
+        })
+        return { project: dir, ...state, check: commerceCheck(state), embedded: embedCommerce(state) }
+      }
+      const state = await loadCommerce(dir)
+      return { project: dir, ...state, check: commerceCheck(state), embedded: embedCommerce(state) }
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'game_studio_wechat_release',
     description: 'The WeChat mini-game release wizard: every step from registering the mini-game to publishing it, with '
       + 'who does it (WeChat console / the plugin / the user), what it unblocks, and copy-paste materials. '
@@ -1155,8 +1191,8 @@ export function apply(ctx: any, config: Config = {}): void {
   ctx.inject(['commands'], (child: any) => {
     child.commands.register({
       name: 'game-studio',
-      description: 'Game Studio sidebar actions (apply, revert, build, export, export-wechat, wechat-devtools, wechat-release, restore, share, unshare, status, wall, publish, unpublish)',
-      input: { hint: '<apply|revert|build|export|export-wechat|wechat-devtools|wechat-release|restore|share|unshare|status|wall|publish|unpublish> {"project": "...", ...}' },
+      description: 'Game Studio sidebar actions (apply, revert, build, export, export-wechat, wechat-devtools, wechat-release, wechat-commerce, restore, share, unshare, status, wall, publish, unpublish)',
+      input: { hint: '<apply|revert|build|export|export-wechat|wechat-devtools|wechat-release|wechat-commerce|restore|share|unshare|status|wall|publish|unpublish> {"project": "...", ...}' },
       async handler({ agent, rawInput }: any) {
         try {
           // The Harness passes everything after `/game-studio`, leading whitespace included.
@@ -1208,6 +1244,17 @@ export function apply(ctx: any, config: Config = {}): void {
               result = await openInDevtools(dir)
               await markReleaseDone(dir, 'devtools', 'opened in WeChat DevTools').catch(() => undefined)
             }
+          }
+          else if (action === 'wechat-commerce') {
+            const state = String(payload.op ?? 'status') === 'configure'
+              ? await updateCommerce(dir, {
+                enabled: typeof payload.enabled === 'boolean' ? payload.enabled : undefined,
+                interstitial: typeof payload.interstitial === 'string' ? payload.interstitial : undefined,
+                rewarded: typeof payload.rewarded === 'string' ? payload.rewarded : undefined,
+                analytics: typeof payload.analytics === 'boolean' ? payload.analytics : undefined,
+              })
+              : await loadCommerce(dir)
+            result = { ...state, check: commerceCheck(state), embedded: embedCommerce(state) }
           }
           else if (action === 'wechat-release') {
             const op = String(payload.op ?? 'status')
@@ -1295,5 +1342,7 @@ export function apply(ctx: any, config: Config = {}): void {
     })
   })
 }
+
+
 
 

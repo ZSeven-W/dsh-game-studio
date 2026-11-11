@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { PNG } from 'pngjs'
 import { createProject, loadManifest, paths } from '../src/project.ts'
+import { updateCommerce } from '../src/commerce.ts'
 import { writeJson } from '../src/util.ts'
 import { exportWechat } from '../src/wechat.ts'
 
@@ -160,6 +161,45 @@ test('SVG slot art is rasterised to PNG at the slot size', async (t) => {
   }
 })
 
+test('a game with ads shows one interstitial between rounds and can revive on a rewarded video', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  const manifest = await loadManifest(dir)
+  manifest.rules = { ...manifest.rules, duration: 3 }
+  await writeJson(paths.manifest(dir), manifest)
+  await updateCommerce(dir, { enabled: true, interstitial: 'adunit-abc123def456', rewarded: 'adunit-rew987654' })
+  const exported = await exportWechat(dir)
+  assert.equal(exported.monetization?.enabled, true)
+
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    await page.waitForTimeout(900)
+    await page.evaluate(() => window.__touch({ changedTouches: [{ identifier: 1, clientX: 250, clientY: 720 }] }))
+    await page.waitForFunction('["won","lost"].includes(window.__G.__gameState().phase)', undefined, { timeout: 20000 })
+    await page.waitForFunction('window.__wxAds.interstitial >= 1', undefined, { timeout: 6000 })
+    const recorded = await page.evaluate(() => ({
+      interstitial: window.__wxAds.interstitial,
+      events: window.__wxAds.events.map(entry => entry.id),
+      commerce: window.__G.__commerce.state(),
+    }))
+    assert.equal(recorded.interstitial, 1, 'exactly one interstitial between rounds')
+    assert.ok(recorded.events.includes('game_round_start'))
+    assert.ok(recorded.events.includes('game_round_end'))
+    assert.ok(recorded.events.includes('game_ad_interstitial'))
+    assert.equal(recorded.commerce.enabled, true)
+
+    // The ad slot is briefly busy after the interstitial; wait it out, then revive.
+    await page.waitForTimeout(1500)
+    await page.evaluate(() => window.__G.__commerce.revive())
+    await page.waitForFunction('window.__G.__commerce.state().rewardedShown >= 1', undefined, { timeout: 6000 })
+    await page.waitForFunction('window.__G.__gameState().phase === "playing"', undefined, { timeout: 6000 })
+    const after = await page.evaluate(() => ({ rewarded: window.__wxAds.rewarded, events: window.__wxAds.events.map(entry => entry.id) }))
+    assert.equal(after.rewarded, 1, 'the rewarded video played once')
+    assert.ok(after.events.includes('game_ad_rewarded'))
+    assert.deepEqual(errors, [])
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
 /** Serves one exported project plus a page that fakes the wx.* surface on a real canvas. */
 async function serveMockWx(root) {
   const mockHtml = `<!doctype html>
@@ -175,6 +215,7 @@ async function serveMockWx(root) {
   var main = document.getElementById('game');
   var mainUsed = false;
   var G = {};
+  window.__wxAds = { interstitial: 0, rewarded: 0, events: [] };
   var wx = {
     createCanvas: function () {
       if (!mainUsed) { mainUsed = true; return main; }
@@ -184,6 +225,19 @@ async function serveMockWx(root) {
       return { windowWidth: window.innerWidth, windowHeight: window.innerHeight, pixelRatio: 1 };
     },
     createImage: function () { return new Image(); },
+    reportEvent: function (id, data) { window.__wxAds.events.push({ id: id, data: data }); },
+    createInterstitialAd: function () {
+      return { show: function () { window.__wxAds.interstitial += 1; return Promise.resolve(); }, onError: function () {} };
+    },
+    createRewardedVideoAd: function () {
+      var close = null;
+      return {
+        show: function () { window.__wxAds.rewarded += 1; setTimeout(function () { if (close) close({ isEnded: true }); }, 40); return Promise.resolve(); },
+        load: function () { return Promise.resolve(); },
+        onClose: function (fn) { close = fn; },
+        onError: function () {}
+      };
+    },
     onTouchStart: function (fn) { window.__touch = function (event) { fn(event); }; },
     onTouchMove: function () {}, onTouchEnd: function () {}, onTouchCancel: function () {},
     onHide: function () {}, onShow: function () {}, onWindowResize: function () {}, onError: function () {},
@@ -300,3 +354,4 @@ test('the exported 3D game renders through WebGL on a mocked wx', async (t) => {
   })
   if (!ran) return t.skip('no Chrome or Edge here')
 })
+

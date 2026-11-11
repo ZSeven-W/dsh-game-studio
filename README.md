@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Describe a small game in one sentence — play it in the sidebar of a <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> conversation, swap in AI art, export one HTML file.</strong><br />
-  <sub>13 agent tools &bull; live sidebar preview &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art with a cost check first &bull; self-playing playtests &bull; version history &bull; one-file HTML export &bull; WeChat mini-game export</sub>
+  <sub>14 agent tools &bull; live sidebar preview &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art with a cost check first &bull; self-playing playtests &bull; version history &bull; one-file HTML export &bull; WeChat mini-game export</sub>
 </p>
 
 <p align="center">
@@ -45,6 +45,7 @@ Ask the agent for a game in plain words — "a 3D game: a red panda collects bam
 | 📱 **Try it on your phone** | `game_studio_share` opens a temporary read-only link on your local network — or a temporary public link via a Cloudflare Quick Tunnel (`cloudflared`) so friends on any network can play — with a QR code in the sidebar. |
 | 🌐 **Publish to GitHub Pages** | `game_studio_publish` pushes the built HTML (or the whole game wall) to a public repository under your signed-in `gh` account and enables GitHub Pages for a permanent link that stays live after you close your computer. |
 | 🚀 **Launch wizard** | The sidebar wizard and `game_studio_wechat_release` track every step from registering the mini-game and filing 小游戏备案 to review and release, says who does what (WeChat console / the plugin / you), marks the steps the plugin really ran, and writes `RELEASE.md` next to the export with copy-paste texts: intro, category, age-rating card, privacy draft, filing blurb and the review note. |
+| 💰 **Ads that are never forced** | `game_studio_wechat_commerce` stores the ad unit IDs from the mini-game console and embeds them into the export. The runtime shows at most one interstitial between two rounds and a rewarded video only when the player taps 看广告复活; round start/end and ad events go to `wx.reportEvent`. No ad unit IDs, no ad code runs. |
 | 🗂️ **My games** | Open the sidebar's **+** and pick **Game Studio · My games**: every game in the workspace as a tile with its latest playtest picture, filtered by 2D/3D and sorted by recency, versions or name. Click one to play it — no agent, no tokens. You can also subscribe to online game sources (`owner/repo`, GitHub repository URL, or GitHub Pages URL) to browse and play published games alongside your own. **Export wall** packs your local games into one offline page to send to friends. |
 
 ## Games made with it
@@ -87,6 +88,7 @@ Measured in a real DSH with DeepSeek-V4.1-Flash, each game made from one sentenc
 | `game_studio_apply_asset` | Put a candidate into the game by its number, rebuild and refresh. |
 | `game_studio_revert_asset` | Go back to a slot's previous art. |
 | `game_studio_wechat_devtools` | Drive WeChat DevTools for the exported mini-game: `open` imports the folder into the IDE, `preview` writes a device QR code next to the export, `upload` submits a version (`version`, `desc`). Needs the IDE's service port switched on (工具 → 设置 → 安全设置 → 服务端口); a closed port comes back as `DEVTOOLS_PORT_CLOSED` with the steps, and the plugin never changes that setting itself. |
+| `game_studio_wechat_commerce` | Store the mini-game's ad unit IDs (`interstitial`, `rewarded`) from 流量主 → 广告位管理, switch ads/analytics on or off, and report what the export will embed. Ads are never forced: one interstitial between rounds, a rewarded video only from the 看广告复活 button. |
 | `game_studio_wechat_release` | The launch checklist and materials: `status` returns every step with its owner (WeChat console / plugin / user), blockers and the next 3 actions; `update` records a step plus the real AppID, name, category, age rating and monetization choice; `materials` writes `RELEASE.md` next to the export with the texts to paste into the console. |
 | `game_studio_versions` | List saved versions, newest first. |
 | `game_studio_restore_version` | Restore an earlier version of the whole game. |
@@ -200,6 +202,7 @@ npm test        # node --test; browser tests are skipped when no Chrome or Edge 
 - See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for the full notices.
 
 **License**: MIT
+
 
 
 

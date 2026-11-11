@@ -233,15 +233,162 @@
     ctx.fillText(text, x, y);
   }
 
-  function drawHud() {
-    if (!uiNodes) return;
-    var state = null;
-    try { state = G.__gameState ? G.__gameState() : null; } catch (error) { state = null; }
+  /* ---- Monetization ---------------------------------------------------------
+   * Never forced: one interstitial between two rounds when one is configured,
+   * and a rewarded video only when the player taps 看广告复活 after losing. The
+   * ad unit IDs come from window.GAME.monetization, which the exporter embeds
+   * from the game's .studio/wechat-commerce.json. Analytics uses whatever the
+   * base library has (reportEvent, else reportAnalytics). */
+  var money;
+  var ads = { interstitial: null, rewarded: null, shown: 0, rewardedShown: 0, lastError: '' };
+  var reviveVisible = false;
+  var reviveRect = null;
+  var lastPhase = 'title';
+  var adBusy = false;
+
+  function readState() {
+    try { return G.__gameState ? G.__gameState() : null; } catch (error) { return null; }
+  }
+
+  function report(event, data) {
+    if (!money || money.analytics === false) return;
+    try {
+      if (wx.reportEvent) wx.reportEvent('game_' + event, data || {});
+      else if (wx.reportAnalytics) wx.reportAnalytics('game_' + event, data || {});
+    } catch (error) { /* analytics is optional */ }
+  }
+
+  function initAds() {
+    if (!money || !money.enabled) return;
+    try {
+      if (money.interstitial && wx.createInterstitialAd) {
+        ads.interstitial = wx.createInterstitialAd({ adUnitId: money.interstitial });
+        if (ads.interstitial && ads.interstitial.onError) {
+          ads.interstitial.onError(function (error) { ads.lastError = String((error && error.errMsg) || error); });
+        }
+      }
+    } catch (error) { ads.lastError = String((error && error.message) || error); }
+    try {
+      if (money.rewarded && wx.createRewardedVideoAd) {
+        ads.rewarded = wx.createRewardedVideoAd({ adUnitId: money.rewarded });
+        if (ads.rewarded && ads.rewarded.onError) {
+          ads.rewarded.onError(function (error) { ads.lastError = String((error && error.errMsg) || error); });
+        }
+      }
+    } catch (error) { ads.lastError = String((error && error.message) || error); }
+  }
+
+  function moneyConfig() {
+    if (money === undefined) {
+      money = (G.GAME && G.GAME.monetization) || null;
+      initAds();
+    }
+    return money;
+  }
+
+  function showInterstitial() {
+    if (!ads.interstitial || adBusy) return;
+    adBusy = true;
+    try {
+      var shown = ads.interstitial.show();
+      if (shown && shown.catch) shown.catch(function () { ads.lastError = 'interstitial show failed'; });
+      ads.shown += 1;
+      report('ad_interstitial', {});
+    } catch (error) { ads.lastError = String((error && error.message) || error); }
+    setTimeout(function () { adBusy = false; }, 1200);
+  }
+
+  function showRewarded(done) {
+    if (!ads.rewarded || adBusy) return;
+    adBusy = true;
+    var handled = false;
+    function finish(ok) {
+      if (handled) return;
+      handled = true;
+      adBusy = false;
+      if (ok) ads.rewardedShown += 1;
+      report('ad_rewarded', { completed: ok ? 1 : 0 });
+      if (ok) done();
+    }
+    try {
+      ads.rewarded.onClose(function (res) { finish(!res || res.isEnded !== false); });
+      var shown = ads.rewarded.show();
+      if (shown && shown.catch) {
+        shown.catch(function () {
+          ads.rewarded.load().then(function () { ads.rewarded.show(); }).catch(function () { finish(false); });
+        });
+      }
+    } catch (error) {
+      ads.lastError = String((error && error.message) || error);
+      finish(false);
+    }
+    // A player who closes the mini-game mid-ad must not lock the button forever.
+    setTimeout(function () { finish(false); }, 30000);
+  }
+
+  function revive() {
+    if (!ads.rewarded) return;
+    showRewarded(function () {
+      reviveVisible = false;
+      // The templates start a new round on a tap on the screen.
+      setTimeout(function () {
+        dispatchTouch('pointerdown', { identifier: 9001, clientX: cssW / 2, clientY: cssH / 2 });
+        dispatchTouch('pointerup', { identifier: 9001, clientX: cssW / 2, clientY: cssH / 2 });
+      }, 300);
+    });
+  }
+
+  function trackCommerce(state) {
+    if (!state || !state.phase) return;
+    moneyConfig();
+    if (state.phase === lastPhase) return;
+    var previous = lastPhase;
+    lastPhase = state.phase;
+    reviveVisible = false;
+    if (state.phase === 'playing' && previous !== 'playing') report('round_start', {});
+    if ((state.phase === 'won' || state.phase === 'lost') && previous === 'playing') {
+      report('round_end', { score: Math.round(state.score || 0), result: state.phase === 'won' ? 'win' : 'lose' });
+      if (money && money.interstitial && ads.interstitial) setTimeout(showInterstitial, 700);
+      if (money && money.rewarded && ads.rewarded && state.phase === 'lost') reviveVisible = true;
+    }
+  }
+
+  /** The revive button is drawn even for games with a canvas HUD (2D templates). */
+  function drawReviveButton(ctx, W, H) {
+    if (!reviveVisible || !ads.rewarded) { reviveRect = null; return; }
+    var label = '看广告复活';
+    ctx.font = font(15);
+    var width = Math.round(ctx.measureText(label).width + 34);
+    var height = 40;
+    var left = Math.round((W - width) / 2);
+    var reviveTop = Math.round(H * 0.40) + 92;
+    ctx.fillStyle = 'rgba(255,196,99,0.95)';
+    ctx.fillRect(left, reviveTop, width, height);
+    ctx.fillStyle = '#2b1a0a';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, W / 2, reviveTop + height / 2);
+    reviveRect = { left: left, top: reviveTop, width: width, height: height };
+  }
+
+  function drawHud(state) {
+    if (!state) state = readState();
     if (!state) return;
     var ctx = mainContext();
     if (!ctx) return;
     var W = cssW;
     var H = cssH;
+    if (!uiNodes) {
+      // A 2D game draws its own HUD; only the commerce button belongs here.
+      ctx.save();
+      try {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.textBaseline = 'middle';
+        drawReviveButton(ctx, W, H);
+      } finally {
+        ctx.restore();
+      }
+      return;
+    }
     var top = Math.max(10, safeTop + 10);
     var scale = dpr;
     ctx.save();
@@ -278,6 +425,7 @@
         centerText(ctx, '得分 ' + Math.round(state.score || 0), W / 2, H * 0.40 + 34, 16, '#ffffff');
         pill(ctx, '点击重新开始', W / 2, Math.round(H * 0.40) + 54, 'center', 14, '#ffffff');
       }
+      drawReviveButton(ctx, W, H);
     } finally {
       ctx.restore();
     }
@@ -285,8 +433,25 @@
 
   function afterFrame() {
     if (webglCanvas) blit();
-    drawHud();
+    var state = readState();
+    trackCommerce(state);
+    drawHud(state);
   }
+
+  G.__commerce = {
+    ads: ads,
+    revive: revive,
+    report: report,
+    state: function () {
+      return {
+        enabled: Boolean(money && money.enabled),
+        shown: ads.shown,
+        rewardedShown: ads.rewardedShown,
+        lastError: ads.lastError,
+        reviveVisible: reviveVisible,
+      };
+    },
+  };
 
   // Every frame the game asks for ends with a blit and a HUD paint.
   G.requestAnimationFrame = function (callback) {
@@ -353,6 +518,14 @@
     };
   }
   function dispatchTouch(type, touch) {
+    // The revive button is drawn by the adapter, so it is hit-tested here before
+    // the game sees the tap (otherwise the tap would just restart the round).
+    if (type === 'pointerdown' && reviveVisible && reviveRect
+      && touch.clientX >= reviveRect.left && touch.clientX <= reviveRect.left + reviveRect.width
+      && touch.clientY >= reviveRect.top && touch.clientY <= reviveRect.top + reviveRect.height) {
+      revive();
+      return;
+    }
     var pointer = pointerEvent(touch, type);
     emit(canvasEvents, type, pointer);
     var touchType = type === 'pointerdown' ? 'touchstart'

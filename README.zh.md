@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>一句话描述一个小游戏 —— 在 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> 对话的侧栏里直接玩，换上 AI 美术，导出成一个 HTML 文件。</strong><br />
-  <sub>13 个 agent 工具 &bull; 侧栏实时预览 &bull; 2D 与 3D 体素模板 &bull; OpenAI 或 Codex 生图、花钱前先确认 &bull; 自动试玩 &bull; 版本历史 &bull; 单文件 HTML 导出 &bull; 微信小游戏导出</sub>
+  <sub>14 个 agent 工具 &bull; 侧栏实时预览 &bull; 2D 与 3D 体素模板 &bull; OpenAI 或 Codex 生图、花钱前先确认 &bull; 自动试玩 &bull; 版本历史 &bull; 单文件 HTML 导出 &bull; 微信小游戏导出</sub>
 </p>
 
 <p align="center">
@@ -45,6 +45,7 @@
 | 📱 **在手机上试玩** | `game_studio_share` 在本地网络上开一个临时只读链接（或通过 `cloudflared` 开启 Cloudflare 临时公网链接，发给任何网络下的朋友都能玩），侧栏里会显示二维码。 |
 | 🌐 **发布到 GitHub Pages** | `game_studio_publish` 用本机已登录的 `gh` 把构建好的 HTML（或整面游戏墙）推到你名下的公开仓库并开启 GitHub Pages，生成关掉电脑也能长期游玩的网址。 |
 | 🚀 **上线向导** | 侧栏「上线向导」和 `game_studio_wechat_release` 跟踪从小游戏注册、小游戏备案到审核发布的每一步，标明谁来做（微信后台 / 插件 / 你），只把插件真的做完的步骤标成完成，并在导出目录写一份 `RELEASE.md`：一句话简介、建议类目、适龄提示、隐私指引草案、备案说明、审核说明，直接复制到后台表单。 |
+| 💰 **广告但不强推** | `game_studio_wechat_commerce` 存小游戏后台创建的广告位 ID，导出时写进游戏。运行时最多在两局之间展示一次插屏，激励视频只由玩家点「看广告复活」触发；开局、结算和广告事件通过 `wx.reportEvent` 上报。没填广告位 ID 就不会执行任何广告代码。 |
 | 🗂️ **游戏墙** | 点右栏的 **+**，选 **游戏工坊 · 游戏墙**：工作区里做过的游戏铺满一面墙，封面是最近一次试玩的画面，可按 2D/3D 筛选，按最近修改、版本数或名称排序。点一下就能玩，不经过 agent，也不花 token。你还可以订阅在线游戏源（`owner/repo`、GitHub 仓库地址或 GitHub Pages 网址），把别人发布的游戏合入墙内直接游玩。**导出游戏墙**会把本地游戏打包成一个离线网页，发给朋友就能玩。 |
 
 ## 用它做出来的游戏
@@ -87,6 +88,7 @@
 | `game_studio_apply_asset` | 按编号把候选图放进游戏，重新构建并刷新。 |
 | `game_studio_revert_asset` | 把某个槽位恢复成上一张美术。 |
 | `game_studio_wechat_devtools` | 驱动微信开发者工具：`open` 把导出目录导入 IDE，`preview` 在导出目录写一张真机二维码，`upload` 上传一个版本（`version`、`desc`）。需要先打开 IDE 服务端口（工具 → 设置 → 安全设置 → 服务端口）；端口关闭时返回 `DEVTOOLS_PORT_CLOSED` 并给出开启步骤，插件不会替你改这个设置。 |
+| `game_studio_wechat_commerce` | 保存小游戏的广告位 ID（`interstitial`、`rewarded`，来自「流量主 → 广告位管理」），开关广告与埋点，并说明下次导出会写入什么。广告不强推：两局之间最多一次插屏，激励视频只由「看广告复活」触发。 |
 | `game_studio_wechat_release` | 上线清单与材料：`status` 返回每一步的负责人（微信后台 / 插件 / 用户）、阻塞项和接下来 3 件事；`update` 记录某一步以及真实 AppID、名称、类目、适龄级别、变现方式；`materials` 在导出目录写 `RELEASE.md`，内容可直接粘进后台表单。 |
 | `game_studio_versions` | 列出已保存的版本，最新的在前。 |
 | `game_studio_restore_version` | 把整个游戏恢复到较早的版本。 |
@@ -200,6 +202,7 @@ npm test        # node --test；找不到 Chrome 或 Edge 时跳过需要浏览�
 - 完整声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
 
 **许可证**：MIT
+
 
 
 
