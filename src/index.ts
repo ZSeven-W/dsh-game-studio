@@ -14,7 +14,7 @@ import { buildProject } from './build.ts'
 import { commerceCheck, embedCommerce, loadCommerce, updateCommerce } from './commerce.ts'
 import { writeWechatCi } from './ci.ts'
 import { devtoolsDoctor, findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
-import { loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFilePresence, releaseFreshness, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
+import { loadRelease, markExported, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFilePresence, releaseFreshness, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
 import { reviewGuide } from './review.ts'
 import { exportWechat } from './wechat.ts'
 import { runCodexBatch, type CodexBatch } from './generation.ts'
@@ -892,6 +892,7 @@ export function apply(ctx: any, config: Config = {}): void {
     async execute(args: any, exec: any) {
       const dir = await projectDir(exec, args.path)
       const result = await exportWechat(dir, { appid: args.appid, subpackage: typeof args.subpackage === 'boolean' ? args.subpackage : undefined })
+      await markExported(dir).catch(() => undefined)
       await markReleaseDone(dir, 'export', `wechat export: ${result.dir}`).catch(() => undefined)
       return { project: dir, ...result }
     },
@@ -1062,13 +1063,13 @@ export function apply(ctx: any, config: Config = {}): void {
         return {
           project: dir, ...result.status,
           materialsPresent: presence.materials, reviewPresent: presence.review,
-          materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale,
+          materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale,
         }
       }
       const state = await loadRelease(dir)
       const presence = await releaseFilePresence(dir)
       const freshness = await releaseFreshness(dir, state)
-      return { project: dir, ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review, materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale }
+      return { project: dir, ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review, materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale }
     },
   }))
 
@@ -1334,6 +1335,7 @@ export function apply(ctx: any, config: Config = {}): void {
               appid: typeof payload.appid === 'string' ? payload.appid : undefined,
               subpackage: typeof payload.subpackage === 'boolean' ? payload.subpackage : undefined,
             })
+            await markExported(dir).catch(() => undefined)
             await markReleaseDone(dir, 'export', 'exported from the sidebar').catch(() => undefined)
           }
           else if (action === 'wechat-devtools') {
@@ -1410,13 +1412,13 @@ export function apply(ctx: any, config: Config = {}): void {
               result = {
                 ...updated.status,
                 materialsPresent: presence.materials, reviewPresent: presence.review,
-                materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale,
+                materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale,
               }
             } else {
               const state = await loadRelease(dir)
               const presence = await releaseFilePresence(dir)
               const freshness = await releaseFreshness(dir, state)
-              result = { ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review, materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale }
+              result = { ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review, materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale }
             }
           }
           else if (action === 'restore') result = await restoreVersion(dir, Math.trunc(Number(payload.version)))

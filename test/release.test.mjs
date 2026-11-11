@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
-  loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFile, releaseFilePresence, releaseFreshness, releaseMaterials, releasePlan, releaseStatus, updateRelease,
+  loadRelease, markExported, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFile, releaseFilePresence, releaseFreshness, releaseMaterials, releasePlan, releaseStatus, updateRelease,
 } from '../src/release.ts'
 import { createProject } from '../src/project.ts'
 import { reviewRisks } from '../src/review.ts'
@@ -233,7 +233,7 @@ test('materials and the review go stale when the answers or the settings change'
     reviewAt: '2021-01-01T00:00:00.000Z',
     answersAt: '2020-06-01T00:00:00.000Z',
   })
-  assert.deepEqual(fresh, { materialsStale: false, reviewStale: false })
+  assert.deepEqual(fresh, { materialsStale: false, reviewStale: false, exportStale: false })
 
   // New answers after the files were written: both are out of date.
   const changed = await releaseFreshness(dir, {
@@ -241,7 +241,7 @@ test('materials and the review go stale when the answers or the settings change'
     reviewAt: '2021-01-01T00:00:00.000Z',
     answersAt: '2022-01-01T00:00:00.000Z',
   })
-  assert.deepEqual(changed, { materialsStale: true, reviewStale: true })
+  assert.deepEqual(changed, { materialsStale: true, reviewStale: true, exportStale: false })
 
   // Newer monetization settings make the materials stale even without answers.
   await utimes(commerce, new Date('2023-01-01T00:00:00Z'), new Date('2023-01-01T00:00:00Z'))
@@ -250,7 +250,7 @@ test('materials and the review go stale when the answers or the settings change'
     reviewAt: '2021-01-01T00:00:00.000Z',
     answersAt: '2020-06-01T00:00:00.000Z',
   })
-  assert.deepEqual(settings, { materialsStale: true, reviewStale: false })
+  assert.deepEqual(settings, { materialsStale: true, reviewStale: false, exportStale: false })
 
   // Regenerating clears it: nothing happened after the new timestamps.
   const regenerated = await releaseFreshness(dir, {
@@ -258,7 +258,7 @@ test('materials and the review go stale when the answers or the settings change'
     reviewAt: '2024-01-01T00:00:00.000Z',
     answersAt: '2020-06-01T00:00:00.000Z',
   })
-  assert.deepEqual(regenerated, { materialsStale: false, reviewStale: false })
+  assert.deepEqual(regenerated, { materialsStale: false, reviewStale: false, exportStale: false })
 
   // updateRelease records answersAt when an answer changes, and not for steps.
   const before = await loadRelease(dir)
@@ -447,4 +447,28 @@ test('the step count follows the monetization choice, and old answers survive a 
   await updateRelease(dir, { monetization: 'iaa' })
   const back = releaseStatus(dir, await loadRelease(dir), releasePlan('iaa'))
   assert.equal(back.steps.find((step) => step.id === 'iaa').status, 'done', 'the earlier tick is still there')
+})
+
+test('the export goes stale when the answers or settings change after it', async (t) => {
+  const dir = await tempGame(t)
+  await mkdir(join(dir, '.studio'), { recursive: true })
+  const commerce = join(dir, '.studio', 'wechat-commerce.json')
+  await writeFile(commerce, '{}\n')
+  await utimes(commerce, new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'))
+
+  const fresh = await releaseFreshness(dir, { exportAt: '2021-01-01T00:00:00.000Z', answersAt: '2020-06-01T00:00:00.000Z' })
+  assert.equal(fresh.exportStale, false)
+
+  const changed = await releaseFreshness(dir, { exportAt: '2021-01-01T00:00:00.000Z', answersAt: '2022-01-01T00:00:00.000Z' })
+  assert.equal(changed.exportStale, true, 'new answers make the export stale')
+
+  await utimes(commerce, new Date('2023-01-01T00:00:00Z'), new Date('2023-01-01T00:00:00Z'))
+  const settings = await releaseFreshness(dir, { exportAt: '2021-01-01T00:00:00.000Z', answersAt: '2020-06-01T00:00:00.000Z' })
+  assert.equal(settings.exportStale, true, 'new monetization settings make the export stale')
+
+  await markExported(dir)
+  const state = await loadRelease(dir)
+  assert.ok(state.exportAt, 'markExported records the timestamp')
+  const after = await releaseFreshness(dir, state)
+  assert.equal(after.exportStale, false, 're-exporting clears it')
 })

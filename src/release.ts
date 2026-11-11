@@ -62,6 +62,8 @@ export interface ReleaseState {
   uploads?: Array<{ version: string; at: string; note?: string }>
   /** When appid/name/category/age/monetization last changed (materials go stale after). */
   answersAt?: string
+  /** When the WeChat project was last exported (settings changes make it stale). */
+  exportAt?: string
   steps: Record<string, ReleaseStepState>
   createdAt: string
   updatedAt: string
@@ -83,6 +85,8 @@ export interface ReleaseStatus {
   /** Filled by the host after checking the file timestamps (optional in the pure status). */
   materialsStale?: boolean
   reviewStale?: boolean
+  /** True when the export predates the current answers or monetization settings. */
+  exportStale?: boolean
   uploads: Array<{ version: string; at: string; note?: string }>
   blocked: Array<{ id: string; title: string; missing: string[] }>
 }
@@ -409,15 +413,17 @@ export async function updateRelease(
  */
 export async function releaseFreshness(
   dir: string,
-  state: Pick<ReleaseState, 'materialsAt' | 'reviewAt' | 'answersAt'>,
-): Promise<{ materialsStale: boolean; reviewStale: boolean }> {
+  state: Pick<ReleaseState, 'materialsAt' | 'reviewAt' | 'answersAt' | 'exportAt'>,
+): Promise<{ materialsStale: boolean; reviewStale: boolean; exportStale: boolean }> {
   const commerceMtime = await stat(commerceFile(dir)).then((info) => info.mtimeMs).catch(() => 0)
   const answersAt = state.answersAt ? Date.parse(state.answersAt) : 0
   const materialsAt = state.materialsAt ? Date.parse(state.materialsAt) : 0
   const reviewAt = state.reviewAt ? Date.parse(state.reviewAt) : 0
+  const exportAt = state.exportAt ? Date.parse(state.exportAt) : 0
   return {
     materialsStale: materialsAt > 0 && (commerceMtime > materialsAt || answersAt > materialsAt),
     reviewStale: reviewAt > 0 && answersAt > reviewAt,
+    exportStale: exportAt > 0 && (commerceMtime > exportAt || answersAt > exportAt),
   }
 }
 
@@ -429,6 +435,13 @@ export async function releaseFilePresence(dir: string): Promise<{ materials: boo
     materials: existsSync(join(exportDir, 'RELEASE.md')),
     review: existsSync(join(exportDir, 'REVIEW.md')),
   }
+}
+
+/** Record that the WeChat project was exported from the current settings. */
+export async function markExported(dir: string): Promise<void> {
+  const state = await loadRelease(dir)
+  state.exportAt = now()
+  await saveRelease(dir, state)
 }
 
 /** Complete the upload step and keep the versions that were really uploaded. */

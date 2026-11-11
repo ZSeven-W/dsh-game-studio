@@ -101,6 +101,21 @@ test('a non-coder journey: create, export, wizard, materials, monetization, help
   assert.equal(badUnit.kind, 'error')
   assert.match(badUnit.text, /adunit-/u)
 
+  // 6b. Changing the monetization settings makes the exported project stale.
+  // Export once more first: the wizard answers above already happened after step 3's export.
+  const firstExport = await run(`export-wechat ${JSON.stringify({ project: game, appid: 'touristappid' })}`)
+  assert.equal(firstExport.kind, 'success', firstExport.text)
+  const afterExport = JSON.parse((await run(`wechat-release ${JSON.stringify({ project: game, op: 'status' })}`)).text)
+  assert.equal(afterExport.exportStale, false, 'a fresh export is not stale')
+  const configured = await run(`wechat-commerce ${JSON.stringify({ project: game, op: 'configure', enabled: true, interstitial: 'adunit-1234567890', analytics: true })}`)
+  assert.equal(configured.kind, 'success', configured.text)
+  const stale = JSON.parse((await run(`wechat-release ${JSON.stringify({ project: game, op: 'status' })}`)).text)
+  assert.equal(stale.exportStale, true, 'settings changed after the export')
+  const reexport = await run(`export-wechat ${JSON.stringify({ project: game, appid: 'touristappid' })}`)
+  assert.equal(reexport.kind, 'success', reexport.text)
+  const freshExport = JSON.parse((await run(`wechat-release ${JSON.stringify({ project: game, op: 'status' })}`)).text)
+  assert.equal(freshExport.exportStale, false, 're-exporting clears the staleness')
+
   // 7. The two calls that need the user's account explain themselves.
   const doctor = await run(`wechat-devtools ${JSON.stringify({ project: game, op: 'doctor' })}`)
   assert.equal(doctor.kind, 'success', doctor.text)
