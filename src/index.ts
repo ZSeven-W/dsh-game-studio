@@ -14,7 +14,7 @@ import { buildProject } from './build.ts'
 import { commerceCheck, embedCommerce, loadCommerce, updateCommerce } from './commerce.ts'
 import { writeWechatCi } from './ci.ts'
 import { devtoolsDoctor, findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
-import { loadRelease, markReleaseDone, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
+import { loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
 import { reviewGuide } from './review.ts'
 import { exportWechat } from './wechat.ts'
 import { runCodexBatch, type CodexBatch } from './generation.ts'
@@ -1027,6 +1027,7 @@ export function apply(ctx: any, config: Config = {}): void {
       const action = String(args.action ?? 'status')
       if (action === 'review') {
         const guide = await reviewGuide(dir)
+        await markReviewWritten(dir)
         return { project: dir, file: guide.file, risks: guide.risks, markdown: guide.markdown }
       }
       if (action === 'materials') {
@@ -1038,6 +1039,7 @@ export function apply(ctx: any, config: Config = {}): void {
           orientation: manifest.orientation,
           slots: Object.keys(manifest.slots).length,
         })
+        await markMaterialsWritten(dir)
         return { project: dir, file: materials.file, markdown: materials.markdown }
       }
       if (action === 'update') {
@@ -1366,10 +1368,13 @@ export function apply(ctx: any, config: Config = {}): void {
             if (!['status', 'update', 'materials', 'review'].includes(op)) throw new StudioError(`Unknown release action "${op}". Use status, update, materials or review.`, 'BAD_ACTION')
             if (op === 'review') {
               const guide = await reviewGuide(dir)
+              await markReviewWritten(dir)
               result = { file: guide.file, risks: guide.risks }
             } else if (op === 'materials') {
               const manifest = await loadManifest(dir)
-              result = await releaseMaterials(dir, { exportDir: findWechatExport(dir), manifestTitle: manifest.title, style: manifest.style, orientation: manifest.orientation })
+              const materials = await releaseMaterials(dir, { exportDir: findWechatExport(dir), manifestTitle: manifest.title, style: manifest.style, orientation: manifest.orientation })
+              await markMaterialsWritten(dir)
+              result = materials
             } else if (op === 'update') {
               const updated = await updateRelease(dir, {
                 step: typeof payload.step === 'string' ? payload.step : undefined,

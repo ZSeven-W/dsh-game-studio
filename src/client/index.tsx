@@ -225,6 +225,9 @@ interface ReleaseView {
   next?: ReleaseStepView[]
   /** Steps held back by a prerequisite. */
   blocked?: ReleaseStepView[]
+  /** Set once the plugin wrote RELEASE.md / REVIEW.md next to the export. */
+  materialsAt?: string | null
+  reviewAt?: string | null
 }
 
 interface CommerceView {
@@ -592,6 +595,8 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
               ? t('tab.releaseBlockedHint', { title: release.blocked[0].title })
               : ''}
         </span>
+        {release?.materialsAt && <span style={s.small}>{t('tab.materialsReady')}</span>}
+        {release?.reviewAt && <span style={s.small}>{t('tab.reviewReady')}</span>}
         {release && <span style={s.small}>{t('tab.releaseProgress', {
           done: String(release.progress.done), total: String(release.progress.total), percent: String(release.progress.percent),
         })}</span>}

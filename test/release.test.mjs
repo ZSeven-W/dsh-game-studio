@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
-  loadRelease, markReleaseDone, releaseFile, releaseMaterials, releasePlan, releaseStatus, updateRelease,
+  loadRelease, markMaterialsWritten, markReleaseDone, markReviewWritten, releaseFile, releaseMaterials, releasePlan, releaseStatus, updateRelease,
 } from '../src/release.ts'
 import { createProject } from '../src/project.ts'
 import { updateCommerce } from '../src/commerce.ts'
@@ -164,6 +164,22 @@ test('materials are written next to the export with everything the console asks 
   assert.match(threeText, /3D 画面需要支持 WebGL2/u)
 })
 
+test('writing the materials and the review is remembered in the status', async (t) => {
+  const dir = await tempGame(t)
+  const before = releaseStatus(dir, await loadRelease(dir), releasePlan('none'))
+  assert.equal(before.materialsAt, null)
+  assert.equal(before.reviewAt, null)
 
+  await markMaterialsWritten(dir)
+  const afterMaterials = releaseStatus(dir, await loadRelease(dir), releasePlan('none'))
+  assert.ok(afterMaterials.materialsAt, 'the materials timestamp is kept')
+  assert.equal(afterMaterials.reviewAt, null)
 
-
+  await markReviewWritten(dir)
+  const afterReview = releaseStatus(dir, await loadRelease(dir), releasePlan('none'))
+  assert.ok(afterReview.reviewAt, 'the review timestamp is kept')
+  // The markers survive a reload, so the sidebar can show them next time.
+  const reloaded = releaseStatus(dir, await loadRelease(dir), releasePlan('none'))
+  assert.equal(reloaded.materialsAt, afterReview.materialsAt)
+  assert.equal(reloaded.reviewAt, afterReview.reviewAt)
+})

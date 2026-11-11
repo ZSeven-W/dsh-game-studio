@@ -76,6 +76,10 @@ test('a non-coder journey: create, export, wizard, materials, monetization, help
   assert.match(materialsText, /## 9\. 上线前检查/u)
   const review = JSON.parse((await run(`wechat-release ${JSON.stringify({ project: game, op: 'review' })}`)).text)
   assert.ok(review.risks.some((risk) => risk.id === 'appid'), 'a tourist AppID is a known risk')
+  // Both files are now on disk, and the status says so, so the sidebar can show it.
+  const afterFiles = JSON.parse((await run(`wechat-release ${JSON.stringify({ project: game, op: 'status' })}`)).text)
+  assert.ok(afterFiles.materialsAt, 'the status remembers the generated materials')
+  assert.ok(afterFiles.reviewAt, 'the status remembers the generated review')
 
   // 6. 侧栏「商业化」: off by default, a malformed ad unit names the format.
   const commerce = JSON.parse((await run(`wechat-commerce ${JSON.stringify({ project: game, op: 'status' })}`)).text)

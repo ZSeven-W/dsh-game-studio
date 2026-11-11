@@ -13,7 +13,7 @@ import { build } from 'esbuild'
 import { buildProject } from '../src/build.ts'
 import { writeState } from '../src/assets.ts'
 import { createProject } from '../src/project.ts'
-import { loadRelease, releasePlan, releaseStatus } from '../src/release.ts'
+import { loadRelease, markMaterialsWritten, markReviewWritten, releasePlan, releaseStatus } from '../src/release.ts'
 import { launchBrowser } from '../test/wechat-harness.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -33,6 +33,9 @@ try {
   await writeFile(join(dir, 'game.json'), `${JSON.stringify(project, null, 2)}\n`)
   const built = await buildProject(dir, 'Screenshot fixture')
   fixtures.state = await writeState(dir, built)
+  // The panel shows that these two files already exist; generate them for the fixture.
+  await markMaterialsWritten(dir)
+  await markReviewWritten(dir)
   fixtures.release = releaseStatus(dir, await loadRelease(dir), releasePlan(false))
   fixtures.commerce = {
     enabled: false,

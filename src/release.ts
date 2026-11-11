@@ -53,6 +53,9 @@ export interface ReleaseState {
   category?: string
   ageRating?: AgeRating
   monetization?: Monetization
+  /** Set by the plugin when it writes RELEASE.md / REVIEW.md next to the export. */
+  materialsAt?: string
+  reviewAt?: string
   steps: Record<string, ReleaseStepState>
   createdAt: string
   updatedAt: string
@@ -66,6 +69,8 @@ export interface ReleaseStatus {
   progress: { done: number; total: number; percent: number }
   steps: Array<ReleaseStep & { status: ReleaseStepStatus; blocked: boolean; note?: string }>
   next: Array<{ id: string; title: string; owner: ReleaseOwner; how: string[] }>
+  materialsAt: string | null
+  reviewAt: string | null
   blocked: Array<{ id: string; title: string; missing: string[] }>
 }
 
@@ -343,6 +348,8 @@ export function releaseStatus(dir: string, state: ReleaseState, plan: ReleaseSte
     appid: state.appid ?? '',
     monetization: state.monetization ?? 'none',
     ageRating: state.ageRating ?? null,
+    materialsAt: state.materialsAt ?? null,
+    reviewAt: state.reviewAt ?? null,
     progress: { done, total: relevant.length, percent: relevant.length === 0 ? 0 : Math.round((done / relevant.length) * 100) },
     steps,
     next: next.slice(0, 3).map(step => ({ id: step.id, title: step.title, owner: step.owner, how: step.how })),
@@ -376,6 +383,19 @@ export async function updateRelease(
   }
   await saveRelease(dir, state)
   return { state, status: releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')) }
+}
+
+/** Record that the materials / review file was written (shown in the sidebar). */
+export async function markMaterialsWritten(dir: string): Promise<void> {
+  const state = await loadRelease(dir)
+  state.materialsAt = now()
+  await saveRelease(dir, state)
+}
+
+export async function markReviewWritten(dir: string): Promise<void> {
+  const state = await loadRelease(dir)
+  state.reviewAt = now()
+  await saveRelease(dir, state)
 }
 
 /** Trigger markers the plugin may set by itself, because it really did the work. */
