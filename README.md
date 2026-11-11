@@ -44,7 +44,7 @@ Ask the agent for a game in plain words — "a 3D game: a red panda collects bam
 | 🟢 **WeChat mini-game export** | `game_studio_export_wechat` writes an importable 微信小游戏 project (`game.js`, `game.json`, `project.config.json`, `assets/*.png`) under `export/wechat/<slug>/`. The game code is left untouched and boots on the bundled `wx.*` runtime adapter; SVG art is rasterised to PNG. 2D canvas and 3D three.js/voxel games both work: WebGL renders offscreen and is composited onto the screen canvas, and the HUD is redrawn from `__gameState`, since mini-games have no DOM. From there `game_studio_wechat_devtools` opens, previews or uploads the project through the IDE's own CLI. |
 | 📱 **Try it on your phone** | `game_studio_share` opens a temporary read-only link on your local network — or a temporary public link via a Cloudflare Quick Tunnel (`cloudflared`) so friends on any network can play — with a QR code in the sidebar. |
 | 🌐 **Publish to GitHub Pages** | `game_studio_publish` pushes the built HTML (or the whole game wall) to a public repository under your signed-in `gh` account and enables GitHub Pages for a permanent link that stays live after you close your computer. |
-| 🚀 **Launch wizard** | `game_studio_wechat_release` tracks every step from registering the mini-game and filing 小游戏备案 to review and release, says who does what (WeChat console / the plugin / you), marks the steps the plugin really ran, and writes `RELEASE.md` next to the export with copy-paste texts: intro, category, age-rating card, privacy draft, filing blurb and the review note. |
+| 🚀 **Launch wizard** | The sidebar wizard and `game_studio_wechat_release` track every step from registering the mini-game and filing 小游戏备案 to review and release, says who does what (WeChat console / the plugin / you), marks the steps the plugin really ran, and writes `RELEASE.md` next to the export with copy-paste texts: intro, category, age-rating card, privacy draft, filing blurb and the review note. |
 | 🗂️ **My games** | Open the sidebar's **+** and pick **Game Studio · My games**: every game in the workspace as a tile with its latest playtest picture, filtered by 2D/3D and sorted by recency, versions or name. Click one to play it — no agent, no tokens. You can also subscribe to online game sources (`owner/repo`, GitHub repository URL, or GitHub Pages URL) to browse and play published games alongside your own. **Export wall** packs your local games into one offline page to send to friends. |
 
 ## Games made with it
@@ -200,5 +200,6 @@ npm test        # node --test; browser tests are skipped when no Chrome or Edge 
 - See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for the full notices.
 
 **License**: MIT
+
 
 

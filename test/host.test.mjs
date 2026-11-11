@@ -323,6 +323,39 @@ test('/game-studio status keeps a live share reachable and clears stale state.js
   assert.equal(JSON.parse(await readFile(statePath, 'utf8')).share, null)
 })
 
+// ---------------------------------------------------------------- wechat release
+
+test('/game-studio wechat-release reports the checklist, records steps and writes materials', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const project = join(root, 'game')
+
+  const initial = await runCommand(`wechat-release ${JSON.stringify({ project, op: 'status' })}`)
+  assert.equal(initial.kind, 'success', initial.text)
+  const view = JSON.parse(initial.text)
+  assert.ok(view.progress.total > 0)
+  assert.equal(view.progress.done, 0)
+  assert.ok(view.steps.some(step => step.id === 'record' && step.owner === 'wechat'), 'filing is a console step')
+  assert.ok(view.next.length > 0)
+
+  const updated = await runCommand(`wechat-release ${JSON.stringify({ project, op: 'update', step: 'register', status: 'done' })}`)
+  assert.equal(updated.kind, 'success', updated.text)
+  assert.equal(JSON.parse(updated.text).progress.done, 1)
+  assert.equal(JSON.parse(await readFile(join(project, '.studio', 'wechat-release.json'), 'utf8')).steps.register.status, 'done')
+
+  const materials = await runCommand(`wechat-release ${JSON.stringify({ project, op: 'materials' })}`)
+  assert.equal(materials.kind, 'success', materials.text)
+  const text = await readFile(JSON.parse(materials.text).file, 'utf8')
+  assert.match(text, /小游戏备案/u)
+  assert.match(text, /适龄提示/u)
+})
+
+test('/game-studio wechat-devtools says to export first instead of guessing a path', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const result = await runCommand(`wechat-devtools ${JSON.stringify({ project: join(root, 'game'), op: 'open' })}`)
+  assert.equal(result.kind, 'error')
+  assert.match(result.text, /run the WeChat export first/u)
+})
+
 // ---------------------------------------------------------------- playtest
 
 /** Stand-ins for the Harness's attachment store and model catalog. */
@@ -1397,3 +1430,4 @@ test('gh api retries transient network errors on GET and git object writes, does
   const failCalls = await noRetryCreate.readCalls()
   assert.equal(failCalls.filter(c => c.method === 'POST' && c.path === 'user/repos').length, 1, 'POST user/repos is never retried')
 })
+

@@ -80,6 +80,12 @@ const s: Record<string, CSSProperties> = {
   img: { width: 76, height: 76, objectFit: 'contain', borderRadius: 8, border: `1px solid ${tok.border}`, background: `repeating-conic-gradient(${tok.layer} 0% 25%, transparent 0% 50%) 50% / 12px 12px` },
   small: { fontSize: 11, color: tok.muted },
   row: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 13 },
+  releasePanel: { borderBottom: `1px solid ${tok.border}`, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflow: 'auto' },
+  releaseHead: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 },
+  releaseStep: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '1px 0' },
+  check: { width: 22, height: 22, flex: 'none', borderRadius: 6, border: `1px solid ${tok.border}`, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0 },
+  doneTitle: { color: tok.muted, textDecoration: 'line-through' },
+  badge: { fontSize: 11, color: tok.muted, border: `1px solid ${tok.border}`, borderRadius: 999, padding: '1px 7px', flex: 'none' },
 }
 
 // ---------------------------------------------------------------- files
@@ -197,8 +203,20 @@ function Thumb({ readBytes, sessionId, path, version, children, title, src }: {
   </div>
 }
 
-function StudioTab(props: any): ReactNode {
-  const { useTabInfo, t, readBytes, runCommand } = props as { useTabInfo: () => any; t: T } & TabInjected
+interface ReleaseStepView {
+  id: string
+  title: string
+  owner: 'wechat' | 'plugin' | 'user'
+  status: 'todo' | 'done' | 'skipped'
+  blocked: boolean
+}
+
+interface ReleaseView {
+  progress: { done: number; total: number; percent: number }
+  steps: ReleaseStepView[]
+}
+
+function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, runCommand } = props as { useTabInfo: () => any; t: T } & TabInjected
   const { tab } = useTabInfo()
   const target = useMemo(() => parseStudioAddress(tab.contentId), [tab.contentId])
   if (target === undefined) throw new Error(`dsh-game-studio: not a studio address "${tab.contentId}"`)
@@ -302,6 +320,70 @@ function StudioTab(props: any): ReactNode {
     }
   }, [runCommand, sessionId, project, reload, t])
 
+  // ---- WeChat launch wizard -------------------------------------------------
+  const [release, setRelease] = useState<ReleaseView | null>(null)
+  const [releaseOpen, setReleaseOpen] = useState(false)
+  const [releaseBusy, setReleaseBusy] = useState(false)
+
+  const loadRelease = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-release ${JSON.stringify({ project, op: 'status' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      setRelease(JSON.parse(result.text) as ReleaseView)
+    } catch (error) {
+      setNotice({ kind: 'error', text: String((error as Error)?.message ?? error) })
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t])
+
+  const toggleReleaseStep = useCallback(async (step: ReleaseStepView) => {
+    setReleaseBusy(true)
+    try {
+      const status = step.status === 'done' ? 'todo' : 'done'
+      const result = await runCommand(sessionId, `wechat-release ${JSON.stringify({ project, op: 'update', step: step.id, status })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      setRelease(JSON.parse(result.text) as ReleaseView)
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t])
+
+  const writeReleaseMaterials = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-release ${JSON.stringify({ project, op: 'materials' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      const file = (JSON.parse(result.text) as { file?: string }).file ?? ''
+      setNotice({ kind: 'info', text: t('tab.releaseMaterialsSaved', { file }) })
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t])
+
+  const openDevtools = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-devtools ${JSON.stringify({ project, op: 'open' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      setNotice({ kind: 'info', text: t('tab.releaseDevtoolsOpened') })
+      await loadRelease()
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t, loadRelease])
+
+  const toggleRelease = useCallback(() => {
+    const next = !releaseOpen
+    setReleaseOpen(next)
+    if (next && release === null) void loadRelease()
+  }, [releaseOpen, release, loadRelease])
+
+  const ownerLabel = (owner: ReleaseStepView['owner']): string => owner === 'wechat'
+    ? t('tab.releaseOwner.wechat')
+    : owner === 'plugin' ? t('tab.releaseOwner.plugin') : t('tab.releaseOwner.user')
+
   const title = state?.title ?? baseName(project)
   const activeShare = liveShare(state?.share, heartbeat)
   const activeShareCopy = activeShare ? shareCopy(activeShare, t, clock(activeShare.expiresAt)) : undefined
@@ -315,6 +397,7 @@ function StudioTab(props: any): ReactNode {
       <button type="button" style={s.button} onClick={() => { void run('build', {}) }} disabled={busy}>{t('tab.rebuild')}</button>
       <button type="button" style={s.button} onClick={() => { void run('export', {}) }} disabled={busy}>{t('tab.export')}</button>
       <button type="button" style={s.button} onClick={() => { void run('export-wechat', {}) }} disabled={busy}>{t('tab.exportWechat')}</button>
+      <button type="button" style={s.button} onClick={toggleRelease} disabled={busy}>{t('tab.release')}</button>
       <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30' }) }} disabled={busy}>{t('tab.share')}</button>
       <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30', scope: 'public' }) }} disabled={busy}>
         {openingPublic ? t('tab.shareOpening') : t('tab.sharePublic')}
@@ -323,6 +406,26 @@ function StudioTab(props: any): ReactNode {
         {publishing ? t('tab.publishing') : pubInfo.buttonLabel}
       </button>
     </div>
+    {releaseOpen && <div style={s.releasePanel}>
+      <div style={s.releaseHead}>
+        <strong>{t('tab.release')}</strong>
+        {release && <span style={s.small}>{t('tab.releaseProgress', {
+          done: String(release.progress.done), total: String(release.progress.total), percent: String(release.progress.percent),
+        })}</span>}
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void loadRelease() }}>{t('tab.reload')}</button>
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void writeReleaseMaterials() }}>{t('tab.releaseMaterials')}</button>
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void openDevtools() }}>{t('tab.releaseDevtools')}</button>
+      </div>
+      {(release?.steps ?? []).filter(step => step.status !== 'skipped').map(step => <div key={step.id} style={s.releaseStep}>
+        <button type="button" style={s.check} disabled={releaseBusy || step.blocked}
+          title={step.blocked ? t('tab.releaseBlocked') : step.title}
+          onClick={() => { void toggleReleaseStep(step) }}>{step.status === 'done' ? '✓' : step.blocked ? '·' : '○'}</button>
+        <span style={step.status === 'done'
+          ? { ...s.small, ...s.doneTitle, flex: 1, minWidth: 0 }
+          : { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{step.title}</span>
+        <span style={s.badge}>{ownerLabel(step.owner)}</span>
+      </div>)}
+    </div>}
     {confirmAction === 'publish' && <div style={{ ...s.hint, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
       <span style={{ color: tok.text }}>{t('tab.publishConfirmHint')}</span>
       <button type="button" style={s.button} disabled={busy} onClick={() => { setConfirmAction(null); void run('publish', { lang }) }}>{t('tab.publishConfirmYes')}</button>

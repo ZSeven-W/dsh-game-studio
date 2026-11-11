@@ -44,7 +44,7 @@
 | 🟢 **导出微信小游戏** | `game_studio_export_wechat` 在 `export/wechat/<slug>/` 下生成可直接导入微信开发者工具的工程（`game.js`、`game.json`、`project.config.json`、`assets/*.png`）。游戏代码不改，由内置的 `wx.*` 运行时适配层跑起来；SVG 素材自动转成 PNG。2D canvas 与 3D three.js/voxel 都可用：WebGL 渲染到离屏画布再合成到上屏画布，HUD 按 `__gameState` 用 canvas 重绘（小游戏没有 DOM）。之后可以用 `game_studio_wechat_devtools` 通过 IDE 自带的 CLI 打开、预览、上传。 |
 | 📱 **在手机上试玩** | `game_studio_share` 在本地网络上开一个临时只读链接（或通过 `cloudflared` 开启 Cloudflare 临时公网链接，发给任何网络下的朋友都能玩），侧栏里会显示二维码。 |
 | 🌐 **发布到 GitHub Pages** | `game_studio_publish` 用本机已登录的 `gh` 把构建好的 HTML（或整面游戏墙）推到你名下的公开仓库并开启 GitHub Pages，生成关掉电脑也能长期游玩的网址。 |
-| 🚀 **上线向导** | `game_studio_wechat_release` 跟踪从小游戏注册、小游戏备案到审核发布的每一步，标明谁来做（微信后台 / 插件 / 你），只把插件真的做完的步骤标成完成，并在导出目录写一份 `RELEASE.md`：一句话简介、建议类目、适龄提示、隐私指引草案、备案说明、审核说明，直接复制到后台表单。 |
+| 🚀 **上线向导** | 侧栏「上线向导」和 `game_studio_wechat_release` 跟踪从小游戏注册、小游戏备案到审核发布的每一步，标明谁来做（微信后台 / 插件 / 你），只把插件真的做完的步骤标成完成，并在导出目录写一份 `RELEASE.md`：一句话简介、建议类目、适龄提示、隐私指引草案、备案说明、审核说明，直接复制到后台表单。 |
 | 🗂️ **游戏墙** | 点右栏的 **+**，选 **游戏工坊 · 游戏墙**：工作区里做过的游戏铺满一面墙，封面是最近一次试玩的画面，可按 2D/3D 筛选，按最近修改、版本数或名称排序。点一下就能玩，不经过 agent，也不花 token。你还可以订阅在线游戏源（`owner/repo`、GitHub 仓库地址或 GitHub Pages 网址），把别人发布的游戏合入墙内直接游玩。**导出游戏墙**会把本地游戏打包成一个离线网页，发给朋友就能玩。 |
 
 ## 用它做出来的游戏
@@ -200,5 +200,6 @@ npm test        # node --test；找不到 Chrome 或 Edge 时跳过需要浏览�
 - 完整声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
 
 **许可证**：MIT
+
 
 
