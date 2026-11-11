@@ -362,12 +362,54 @@ test('an ad error is turned into a code and a fix for the player', async (t) => 
     // Ads are created on the first animation frame, not at boot.
     await page.waitForFunction('typeof window.__wxAds.failRewarded === "function"', undefined, { timeout: 10000 })
     const result = await page.evaluate(() => {
-      window.__wxAds.failRewarded(1004)
-      return { state: window.__G.__commerce.state(), events: window.__wxAds.events.map(entry => entry.id) }
+      const codes = [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008]
+      const hints = codes.map((code) => {
+        window.__wxAds.failRewarded(code)
+        const state = window.__G.__commerce.state()
+        return { code: state.lastErrorCode, hint: state.lastErrorHint }
+      })
+      return { hints, events: window.__wxAds.events.map(entry => entry.id) }
     })
-    assert.equal(result.state.lastErrorCode, 1004)
-    assert.match(result.state.lastErrorHint, /没有合适的广告/u)
-    assert.ok(result.events.includes('game_ad_error'), 'the failure is reported for the dashboard')
+    // Every documented code maps to its own fix; an unknown code keeps the raw message.
+    const expected = {
+      1000: /后端/u,
+      1001: /参数/u,
+      1002: /广告位 ID/u,
+      1003: /内部错误/u,
+      1004: /没有合适的广告/u,
+      1005: /审核中/u,
+      1006: /驳回/u,
+      1007: /封禁/u,
+      1008: /已关闭/u,
+    }
+    assert.deepEqual(result.hints.map((entry) => entry.code), [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008])
+    for (const entry of result.hints) assert.match(entry.hint, expected[entry.code], `code ${entry.code}`)
+    assert.equal(result.events.filter((id) => id === 'game_ad_error').length, 9, 'each failure is reported')
+    assert.deepEqual(errors, [])
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
+test('a failed purchase reports iap_failed with the error code and rejects', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  await updateCommerce(dir, { iapEnabled: true, licenseNumber: 'ISBN 978-7-498-12345-6', merchantId: '1900000109', payUrl: 'https://pay.example.com/sign' })
+  const exported = await exportWechat(dir)
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    const result = await page.evaluate(async () => {
+      window.__wxIap.failNext = 1002
+      try {
+        await window.__G.__commerce.iap.buy('gem-10')
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, code: error && error.errCode }
+      }
+    })
+    assert.equal(result.ok, false, 'the purchase rejects so the game can tell the player')
+    assert.equal(result.code, 1002)
+    const events = await page.evaluate(() => window.__wxAds.events.filter((entry) => entry.id === 'game_iap_failed'))
+    assert.equal(events.length, 1)
+    assert.equal(events[0].data.errCode, 1002)
     assert.deepEqual(errors, [])
   })
   if (!ran) return t.skip('no Chrome or Edge here')

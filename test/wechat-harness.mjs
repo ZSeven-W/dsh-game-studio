@@ -76,6 +76,12 @@ const MOCK_INJECT = `(function () {
     },
     requestMidasPaymentGameItem: function (options) {
       window.__wxIap.payment = { api: 'midas', signData: options.signData, paySig: options.paySig, signature: options.signature };
+      var fail = window.__wxIap.failNext;
+      if (fail) {
+        window.__wxIap.failNext = null;
+        setTimeout(function () { options.fail({ errCode: fail, errMsg: 'requestMidasPaymentGameItem:fail mock' }); }, 10);
+        return;
+      }
       setTimeout(function () { options.success({ errMsg: 'requestMidasPaymentGameItem:ok' }); }, 10);
     },
     requestVirtualPayment: function (options) {
