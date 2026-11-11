@@ -842,6 +842,7 @@ export function apply(ctx: any, config: Config = {}): void {
     parameters: {
       path: projectParam,
       appid: { type: 'string', description: 'WeChat mini-game AppID. Defaults to touristappid; use the user\'s AppID for preview/upload.' },
+      subpackage: { type: 'boolean', description: 'Put the slot art in an assets subpackage. Defaults to on when the art passes 1.5 MB; the export downloads it before the game starts.' },
     },
     output: {
       schema: json,
@@ -850,7 +851,7 @@ export function apply(ctx: any, config: Config = {}): void {
     },
     async execute(args: any, exec: any) {
       const dir = await projectDir(exec, args.path)
-      const result = await exportWechat(dir, { appid: args.appid })
+      const result = await exportWechat(dir, { appid: args.appid, subpackage: typeof args.subpackage === 'boolean' ? args.subpackage : undefined })
       await markReleaseDone(dir, 'export', `wechat export: ${result.dir}`).catch(() => undefined)
       return { project: dir, ...result }
     },
@@ -1270,7 +1271,10 @@ export function apply(ctx: any, config: Config = {}): void {
           else if (action === 'build') { const build = await buildProject(dir, 'Rebuilt from the sidebar'); await writeState(dir, build); result = build }
           else if (action === 'export') result = await exportGame(dir)
           else if (action === 'export-wechat') {
-            result = await exportWechat(dir, { appid: typeof payload.appid === 'string' ? payload.appid : undefined })
+            result = await exportWechat(dir, {
+              appid: typeof payload.appid === 'string' ? payload.appid : undefined,
+              subpackage: typeof payload.subpackage === 'boolean' ? payload.subpackage : undefined,
+            })
             await markReleaseDone(dir, 'export', 'exported from the sidebar').catch(() => undefined)
           }
           else if (action === 'wechat-devtools') {
@@ -1396,6 +1400,7 @@ export function apply(ctx: any, config: Config = {}): void {
     })
   })
 }
+
 
 
 

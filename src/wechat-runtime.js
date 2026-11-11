@@ -393,6 +393,25 @@
     reviveRect = { left: left, top: reviveTop, width: width, height: height };
   }
 
+  /** Fills the screen with a short message; used while a subpackage downloads. */
+  function showLoading(text) {
+    var ctx = mainContext();
+    if (!ctx) return;
+    ctx.save();
+    try {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = '#0b1020';
+      ctx.fillRect(0, 0, cssW, cssH);
+      ctx.fillStyle = '#ffe9a8';
+      ctx.font = font(16);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(text || '加载中…'), cssW / 2, cssH / 2);
+    } finally {
+      ctx.restore();
+    }
+  }
+
   function drawHud(state) {
     if (!state) state = readState();
     if (!state) return;
@@ -547,6 +566,7 @@
   G.__wechatRuntime = {
     width: cssW, height: cssH, dpr: dpr, safeTop: safeTop,
     quality: { tier: quality, benchmarkLevel: benchmarkLevel, dprCap: dprCap },
+    showLoading: showLoading,
     metrics: function () {
       var elapsed = clockNow() - startedAt;
       return {
@@ -708,6 +728,7 @@
     });
   }
 })();
+
 
 
 

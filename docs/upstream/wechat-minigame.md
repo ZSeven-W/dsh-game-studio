@@ -40,28 +40,26 @@ Base commit: `93459aafc9436d66364f05b804a7841d399c2594` (current `main`).
 
 ## Commits
 
-| # | Commit | Scope |
-| - | --- | --- |
-| 1 | `feat: export to WeChat mini-game as a publish target` | exporter, 2D adapter, tool, sidebar button |
-| 2 | `feat(wechat): export 3D three.js games with the engine inlined` | 3D payload and runtime order |
-| 3 | `feat(wechat): composite WebGL and redraw the DOM HUD on canvas` | offscreen WebGL, HUD, revive button |
-| 4 | `feat(wechat): drive WeChat DevTools from the plugin` | CLI wrapper and error mapping |
-| 5 | `feat(wechat): add the launch wizard and release materials` | checklist state + RELEASE.md |
-| 6 | `feat(wizard): put the WeChat launch checklist in the sidebar` | sidebar panel |
-| 7 | `chore: release 0.1.0-rc.6` | version |
-| 8 | `feat(commerce): ads that are never forced, and the data that proves it` | IAA + analytics |
-| 9 | `feat(review): pre-submission risk check with the reasons mini-games are rejected` | REVIEW.md |
-| 10 | `feat(commerce): in-app purchases behind the licence gate, with an honest dry-run` | IAP skeleton |
-| 11 | `feat(perf): package budget and device-aware render scale` | package report + quality tiers |
-| 12 | `feat(observability): boot/fps metrics and realtime error logging` | metrics + RealtimeLog |
-| 13 | `feat(commerce): a monetization panel in the sidebar` | sidebar panel for ad units and IAP settings |
-| 14 | `feat(commerce): a monetization panel in the sidebar` | sidebar panel (order: after the wizard panel) |
-| 15 | `feat(ci): generate a WeChat upload workflow for CI` | CI upload kit |
-| 16 | `docs: pull-request description and patch-series notes for the WeChat target` | this document |
+One commit per capability; the patch series in `artifacts/upstream-pr/` is the
+authoritative list. In order:
 
-Each commit builds and tests on its own; version bumps ride along with the
-feature commit that needed them, matching the repository's existing
-`release: 0.1.0-rc.N` convention.
+1. export target (2D adapter, tool, sidebar button, tests, docs)
+2. 3D three.js support (engine inlined, runtime order)
+3. WebGL compositing and the canvas HUD
+4. WeChat DevTools CLI automation
+5. launch wizard and `RELEASE.md`
+6. the sidebar wizard panel
+7. advertisements and analytics
+8. the pre-review checklist (`REVIEW.md`)
+9. in-app purchases behind the licence gate
+10. package budget and device-aware render scale
+11. boot/fps metrics and realtime error logging
+12. the sidebar monetization panel
+13. CI upload kit
+14. automatic assets subpackage
+
+Version bumps ride along with the feature commit that needed them, matching the
+repository's existing `release: 0.1.0-rc.N` convention.
 
 ## Compatibility and risk
 

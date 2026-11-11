@@ -70,7 +70,7 @@ export async function analyzeWechatPackage(dir: string): Promise<PackageReport> 
     suggestions.push('先把最大的几张图压小：导出前把槽位图降到实际显示尺寸（通常 256–512px 就够），或换成 WebP。')
   }
   if (totalBytes > MAIN_PACKAGE_LIMIT) {
-    suggestions.push('主包仍然超限时用分包：把大素材放 subpackage，进游戏前用 wx.loadSubpackage 预下载（需要游戏代码配合，插件不能透明地替你拆）。')
+    suggestions.push('主包仍然超限时用分包：插件会在素材超过 1.5 MB 时自动把素材放进 assets 分包，并在游戏启动前用 wx.loadSubpackage 预下载；也可以用导出的 subpackage 选项强制开启。')
   }
   const js = entries.find(entry => entry.file === 'game.js')
   if (js && js.bytes > 1024 * 1024) {
@@ -93,4 +93,5 @@ export async function analyzeWechatPackage(dir: string): Promise<PackageReport> 
 function warningFree(warnings: string[]): boolean {
   return warnings.length === 0
 }
+
 

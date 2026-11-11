@@ -278,6 +278,33 @@ test('boot metrics are reported and runtime errors reach the WeChat realtime log
   if (!ran) return t.skip('no Chrome or Edge here')
 })
 
+test('large art goes into an assets subpackage and the game waits for it', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  const manifest = await loadManifest(dir)
+  const slot = Object.keys(manifest.slots)[0]
+  // Over the 1.5 MB auto threshold; the content does not matter to the exporter.
+  await writeFile(join(dir, manifest.slots[slot].file), Buffer.alloc(2_000_000, 7))
+  const exported = await exportWechat(dir)
+  assert.equal(exported.subpackage, true)
+  const gameJson = JSON.parse(await readFile(join(exported.dir, 'game.json'), 'utf8'))
+  assert.deepEqual(gameJson.subpackages, [{ name: 'assets', root: 'assets' }])
+  const game = await readFile(join(exported.dir, 'game.js'), 'utf8')
+  assert.match(game, /"subpackage":\{"name":"assets"\}/u)
+  assert.match(game, /wx\.loadSubpackage/u)
+  assert.match(game, /正在下载资源/u)
+
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    await page.waitForFunction('window.__wxSubpackages.length > 0', undefined, { timeout: 6000 })
+    assert.deepEqual(await page.evaluate(() => window.__wxSubpackages), ['assets'])
+    // The game code only runs after the subpackage callback, so the title screen
+    // appearing proves the boot wrapper waited.
+    await page.waitForFunction('window.__G.__gameState && window.__G.__gameState().phase === "title"', undefined, { timeout: 10000 })
+    assert.deepEqual(errors, [])
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
 /** Serves one exported project plus a page that fakes the wx.* surface on a real canvas. */
 async function serveMockWx(root) {
   const mockHtml = `<!doctype html>
@@ -296,6 +323,7 @@ async function serveMockWx(root) {
   window.__wxAds = { interstitial: 0, rewarded: 0, events: [] };
   window.__wxIap = { request: null, payment: null };
   window.__wxLogs = [];
+  window.__wxSubpackages = [];
   var wx = {
     createCanvas: function () {
       if (!mainUsed) { mainUsed = true; return main; }
@@ -336,6 +364,11 @@ async function serveMockWx(root) {
     onTouchMove: function () {}, onTouchEnd: function () {}, onTouchCancel: function () {},
     onHide: function () {}, onShow: function () {}, onWindowResize: function () {},
     onError: function (fn) { window.__wxError = fn; },
+    loadSubpackage: function (options) {
+      window.__wxSubpackages.push(options.name);
+      setTimeout(function () { if (options.success) options.success({ errMsg: 'loadSubpackage:ok' }); }, 30);
+      return { onProgress: function () {} };
+    },
     onUnhandledRejection: function (fn) { window.__wxRejection = fn; },
     getRealtimeLogManager: function () {
       return {
@@ -462,6 +495,7 @@ test('the exported 3D game renders through WebGL on a mocked wx', async (t) => {
   })
   if (!ran) return t.skip('no Chrome or Edge here')
 })
+
 
 
 
