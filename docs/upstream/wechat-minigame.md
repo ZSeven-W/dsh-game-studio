@@ -40,8 +40,9 @@ Base commit: `93459aafc9436d66364f05b804a7841d399c2594` (current `main`).
 
 ## Commits
 
-One small commit per change (128 on this branch, so a reviewer can take them
-apart); the patch series in `artifacts/upstream-pr/` is the authoritative list.
+One small commit per change, so a reviewer can take them apart; the patch series in
+`artifacts/upstream-pr/` is the authoritative list (and the count grows with every
+review fix, so it is not quoted here).
 The capabilities, in order:
 
 1. export target (2D adapter, tool, sidebar button, tests, docs)
