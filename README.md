@@ -190,7 +190,6 @@ npm run acceptance # 2D + 3D game → WeChat export → boot in the mock wx harn
 
 The acceptance run uses the same mock-wx harness as the tests, so it fails when the
 shipped adapter breaks — re-run it after an upstream update.
-```
 
 ## Ecosystem
 
