@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { releasePlan, updateRelease } from '../src/release.ts'
+import { updateCommerce } from '../src/commerce.ts'
 import { REVIEW_REASONS, reviewGuide, reviewMarkdown, reviewRisks } from '../src/review.ts'
 
 async function tempGame(t) {
@@ -89,16 +90,32 @@ test('finishing the console steps and exporting removes those risks', async (t) 
   assert.match(text, /常见驳回原因/u)
 })
 
-test('in-app purchases without a licence are a blocker, not a warning', async (t) => {
+test('in-app purchases need the licence configured, not just the step ticked', async (t) => {
   const dir = await tempGame(t)
   await updateRelease(dir, { monetization: 'both', appid: 'wx1234567890abcdef' })
+
+  // Nothing configured: a blocker that names the licence.
   const risks = await reviewRisks(dir)
-  const iap = risks.find(risk => risk.id === 'iap')
-  assert.equal(iap?.severity, 'blocker')
-  assert.match(iap.fix, /版号/u)
+  assert.equal(risks.find(risk => risk.id === 'iap')?.severity, 'blocker')
+  assert.match(risks.find(risk => risk.id === 'iap').fix, /版号/u)
+
+  // Ticking the step without the licence must not clear it: materials would still
+  // say 版号未填写, so the review and the materials would disagree.
   await updateRelease(dir, { step: 'iap' })
-  const after = await reviewRisks(dir)
-  assert.ok(!after.some(risk => risk.id === 'iap'), 'marking the licence step clears it')
+  assert.equal((await reviewRisks(dir)).find(risk => risk.id === 'iap')?.severity, 'blocker',
+    'a tick alone does not make the licence exist')
+
+  // Once the licence and merchant ID are in the commerce panel, the step becomes the
+  // only thing left, and the risk is a warning about the tick.
+  await updateCommerce(dir, { iapEnabled: true, licenseNumber: 'ISBN 978-7-498-12345-6', merchantId: '1900000109' })
+  await updateRelease(dir, { step: 'iap', status: 'todo' })
+  const warning = (await reviewRisks(dir)).find(risk => risk.id === 'iap')
+  assert.equal(warning?.severity, 'warning')
+  assert.match(warning.title, /打勾/u)
+
+  // And with both, the risk disappears.
+  await updateRelease(dir, { step: 'iap' })
+  assert.ok(!(await reviewRisks(dir)).some(risk => risk.id === 'iap'), 'configured + ticked clears it')
 })
 
 test('an export over the 4 MB main package is caught before upload', async (t) => {

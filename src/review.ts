@@ -10,6 +10,7 @@ import { mkdir, readdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { findWechatExport } from './devtools.ts'
 import { loadManifest, paths } from './project.ts'
+import { loadCommerce } from './commerce.ts'
 import { loadRelease, releasePlan, type ReleaseState } from './release.ts'
 
 export interface ReviewReason {
@@ -141,6 +142,7 @@ function stepDone(state: ReleaseState, id: string): boolean {
 export async function reviewRisks(dir: string, state?: ReleaseState, options: ReviewCheckOptions = {}): Promise<ReviewRisk[]> {
   const release = state ?? await loadRelease(dir)
   const manifest = await loadManifest(dir).catch(() => null)
+  const commerce = await loadCommerce(dir).catch(() => null)
   const exportDir = options.exportDir ?? findWechatExport(dir)
   const risks: ReviewRisk[] = []
 
@@ -172,8 +174,15 @@ export async function reviewRisks(dir: string, state?: ReleaseState, options: Re
   if (!stepDone(release, 'privacy')) {
     risks.push({ id: 'privacy', severity: 'warning', title: '隐私保护指引还没配置', fix: '按实际收集的信息填写后台的用户隐私保护指引；不收集也要如实声明。' })
   }
-  if ((release.monetization === 'iap' || release.monetization === 'both') && !stepDone(release, 'iap')) {
-    risks.push({ id: 'iap', severity: 'blocker', title: '选了内购但版号/商户号还没就绪', fix: '先取得版号并开通微信支付商户号；没有版号就不要开虚拟支付。' })
+  if (release.monetization === 'iap' || release.monetization === 'both') {
+    // The materials list the licence and merchant ID from the commerce panel; the
+    // review must not claim they are missing just because the step is not ticked.
+    const iapConfigured = Boolean(commerce?.iap?.enabled && commerce?.iap?.licenseNumber && commerce?.iap?.merchantId)
+    if (!iapConfigured) {
+      risks.push({ id: 'iap', severity: 'blocker', title: '选了内购但版号/商户号还没就绪', fix: '先取得版号并开通微信支付商户号；没有版号就不要开虚拟支付。' })
+    } else if (!stepDone(release, 'iap')) {
+      risks.push({ id: 'iap', severity: 'warning', title: '内购资质已填写，但向导「接入内购」还没打勾', fix: '确认版号与商户号在后台生效后，把该步骤标记完成。' })
+    }
   }
   if (!exportDir) {
     risks.push({ id: 'export', severity: 'warning', title: '还没有微信工程', fix: '先导出微信小游戏工程，再在开发者工具里真机预览。' })
