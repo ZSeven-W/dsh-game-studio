@@ -70,6 +70,8 @@ worktree (61 on the current series; it grows as tests are added). `--build` crea
 
 - `docs/TRACEABILITY.md` — new tests must appear as evidence.
 - `docs/CHANGELOG.md` — new user-visible changes, with the commit hash.
+- `docs/upstream/wechat-minigame.md` — the PR body: refresh the test counts and the
+  commit count when they change.
 - workspace `artifacts/交付说明.md`, `V4.0-progress.md`, `验收对照.md`,
   `下一步待办.md` — version, patch count, test count, acceptance count, trace count.
 - `node ../artifacts/status-check.mjs` and `node ../artifacts/audit-docs.mjs`

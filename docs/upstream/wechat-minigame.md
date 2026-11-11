@@ -40,8 +40,9 @@ Base commit: `93459aafc9436d66364f05b804a7841d399c2594` (current `main`).
 
 ## Commits
 
-One commit per capability; the patch series in `artifacts/upstream-pr/` is the
-authoritative list. In order:
+One small commit per change (86 on this branch, so a reviewer can take them
+apart); the patch series in `artifacts/upstream-pr/` is the authoritative list.
+The capabilities, in order:
 
 1. export target (2D adapter, tool, sidebar button, tests, docs)
 2. 3D three.js support (engine inlined, runtime order)
@@ -82,13 +83,24 @@ repository's existing `release: 0.1.0-rc.N` convention.
 
 ## Testing
 
-- `npm test`: 152 tests, 99 pass. The 49 failures are environmental on this
+- `npm test`: 211 tests, 158 pass. The 49 failures are environmental on this
   Windows machine and identical before this series (no `gh` CLI, no `cloudflared`,
   Codex CLI tests, path-separator assertions); 4 tests skip without a browser.
-- New suites: `test/wechat.test.mjs` (8), `test/devtools.test.mjs` (5),
-  `test/release.test.mjs` (6), `test/commerce.test.mjs` (4),
-  `test/review.test.mjs` (5), `test/size.test.mjs` (5), plus Host-level command
-  contracts in `test/host.test.mjs`.
+- New suites: `test/wechat.test.mjs` (23), `test/devtools.test.mjs` (6),
+  `test/release.test.mjs` (7), `test/commerce.test.mjs` (4),
+  `test/review.test.mjs` (7), `test/size.test.mjs` (6), `test/ci.test.mjs` (3),
+  `test/consistency.test.mjs` (3), `test/journey.test.mjs` (2), plus Host-level
+  contracts in `test/host.test.mjs` (47).
+- Contract and documentation guards: `test/codes.test.mjs` (error-code table and
+  sources agree), `test/claims.test.mjs` (no over-promising copy, boundaries stay),
+  `test/copy.test.mjs` (Chinese punctuation), `test/changelog.test.mjs` (every
+  entry names a real commit), `test/releasing.test.mjs` (the release checklist),
+  `test/workflows.test.mjs` (CI evidence and the nightly drift job),
+  `test/client-runtime.test.mjs` (the built sidebar bundle loads and registers
+  its tabs), `test/journey-user.test.mjs` (the whole user journey in order),
+  `test/devtools-doctor.test.mjs` (CLI/port/AppID diagnosis),
+  `test/devtools-command.test.mjs` (upload through a fake CLI marks the wizard
+  step), `test/ci-upload.test.mjs` (the generated upload script runs).
 - Browser tests boot the **exported** project in a mock `wx.*` environment in
   headless Chrome: 2D and 3D boot, WebGL compositing, HUD, one interstitial, a
   rewarded revive, both IAP modes, render-scale tiers, and metrics/error logging.
