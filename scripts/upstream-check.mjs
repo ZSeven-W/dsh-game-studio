@@ -95,6 +95,27 @@ function verifyBuildIn(worktree) {
     unlinkNodeModules(worktree)
     return
   }
+  // The applied tree must also pack like the fork: runtime files only, within budget.
+  const pack = spawnSync(npm, ['pack', '--dry-run', '--json', '--ignore-scripts'], {
+    cwd: worktree, shell: true, encoding: 'utf8', timeout: 300000,
+  })
+  try {
+    const start = String(pack.stdout ?? '').indexOf('[')
+    const entry = JSON.parse(String(pack.stdout ?? '').slice(start))[0]
+    const shipped = entry.files.map((file) => file.path)
+    const leaked = shipped.filter((file) => /^(src|test|scripts|docs)\//u.test(file) || file.endsWith('.ts'))
+    report.pack = {
+      ok: pack.status === 0 && leaked.length === 0 && entry.size <= 2 * 1024 * 1024,
+      size: entry.size,
+      files: shipped.length,
+      leaked,
+    }
+    if (!report.pack.ok) report.message += '; the packed artifact leaks sources or exceeds the budget'
+  } catch (error) {
+    report.pack = { ok: false, error: String(error?.message ?? error).slice(0, 160) }
+    report.message += '; the applied tree does not pack'
+  }
+
   const files = [
     'test/wechat.test.mjs', 'test/release.test.mjs', 'test/client.test.mjs', 'test/consistency.test.mjs',
     'test/journey.test.mjs', 'test/commerce.test.mjs', 'test/size.test.mjs', 'test/devtools.test.mjs',
@@ -240,6 +261,11 @@ if (asJson) {
   if (report.build) console.log(`  links     node_modules junction: ${report.junction}`)
   if (report.build) console.log(`  build     ${report.build}${report.buildLog ? ` — ${report.buildLog}` : ''}`)
   if (report.tests) console.log(`  tests     ${report.tests.pass} pass, ${report.tests.fail} fail, ${report.tests.skipped} skipped`)
+  if (report.pack) {
+    console.log(report.pack.ok
+      ? `  pack      ok (${(report.pack.size / 1024).toFixed(0)} KB, ${report.pack.files} files)`
+      : `  pack      FAIL (${JSON.stringify(report.pack).slice(0, 120)})`)
+  }
   if (report.conflicts.length > 0) console.log(`  conflicts ${report.conflicts.join(', ')}`)
   if (report.message) console.log(`  ${report.message}`)
   if (report.recovery) console.log(`  next      ${report.recovery}`)
