@@ -54,8 +54,13 @@ async function prepareGame(spec, dir) {
   // Short round so the acceptance run does not wait a minute.
   project.rules = { ...project.rules, duration: 6 }
   await writeJson(paths.manifest(dir), project)
-  await updateRelease(dir, { ageRating: '8+', category: '游戏 > 休闲游戏', monetization: 'iaa', gameName: spec.title })
+  await updateRelease(dir, { ageRating: '8+', category: '游戏 > 休闲游戏', monetization: 'both', gameName: spec.title })
+  // The licence and merchant ID are recorded above, so the wizard step is done too.
+  await updateRelease(dir, { step: 'iap' })
   await updateCommerce(dir, {
+    iapEnabled: true,
+    licenseNumber: 'ISBN 978-7-498-12345-6',
+    merchantId: '1900000109',
     enabled: true,
     interstitial: AD_UNITS.interstitial,
     rewarded: AD_UNITS.rewarded,
@@ -82,6 +87,14 @@ async function playExported(spec, exportedDir, shotsDir) {
     const quality = await page.evaluate(() => window.__G.__wechatRuntime.quality)
     // Everything below is what a real device would exercise; each probe is
     // asserted as its own check so a regression names the broken capability.
+    const iap = await page.evaluate(async () => {
+      try {
+        const result = await window.__G.__commerce.iap.buy('gem-10')
+        return { dryRun: result && result.dryRun === true }
+      } catch (error) {
+        return { dryRun: false, error: String((error && error.message) || error) }
+      }
+    })
     const probe = await page.evaluate(async () => {
       const toneOk = window.__G.__wechatRuntime.playTone(440, 0.05, 'sine', 0.05)
       await new Promise((resolve) => setTimeout(resolve, 150))
@@ -102,6 +115,7 @@ async function playExported(spec, exportedDir, shotsDir) {
       metrics,
       quality,
       probe,
+      iap,
       errors: mock.errors,
       shots: [shot('title'), shot('playing')],
     }
@@ -138,6 +152,7 @@ for (const spec of GAMES) {
     check(`${spec.id}: no ad is forced at boot`,
       play.probe.ads !== null && play.probe.ads.interstitial === 0 && play.probe.ads.rewarded === 0,
       JSON.stringify(play.probe.ads))
+    check(`${spec.id}: demo purchase returns dryRun`, play.iap.dryRun === true, play.iap.error || 'dryRun')
     check(`${spec.id}: device tier reported`, Boolean(play.quality?.tier), `${play.quality?.tier} · cap ${play.quality?.dprCap}x`)
     if (spec.renderer) {
       check(`${spec.id}: renders through WebGL`, play.state.renderer === spec.renderer, play.state.renderer)
@@ -145,7 +160,7 @@ for (const spec of GAMES) {
   }
 
   // Release materials and the pre-review check go next to the export.
-  await updateRelease(dir, { ageRating: '8+', category: '游戏 > 休闲游戏', monetization: 'iaa', gameName: spec.title })
+  await updateRelease(dir, { ageRating: '8+', category: '游戏 > 休闲游戏', monetization: 'both', gameName: spec.title })
   const materials = await releaseMaterials(dir, {
     exportDir: exported.dir,
     manifestTitle: spec.title,
@@ -155,6 +170,16 @@ for (const spec of GAMES) {
   const review = await reviewGuide(dir, { exportDir: exported.dir })
   check(`${spec.id}: release materials written`, materials.file.endsWith('RELEASE.md'), materials.file)
   check(`${spec.id}: pre-review risks listed`, review.risks.length > 0, review.risks.map((risk) => risk.id).join(', '))
+
+  // The copy-paste material must name the same ads and rating the game carries.
+  const gameJs = await readFile(join(exported.dir, 'game.js'), 'utf8')
+  const materialsText = await readFile(materials.file, 'utf8')
+  const units = [exported.monetization?.interstitial, exported.monetization?.rewarded].filter(Boolean)
+  const rating = (gameJs.match(/"ageRating":"([^"]+)"/u) ?? [])[1]
+  const agree = units.every((id) => gameJs.includes(id) && materialsText.includes(id))
+    && (!rating || materialsText.includes('适龄级别：' + rating))
+  check(spec.id + ': materials match the export (ads, age rating)', agree,
+    units.length + ' ad units' + (rating ? ', rating ' + rating : ''))
 
   report.games.push({
     id: spec.id,
