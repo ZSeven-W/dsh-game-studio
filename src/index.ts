@@ -1063,13 +1063,13 @@ export function apply(ctx: any, config: Config = {}): void {
         return {
           project: dir, ...result.status,
           materialsPresent: presence.materials, reviewPresent: presence.review,
-          materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale,
+          materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale, uploadStale: freshness.uploadStale,
         }
       }
       const state = await loadRelease(dir)
       const presence = await releaseFilePresence(dir)
       const freshness = await releaseFreshness(dir, state)
-      return { project: dir, ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review, materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale }
+      return { project: dir, ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review, materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale, uploadStale: freshness.uploadStale }
     },
   }))
 
@@ -1412,13 +1412,13 @@ export function apply(ctx: any, config: Config = {}): void {
               result = {
                 ...updated.status,
                 materialsPresent: presence.materials, reviewPresent: presence.review,
-                materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale,
+                materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale, uploadStale: freshness.uploadStale,
               }
             } else {
               const state = await loadRelease(dir)
               const presence = await releaseFilePresence(dir)
               const freshness = await releaseFreshness(dir, state)
-              result = { ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review, materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale }
+              result = { ...releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')), materialsPresent: presence.materials, reviewPresent: presence.review, materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale, uploadStale: freshness.uploadStale }
             }
           }
           else if (action === 'restore') result = await restoreVersion(dir, Math.trunc(Number(payload.version)))

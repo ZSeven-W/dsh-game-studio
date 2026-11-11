@@ -87,6 +87,8 @@ export interface ReleaseStatus {
   reviewStale?: boolean
   /** True when the export predates the current answers or monetization settings. */
   exportStale?: boolean
+  /** True when the newest upload predates the current export or settings. */
+  uploadStale?: boolean
   uploads: Array<{ version: string; at: string; note?: string }>
   blocked: Array<{ id: string; title: string; missing: string[] }>
 }
@@ -406,6 +408,21 @@ export async function updateRelease(
   return { state, status: releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')) }
 }
 
+/** Was the newest upload made against something older than the current state? */
+function uploadStaleAt(
+  state: Pick<ReleaseState, 'uploads'>,
+  exportAt: number,
+  commerceMtime: number,
+  answersAt: number,
+  sourceMtime: number,
+): boolean {
+  const last = state.uploads?.at(-1)
+  if (!last) return false
+  const uploadedAt = Date.parse(last.at)
+  if (!Number.isFinite(uploadedAt)) return false
+  return exportAt > uploadedAt || commerceMtime > uploadedAt || answersAt > uploadedAt || sourceMtime > uploadedAt
+}
+
 /**
  * Are the generated files older than the answers or the monetization settings?
  * Returns both flags so the panel can say "regenerate" instead of showing a stale
@@ -413,8 +430,8 @@ export async function updateRelease(
  */
 export async function releaseFreshness(
   dir: string,
-  state: Pick<ReleaseState, 'materialsAt' | 'reviewAt' | 'answersAt' | 'exportAt'>,
-): Promise<{ materialsStale: boolean; reviewStale: boolean; exportStale: boolean }> {
+  state: Pick<ReleaseState, 'materialsAt' | 'reviewAt' | 'answersAt' | 'exportAt' | 'uploads'>,
+): Promise<{ materialsStale: boolean; reviewStale: boolean; exportStale: boolean; uploadStale: boolean }> {
   const commerceMtime = await stat(commerceFile(dir)).then((info) => info.mtimeMs).catch(() => 0)
   const answersAt = state.answersAt ? Date.parse(state.answersAt) : 0
   const materialsAt = state.materialsAt ? Date.parse(state.materialsAt) : 0
@@ -430,6 +447,7 @@ export async function releaseFreshness(
     materialsStale: materialsAt > 0 && (commerceMtime > materialsAt || answersAt > materialsAt),
     reviewStale: reviewAt > 0 && answersAt > reviewAt,
     exportStale: exportAt > 0 && (commerceMtime > exportAt || answersAt > exportAt || sourceMtime > exportAt),
+    uploadStale: uploadStaleAt(state, exportAt, commerceMtime, answersAt, sourceMtime),
   }
 }
 

@@ -233,7 +233,7 @@ test('materials and the review go stale when the answers or the settings change'
     reviewAt: '2021-01-01T00:00:00.000Z',
     answersAt: '2020-06-01T00:00:00.000Z',
   })
-  assert.deepEqual(fresh, { materialsStale: false, reviewStale: false, exportStale: false })
+  assert.deepEqual(fresh, { materialsStale: false, reviewStale: false, exportStale: false, uploadStale: false })
 
   // New answers after the files were written: both are out of date.
   const changed = await releaseFreshness(dir, {
@@ -241,7 +241,7 @@ test('materials and the review go stale when the answers or the settings change'
     reviewAt: '2021-01-01T00:00:00.000Z',
     answersAt: '2022-01-01T00:00:00.000Z',
   })
-  assert.deepEqual(changed, { materialsStale: true, reviewStale: true, exportStale: false })
+  assert.deepEqual(changed, { materialsStale: true, reviewStale: true, exportStale: false, uploadStale: false })
 
   // Newer monetization settings make the materials stale even without answers.
   await utimes(commerce, new Date('2023-01-01T00:00:00Z'), new Date('2023-01-01T00:00:00Z'))
@@ -250,7 +250,7 @@ test('materials and the review go stale when the answers or the settings change'
     reviewAt: '2021-01-01T00:00:00.000Z',
     answersAt: '2020-06-01T00:00:00.000Z',
   })
-  assert.deepEqual(settings, { materialsStale: true, reviewStale: false, exportStale: false })
+  assert.deepEqual(settings, { materialsStale: true, reviewStale: false, exportStale: false, uploadStale: false })
 
   // Regenerating clears it: nothing happened after the new timestamps.
   const regenerated = await releaseFreshness(dir, {
@@ -258,7 +258,7 @@ test('materials and the review go stale when the answers or the settings change'
     reviewAt: '2024-01-01T00:00:00.000Z',
     answersAt: '2020-06-01T00:00:00.000Z',
   })
-  assert.deepEqual(regenerated, { materialsStale: false, reviewStale: false, exportStale: false })
+  assert.deepEqual(regenerated, { materialsStale: false, reviewStale: false, exportStale: false, uploadStale: false })
 
   // updateRelease records answersAt when an answer changes, and not for steps.
   const before = await loadRelease(dir)
@@ -495,4 +495,33 @@ test('the export goes stale when the answers or settings change after it', async
   assert.ok(state.exportAt, 'markExported records the timestamp')
   const after = await releaseFreshness(dir, state)
   assert.equal(after.exportStale, false, 're-exporting clears it')
+})
+
+test('an upload goes stale when the export or the settings move past it', async (t) => {
+  const dir = await tempGame(t)
+  await mkdir(join(dir, '.studio'), { recursive: true })
+  const commerce = join(dir, '.studio', 'wechat-commerce.json')
+  await writeFile(commerce, '{}\n')
+  await utimes(commerce, new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'))
+
+  const uploads = [{ version: '1.0.0', at: '2021-01-01T00:00:00.000Z' }]
+  // The upload happened after the export it was made from: not stale.
+  const uploaded = await releaseFreshness(dir, { uploads, exportAt: '2020-06-01T00:00:00.000Z', answersAt: '2020-06-01T00:00:00.000Z' })
+  assert.equal(uploaded.uploadStale, false)
+
+  // Re-exporting after the upload means the uploaded build is old.
+  const reexported = await releaseFreshness(dir, { uploads, exportAt: '2022-01-01T00:00:00.000Z', answersAt: '2020-06-01T00:00:00.000Z' })
+  assert.equal(reexported.uploadStale, true)
+
+  // A settings change after the upload is enough too.
+  const changed = await releaseFreshness(dir, { uploads, exportAt: '2020-06-01T00:00:00.000Z', answersAt: '2022-01-01T00:00:00.000Z' })
+  assert.equal(changed.uploadStale, true)
+
+  // A newer upload in a state that moved on clears it.
+  const reuploaded = await releaseFreshness(dir, {
+    uploads: [...uploads, { version: '1.0.1', at: '2023-01-01T00:00:00.000Z' }],
+    exportAt: '2022-06-01T00:00:00.000Z',
+    answersAt: '2022-06-01T00:00:00.000Z',
+  })
+  assert.equal(reuploaded.uploadStale, false)
 })

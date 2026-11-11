@@ -102,5 +102,6 @@ test('upload runs the CLI it is pointed at and marks the wizard step done', asyn
   assert.match(step.note, /主包 1 KB/u)
   assert.match(step.note, /upload ok/u)
   assert.deepEqual(view.uploads.map((entry) => entry.version), ['1.2.3'], 'the uploaded version is kept in the status')
+  assert.equal(view.uploadStale, false, 'a fresh upload is not stale')
   assert.equal(view.uploads[0].note, step.note)
 })

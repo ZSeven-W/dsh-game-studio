@@ -233,6 +233,7 @@ interface ReleaseView {
   materialsStale?: boolean
   reviewStale?: boolean
   exportStale?: boolean
+  uploadStale?: boolean
   uploads?: Array<{ version: string; at: string; note?: string }>
 }
 
@@ -602,6 +603,7 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
               : ''}
         </span>
         {release?.exportStale && <span style={s.small}>{t('tab.exportStale')}</span>}
+        {release?.uploadStale && <span style={s.small}>{t('tab.uploadStale')}</span>}
         {release?.uploads && release.uploads.length > 0 && (
           <span style={s.small}>{t('tab.lastUpload', { version: release.uploads[release.uploads.length - 1].version })}</span>
         )}
