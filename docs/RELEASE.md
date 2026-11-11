@@ -87,7 +87,7 @@ Expected output when the fork is healthy:
 upstream origin/main: up-to-date
   series    applies cleanly
   build     ok
-  tests     67 pass, 0 fail, 0 skipped    # the count grows as tests are added; 0 fail is the check
+  tests     85 pass, 0 fail, 0 skipped    # the count grows as tests are added; 0 fail is the check
 ```
 
 CI runs the same command nightly (`.github/workflows/upstream-drift.yml`); in a GitHub fork origin
