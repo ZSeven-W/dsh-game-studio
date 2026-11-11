@@ -86,6 +86,17 @@ const runCommand = async (_session: string, input: string) => {
     const done = steps.filter((step) => step.status === 'done').length
     return { ok: true, text: JSON.stringify({ ...base, steps, progress: { done, total: steps.length, percent: Math.round((done * 100) / steps.length) } }) }
   }
+  if (input.startsWith('export-wechat')) {
+    // The panel shows the directory from the result, so return what the host returns.
+    return {
+      ok: true,
+      text: JSON.stringify({
+        dir: 'export/wechat/lantern-isle-3d',
+        files: ['game.js', 'game.json', 'project.config.json', 'assets/hero.png'],
+        report: { mainBytes: 410000, totalBytes: 810000, warnings: [] },
+      }),
+    }
+  }
   if (input.startsWith('wechat-commerce')) return { ok: true, text: JSON.stringify(fixtures.commerce) }
   if (input.startsWith('wechat-devtools')) {
     if (input.includes('"preview"')) {
