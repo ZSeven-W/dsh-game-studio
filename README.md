@@ -189,6 +189,7 @@ npm run acceptance # 2D + 3D game → WeChat export → boot in the mock wx harn
 npm run upstream   # is upstream still where this fork branched from, and does the series apply?
 # add -- to also apply, build and test the series: npm run upstream -- --build
 npm run trace      # do the requirement→test references in docs/TRACEABILITY.md still exist?
+npm run installed  # smoke-test the installed plugin (export, wizard, materials, runtime boot)
 ```
 
 The acceptance run uses the same mock-wx harness as the tests, so it fails when the
