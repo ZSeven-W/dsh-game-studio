@@ -293,9 +293,21 @@ export async function previewInDevtools(gameDir: string, options: DevtoolsOption
   return await runAction(cli, 'preview', project, devtoolsArgs('preview', project, { qr, info }), options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
 }
 
+/** Uploads need the real mini-game AppID; check it before starting the IDE. */
+function requireRealAppid(projectDir: string): void {
+  const appid = readProjectAppid(projectDir)
+  if (appid !== null && appid !== '' && appid !== 'touristappid') return
+  throw new StudioError(
+    'This project still uses the tourist AppID, which can be previewed but not uploaded. '
+    + 'Set the real mini-game AppID (re-export with the appid, or edit project.config.json) and retry.',
+    'DEVTOOLS_BAD_APPID',
+  )
+}
+
 export async function uploadFromDevtools(gameDir: string, options: DevtoolsOptions = {}): Promise<DevtoolsResult> {
   const project = findWechatExport(gameDir)
   if (!project) throw new StudioError('No WeChat mini-game export found; run the WeChat export first.', 'NO_WECHAT_EXPORT')
+  requireRealAppid(project)
   const cli = requireDevtools(options.cli)
   const info = join(project, '.devtools-upload.json')
   const args = devtoolsArgs('upload', project, { version: options.version, desc: options.desc, info })

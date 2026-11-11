@@ -1,13 +1,13 @@
 // WeChat DevTools automation: argument shapes, the IDE's error messages mapped
 // to coded errors the agent can act on, and finding the newest export.
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
   devtoolsArgs, devtoolsCandidates, findDevtools, findWechatExport, mapDevtoolsError,
-  readDevtoolsInfo, requireDevtools, runDevtools,
+  readDevtoolsInfo, requireDevtools, runDevtools, uploadFromDevtools,
 } from '../src/devtools.ts'
 
 test('devtoolsArgs builds the documented CLI calls', () => {
@@ -111,4 +111,25 @@ test('runDevtools captures the CLI output and exit code', { skip: process.platfo
   assert.equal(code, 1)
   assert.match(output, /service port disabled/u)
   assert.equal(mapDevtoolsError(output)?.code, 'DEVTOOLS_PORT_CLOSED')
+})
+
+test('upload refuses the tourist AppID before it starts the IDE', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'devtools-tourist-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const game = join(root, 'game')
+  const exportDir = join(game, 'export', 'wechat', 'isle')
+  await mkdir(exportDir, { recursive: true })
+  for (const name of ['game.js', 'game.json']) await writeFile(join(exportDir, name), '{}\n')
+  await writeFile(join(exportDir, 'project.config.json'), JSON.stringify({ appid: 'touristappid' }))
+
+  // A CLI that proves whether it was started: it would leave a marker file.
+  const marker = join(root, 'cli-ran.txt')
+  const cli = join(root, 'fake-cli.cmd')
+  await writeFile(cli, `@echo off\r\necho ran > "${marker}"\r\n`, 'utf8')
+
+  await assert.rejects(
+    () => uploadFromDevtools(game, { cli }),
+    (error) => error.code === 'DEVTOOLS_BAD_APPID' && /tourist AppID/u.test(error.message) && /re-export with the appid/u.test(error.message),
+  )
+  await assert.rejects(() => access(marker), 'the IDE must not be started just to fail on the AppID')
 })
