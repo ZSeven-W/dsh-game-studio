@@ -22,6 +22,8 @@ no bump; anything that changes `lib/` does.
 ```sh
 cd dsh-game-studio-fork
 npm version 0.1.0-rc.73 --no-git-tag-version   # the next increment
+# then update the README badge (`Current plugin release`) to the same version: the
+# version-doc test and the package check both compare it with package.json
 ```
 
 ## 2. Build and run the local gates
