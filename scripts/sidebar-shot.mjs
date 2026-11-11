@@ -369,6 +369,7 @@ try {
     const shown = await page.evaluate(() => document.body.innerText.includes('export/wechat/lantern-isle-3d'))
     console.log(`export button result: ${shown ? 'directory shown' : 'NOTHING SHOWN'}`)
     if (!shown) process.exitCode = 1
+    await page.screenshot({ path: join(outDir, 'sidebar-exported.png'), fullPage: true })
   }
 
   console.log(`screenshots written to ${outDir} (${errors.length} page errors)`)
