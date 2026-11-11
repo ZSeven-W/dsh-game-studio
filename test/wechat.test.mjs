@@ -374,6 +374,18 @@ test('an error storm keeps the first 20 realtime logs and folds the rest', async
   if (!ran) return t.skip('no Chrome or Edge here')
 })
 
+test('the safe area reaches the runtime, including the landscape side inset', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  const exported = await exportWechat(dir)
+  const ran = await withMockWx(exported.dir, async ({ page }) => {
+    const runtime = await page.evaluate(() => window.__G.__wechatRuntime)
+    assert.equal(runtime.safeTop, 24)
+    assert.equal(runtime.safeLeft, 44)
+  }, { safeArea: { top: 24, left: 44, right: 44, bottom: 0, width: 812, height: 375 } })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
 /** Open one exported project in a mock-wx page and hand it to `run`. False = no browser. */
 async function withMockWx(exportedDir, run, options = {}) {
   const mock = await openMockPage(exportedDir, options)

@@ -27,6 +27,8 @@
   var dprCap = quality === 'low' ? 1 : quality === 'medium' ? 1.5 : 2;
   var dpr = Math.min(dprCap, sys.pixelRatio || 1);
   var safeTop = sys.safeArea && typeof sys.safeArea.top === 'number' ? sys.safeArea.top : 0;
+  // In landscape the notch sits on a side, so the HUD also needs the left inset.
+  var safeLeft = sys.safeArea && typeof sys.safeArea.left === 'number' ? sys.safeArea.left : 0;
   if (quality === 'low' && wx.setPreferredFramesPerSecond) {
     // A steady 30 fps on a weak device feels better than a wobbling 45 and saves battery.
     try { wx.setPreferredFramesPerSecond(30); } catch (error) { /* optional */ }
@@ -613,6 +615,7 @@
       return;
     }
     var top = Math.max(10, safeTop + 10);
+    var inset = Math.max(12, safeLeft + 12);
     var scale = dpr;
     ctx.save();
     try {
@@ -633,13 +636,13 @@
         return;
       }
       if (typeof state.hearts === 'number' && state.hearts >= 0) {
-        pill(ctx, repeat('♥', Math.max(0, Math.round(state.hearts))), 12, top, 'left', 15, '#ff8a9a');
+        pill(ctx, repeat('♥', Math.max(0, Math.round(state.hearts))), inset, top, 'left', 15, '#ff8a9a');
       }
       if (typeof state.score === 'number') {
-        pill(ctx, '✦ ' + Math.round(state.score), 12 + 86, top, 'left', 15, '#ffe9a8');
+        pill(ctx, '✦ ' + Math.round(state.score), inset + 86, top, 'left', 15, '#ffe9a8');
       }
       if (typeof state.time === 'number' && state.phase === 'playing') {
-        pill(ctx, Math.ceil(state.time) + 's', W - 12, top, 'right', 15, '#ffffff');
+        pill(ctx, Math.ceil(state.time) + 's', W - inset, top, 'right', 15, '#ffffff');
       }
       if (state.phase === 'won' || state.phase === 'lost') {
         ctx.fillStyle = 'rgba(10,14,32,0.55)';
@@ -755,7 +758,7 @@
   };
   G.cancelAnimationFrame = function (id) { nativeCaf(id); };
   G.__wechatRuntime = {
-    width: cssW, height: cssH, dpr: dpr, safeTop: safeTop,
+    width: cssW, height: cssH, dpr: dpr, safeTop: safeTop, safeLeft: safeLeft,
     quality: { tier: quality, benchmarkLevel: benchmarkLevel, dprCap: dprCap },
     showLoading: showLoading,
     playTone: playTone,
@@ -871,6 +874,7 @@
     cssH = Math.max(1, next.windowHeight || cssH);
     dpr = Math.min(dprCap, next.pixelRatio || dpr);
     safeTop = next.safeArea && typeof next.safeArea.top === 'number' ? next.safeArea.top : safeTop;
+    safeLeft = next.safeArea && typeof next.safeArea.left === 'number' ? next.safeArea.left : safeLeft;
     G.innerWidth = cssW;
     G.innerHeight = cssH;
     G.devicePixelRatio = dpr;

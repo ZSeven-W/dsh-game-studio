@@ -42,7 +42,8 @@ const MOCK_INJECT = `(function () {
         windowWidth: window.innerWidth,
         windowHeight: window.innerHeight,
         pixelRatio: typeof window.__pixelRatio === 'number' ? window.__pixelRatio : 1,
-        benchmarkLevel: typeof window.__benchmarkLevel === 'number' ? window.__benchmarkLevel : undefined
+        benchmarkLevel: typeof window.__benchmarkLevel === 'number' ? window.__benchmarkLevel : undefined,
+        safeArea: window.__safeArea || undefined
       };
     },
     setPreferredFramesPerSecond: function (fps) { window.__wxFps.push(fps); },
@@ -159,10 +160,11 @@ export async function openMockPage(exportedDir, options = {}) {
   if (!browser) return null
   const { server, port } = await serveMockWx(exportedDir)
   const page = await browser.newPage({ viewport: { width: 500, height: 900 }, deviceScaleFactor: 1 })
-  if (options.benchmarkLevel !== undefined || options.pixelRatio !== undefined) {
+  if (options.benchmarkLevel !== undefined || options.pixelRatio !== undefined || options.safeArea) {
     await page.addInitScript((values) => {
       if (typeof values.benchmarkLevel === 'number') window.__benchmarkLevel = values.benchmarkLevel
       if (typeof values.pixelRatio === 'number') window.__pixelRatio = values.pixelRatio
+      if (values.safeArea) window.__safeArea = values.safeArea
     }, options)
   }
   const errors = []
