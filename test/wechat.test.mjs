@@ -292,6 +292,11 @@ test('large art goes into an assets subpackage and the game waits for it', async
   assert.match(game, /"subpackage":\{"name":"assets"\}/u)
   assert.match(game, /wx\.loadSubpackage/u)
   assert.match(game, /正在下载资源/u)
+  // The 4 MB main-package check must not count the subpackage art.
+  assert.ok(exported.report.mainBytes < 1_500_000, 'main package excludes the subpackage')
+  assert.ok(exported.report.totalBytes > 2_000_000, 'total package keeps the art')
+  assert.ok(!exported.report.warnings.some((warning) => warning.includes('4 MB 主包')),
+    'subpackage art must not trigger the main-package warning')
 
   const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
     await page.waitForFunction('window.__wxSubpackages.length > 0', undefined, { timeout: 6000 })

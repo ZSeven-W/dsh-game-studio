@@ -1,10 +1,11 @@
 /**
  * Package budget for the WeChat export.
  *
- * WeChat mini-games have a 4 MB main package and a 30 MB total package. The
- * exporter writes one folder, so everything in it is main package until the game
- * is split, and a single oversized texture is the usual reason an export cannot
- * be uploaded. This module measures the folder and says what to cut.
+ * WeChat mini-games have a 4 MB main package and a 30 MB total package. The 4 MB
+ * check must count only what stays in the main package: files under a subpackage
+ * root are downloaded separately, so they count towards the total, not the main
+ * package. A single oversized texture is the usual reason a main package cannot
+ * be uploaded; this module measures both and says what to cut.
  */
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -44,19 +45,25 @@ function mb(bytes: number): string {
   return `${(bytes / 1048576).toFixed(2)} MB`
 }
 
-export async function analyzeWechatPackage(dir: string): Promise<PackageReport> {
+export async function analyzeWechatPackage(
+  dir: string,
+  options: { subpackageRoots?: string[] } = {},
+): Promise<PackageReport> {
   const entries: PackageEntry[] = []
   await walk(dir, dir, entries)
   entries.sort((a, b) => b.bytes - a.bytes)
   const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0)
+  const roots = (options.subpackageRoots ?? []).map(root => root.replace(/\/+$/u, '') + '/')
+  const inSubpackage = (file: string): boolean => roots.some(root => file.startsWith(root))
+  const mainBytes = entries.filter(entry => !inSubpackage(entry.file)).reduce((sum, entry) => sum + entry.bytes, 0)
   const assets = entries.filter(entry => entry.file.startsWith('assets/'))
   const warnings: string[] = []
   const suggestions: string[] = []
 
-  if (totalBytes > MAIN_PACKAGE_LIMIT) {
-    warnings.push(`主包约 ${mb(totalBytes)}，超过微信小游戏的 4 MB 主包限制，无法直接上传。`)
-  } else if (totalBytes > MAIN_PACKAGE_LIMIT * 0.8) {
-    warnings.push(`主包约 ${mb(totalBytes)}，已接近 4 MB 上限，再加素材就会超。`)
+  if (mainBytes > MAIN_PACKAGE_LIMIT) {
+    warnings.push(`主包约 ${mb(mainBytes)}，超过微信小游戏的 4 MB 主包限制，无法直接上传。`)
+  } else if (mainBytes > MAIN_PACKAGE_LIMIT * 0.8) {
+    warnings.push(`主包约 ${mb(mainBytes)}，已接近 4 MB 上限，再加素材就会超。`)
   }
   if (totalBytes > TOTAL_PACKAGE_LIMIT) warnings.push(`总包约 ${mb(totalBytes)}，超过 30 MB 总包限制。`)
 
@@ -69,8 +76,10 @@ export async function analyzeWechatPackage(dir: string): Promise<PackageReport> 
   if (heavy.length > 0) {
     suggestions.push('先把最大的几张图压小：导出前把槽位图降到实际显示尺寸（通常 256–512px 就够），或换成 WebP。')
   }
-  if (totalBytes > MAIN_PACKAGE_LIMIT) {
-    suggestions.push('主包仍然超限时用分包：插件会在素材超过 1.5 MB 时自动把素材放进 assets 分包，并在游戏启动前用 wx.loadSubpackage 预下载；也可以用导出的 subpackage 选项强制开启。')
+  if (mainBytes > MAIN_PACKAGE_LIMIT) {
+    suggestions.push('主包超限时用分包：插件会在素材超过 1.5 MB 时自动把素材放进 assets 分包，并在游戏启动前用 wx.loadSubpackage 预下载；也可以用导出的 subpackage 选项强制开启。')
+  } else if (roots.length > 0) {
+    suggestions.push(`素材在分包里（${roots.join(', ')}），不计入主包；主包 ${mb(mainBytes)}，分包合计 ${mb(totalBytes - mainBytes)}。`)
   }
   const js = entries.find(entry => entry.file === 'game.js')
   if (js && js.bytes > 1024 * 1024) {
@@ -82,7 +91,7 @@ export async function analyzeWechatPackage(dir: string): Promise<PackageReport> 
   return {
     dir,
     totalBytes,
-    mainBytes: totalBytes,
+    mainBytes,
     largest: entries.slice(0, 5),
     assets,
     warnings,

@@ -300,7 +300,7 @@ export async function exportWechat(dir: string, options: WechatExportOptions = {
     warnings.push('这个工程没有素材槽位；游戏代码需要自己绘制画面。')
   }
 
-  const report = await analyzeWechatPackage(outDir)
+  const report = await analyzeWechatPackage(outDir, { subpackageRoots: useSubpackage ? ['assets'] : [] })
   return { dir: outDir, files, bytes, appid, runtimes, monetization: commerce, subpackage: useSubpackage, report, warnings }
 }
 

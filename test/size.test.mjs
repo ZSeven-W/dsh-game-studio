@@ -17,6 +17,23 @@ async function write(dir, name, bytes) {
   await writeFile(join(dir, name), Buffer.alloc(bytes, 1))
 }
 
+test('a subpackage keeps its assets out of the 4 MB main package', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'wechat-size-sub-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await mkdir(join(root, 'assets'), { recursive: true })
+  await writeFile(join(root, 'game.js'), 'x'.repeat(200 * 1024))
+  await writeFile(join(root, 'assets', 'big.png'), Buffer.alloc(6 * 1024 * 1024, 1))
+
+  const plain = await analyzeWechatPackage(root)
+  assert.ok(plain.warnings.some((warning) => warning.includes('4 MB 主包')), 'without a subpackage the art is main package')
+
+  const split = await analyzeWechatPackage(root, { subpackageRoots: ['assets'] })
+  assert.equal(split.mainBytes, 200 * 1024)
+  assert.ok(split.totalBytes > 6 * 1024 * 1024)
+  assert.ok(!split.warnings.some((warning) => warning.includes('4 MB 主包')), 'subpackage art must not count as main package')
+  assert.ok(split.suggestions.some((suggestion) => suggestion.includes('分包')))
+})
+
 test('a small export is under the limit and says so', async (t) => {
   const dir = await tempDir(t)
   await write(dir, 'game.js', 200 * 1024)
