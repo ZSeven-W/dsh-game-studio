@@ -1,6 +1,7 @@
 // Monetization config: validation, what the exporter embeds, and what the
 // runtime is allowed to do with it.
 import assert from 'node:assert/strict'
+import { commerceFormHints } from '../src/commerce-hints.ts'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -105,4 +106,26 @@ test('in-app purchases stay off until a licence and a merchant ID are recorded',
   await assert.rejects(updateCommerce(dir, { payUrl: 'http://insecure.example/pay' }), /https/u)
   const withServer = await updateCommerce(dir, { payUrl: 'https://pay.example.com/sign' })
   assert.deepEqual(embedCommerce(withServer).iap, { enabled: true, dryRun: false, payUrl: 'https://pay.example.com/sign' })
+})
+
+test('the form says what is missing before anything is saved', () => {
+  const empty = { adsOn: false, interstitial: '', rewarded: '', iapOn: false, licence: '', merchant: '', payUrl: '' }
+  assert.deepEqual(commerceFormHints(empty), { problems: [], notes: [] })
+
+  const ads = commerceFormHints({ ...empty, adsOn: true })
+  assert.match(ads.problems.join(' '), /广告位 ID/u)
+
+  const badUnit = commerceFormHints({ ...empty, adsOn: true, interstitial: 'nope' })
+  assert.match(badUnit.problems.join(' '), /adunit-/u)
+
+  const iap = commerceFormHints({ ...empty, iapOn: true })
+  assert.match(iap.problems.join(' '), /版号/u)
+  assert.match(iap.problems.join(' '), /商户号/u)
+
+  const badUrl = commerceFormHints({ ...empty, iapOn: true, licence: 'ISBN 978-7', merchant: '1900000109', payUrl: 'http://x' })
+  assert.match(badUrl.problems.join(' '), /https:\/\//u)
+
+  const demo = commerceFormHints({ ...empty, iapOn: true, licence: 'ISBN 978-7', merchant: '1900000109' })
+  assert.deepEqual(demo.problems, [])
+  assert.match(demo.notes.join(' '), /演示模式/u)
 })

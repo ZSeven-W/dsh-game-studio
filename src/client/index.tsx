@@ -643,7 +643,9 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
         <span style={s.badge}>{ownerLabel(step.owner)}</span>
       </div>)}
     </div>}
-    {commerceOpen && <div style={s.releasePanel}>
+    {commerceOpen && (() => {
+      const live = commerceFormHints({ adsOn, interstitial, rewarded, iapOn, licence, merchant, payUrl })
+      return <div style={s.releasePanel}>
       <div style={s.releaseHead}>
         <strong>{t('tab.commerce')}</strong>
         <button type="button" style={s.button} disabled={commerceBusy} onClick={() => { void loadCommerce() }}>{t('tab.reload')}</button>
@@ -672,8 +674,11 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
       </label>
       {(commerce?.check?.problems ?? []).map((problem, index) => <div key={`p${index}`} style={s.error}>{problem}</div>)}
       {(commerce?.check?.notes ?? []).map((note, index) => <div key={`n${index}`} style={s.small}>{note}</div>)}
+      {live.problems.map((problem, index) => <div key={`lp${index}`} style={s.error}>{problem}</div>)}
+      {live.notes.map((note, index) => <div key={`ln${index}`} style={s.small}>{note}</div>)}
       <div style={s.small}>{t('tab.commerceDataHint')}</div>
-    </div>}
+    </div>
+    })()}
     {confirmAction === 'publish' && <div style={{ ...s.hint, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
       <span style={{ color: tok.text }}>{t('tab.publishConfirmHint')}</span>
       <button type="button" style={s.button} disabled={busy} onClick={() => { setConfirmAction(null); void run('publish', { lang }) }}>{t('tab.publishConfirmYes')}</button>
