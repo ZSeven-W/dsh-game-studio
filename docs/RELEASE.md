@@ -89,7 +89,30 @@ git format-patch 93459aa..HEAD -o ../artifacts/upstream-pr --no-signature
 Apply the series in a clean worktree at the base commit and compare tree hashes
 before opening the PR; `docs/upstream/wechat-minigame.md` is the PR body.
 
-## 6. What a release must not claim
+## 6. Error codes on the WeChat path
+
+Every failure the WeChat tools raise carries a code, and each code names the fix in
+its message. This table is checked against the sources (`test/codes.test.mjs`): a
+code that exists but is not listed fails the suite, and so does a listed code that
+no longer exists.
+
+| Code | When it appears | What the user does |
+| --- | --- | --- |
+| `APPID_INVALID` | The AppID passed to the export is not `wx…` and not `touristappid` | Copy the AppID from 后台「设置 → 基本设置」 |
+| `NO_BROWSER` | The export needs Chrome or Edge to rasterise SVG art | Install one, or use PNG art |
+| `NO_WECHAT_EXPORT` | A WeChat step ran before the export | Run the WeChat export first |
+| `DEVTOOLS_PORT_CLOSED` | The IDE's service port is off | 工具 → 设置 → 安全设置 → 服务端口 → 开启 |
+| `DEVTOOLS_BAD_APPID` | The project still uses `touristappid` | Re-export with the real AppID, then upload |
+| `DEVTOOLS_NOT_LOGGED_IN` | The IDE is not signed in | Open it once and scan the QR code |
+| `NO_DEVTOOLS` | The IDE or its CLI cannot be found | Install WeChat DevTools |
+| `DEVTOOLS_FAILED` | The IDE returned another error | Read the IDE output included in the message |
+| `CI_NEEDS_APPID` | CI files were requested for a tourist AppID | Re-export with the real AppID |
+| `BAD_AD_UNIT` | An ad unit ID is not `adunit-…` | Copy it from 流量主 → 广告位管理 |
+| `BAD_RELEASE_STEP` | A wizard step id does not exist | Use the ids from `wechat-release status` |
+| `BAD_RELEASE_STATUS` | A step status is not todo/done/skipped | Use todo, done or skipped |
+| `BAD_ACTION` | The command action is not one of the known ones | Run `/game-studio` with no action for the list |
+
+## 7. What a release must not claim
 
 - That a game passed WeChat review, filing or licensing — only the console decides.
 - That ads or in-app purchases earn anything; the plugin proves they are wired.
