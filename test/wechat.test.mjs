@@ -231,6 +231,13 @@ test('in-app purchases run in demo mode without a pay server, and through wx.req
   if (!paidTail) return t.skip('no Chrome or Edge here')
 })
 
+test('a fresh export embeds the age rating the materials draft', async (t) => {
+  const { dir } = await tempProject(t)
+  const exported = await exportWechat(dir)
+  const game = await readFile(join(exported.dir, 'game.js'), 'utf8')
+  assert.match(game, /"ageRating":"8\+"/u)
+})
+
 test('a weak device gets a capped render scale, a fast one does not', async (t) => {
   const { dir } = await tempProject(t)
   await rasterSlots(dir)
@@ -433,7 +440,7 @@ test('the age rating chosen in the wizard reaches the exported game', async (t) 
   await rasterSlots(dir)
   const without = await exportWechat(dir)
   const plain = await readFile(join(without.dir, 'game.js'), 'utf8')
-  assert.doesNotMatch(plain, /"ageRating"/u, 'no badge before the wizard records a rating')
+  assert.match(plain, /"ageRating":"8\+"/u, 'the draft rating is embedded before the wizard records one')
 
   await updateRelease(dir, { ageRating: '12+' })
   const exported = await exportWechat(dir)

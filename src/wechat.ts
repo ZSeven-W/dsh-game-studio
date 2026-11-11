@@ -203,7 +203,10 @@ export async function exportWechat(dir: string, options: WechatExportOptions = {
   const commerce = embedCommerce(await loadCommerce(dir))
   // The wizard's 适龄提示 must be visible in the game, not only in RELEASE.md.
   const release = await loadRelease(dir).catch(() => null)
-  const ageRating = release?.ageRating
+  // The materials already draft a rating (8+ until the wizard says otherwise); the
+  // export embeds the same value so the badge on the title screen cannot disagree
+  // with the release document. The wizard step stays open until the user confirms it.
+  const ageRating = release?.ageRating ?? '8+'
   const assetBytes = written.filter(entry => entry.file.startsWith('assets/')).reduce((sum, entry) => sum + entry.bytes, 0)
   // A subpackage keeps the main package under 4 MB, but the game may only start
   // after it finished downloading; the boot wrapper below takes care of that.

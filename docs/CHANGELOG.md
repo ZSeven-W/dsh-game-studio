@@ -8,6 +8,8 @@ names the commit it came from (`git show <hash>`); the branch is 64 commits on
 
 - Chinese/English release materials: the same RELEASE.md carries an English summary
   that repeats the title, rating, round length, monetization mode and ad unit IDs (8e4d4ac).
+- A fresh export embeds the same draft rating (8+) the materials use, so the title
+  badge cannot disagree with the release document (follow-up to 47621d6).
 - The data section lists all ten reported events instead of the eight we remembered;
   an unregistered event is dropped silently by WeChat (9c0057b).
 - The pre-launch section tells the user to self-check `__wechatRuntime.summary()` in
