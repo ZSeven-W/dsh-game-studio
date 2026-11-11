@@ -32,6 +32,19 @@
     try { wx.setPreferredFramesPerSecond(30); } catch (error) { /* optional */ }
   }
   var mainCanvas = wx.createCanvas();
+  // Boot timing: WeChat reports a high-resolution clock on newer base libraries,
+  // and a stopwatch on the first frame is the only startup number that matters.
+  function clockNow() {
+    try {
+      var perf = wx.getPerformance && wx.getPerformance();
+      if (perf && typeof perf.now === 'function') return perf.now();
+    } catch (error) { /* fall back to Date */ }
+    return Date.now();
+  }
+  var startedAt = clockNow();
+  var frames = 0;
+  var firstFrameAt = null;
+  var frameTimes = [];
   var canvasEvents = {};
   var windowEvents = {};
   var documentEvents = {};
@@ -442,6 +455,11 @@
   }
 
   function afterFrame() {
+    frames += 1;
+    var frameAt = clockNow();
+    if (firstFrameAt === null) firstFrameAt = frameAt;
+    frameTimes.push(frameAt);
+    if (frameTimes.length > 30) frameTimes.shift();
     if (webglCanvas) blit();
     var state = readState();
     trackCommerce(state);
@@ -529,6 +547,18 @@
   G.__wechatRuntime = {
     width: cssW, height: cssH, dpr: dpr, safeTop: safeTop,
     quality: { tier: quality, benchmarkLevel: benchmarkLevel, dprCap: dprCap },
+    metrics: function () {
+      var elapsed = clockNow() - startedAt;
+      return {
+        bootMs: firstFrameAt === null ? null : Math.round(firstFrameAt - startedAt),
+        frames: frames,
+        fps: frameTimes.length >= 2
+          ? Math.round((frameTimes.length - 1) * 1000 / Math.max(1, frameTimes[frameTimes.length - 1] - frameTimes[0]))
+          : 0,
+        ageMs: Math.round(clockNow() - startedAt),
+        tier: quality,
+      };
+    },
     canvas: gameCanvas, screen: mainCanvas,
     get ctx() { return mainContext(); },
     get webgl() { return webglCanvas; },
@@ -649,10 +679,35 @@
   }
   if (wx.onHide) wx.onHide(hide);
   if (wx.onShow) wx.onShow(show);
+  var logLoaded = false;
+  var logManager = null;
+  function realtimeLog() {
+    if (!logLoaded) {
+      logLoaded = true;
+      try { logManager = wx.getRealtimeLogManager ? wx.getRealtimeLogManager() : null; } catch (error) { logManager = null; }
+    }
+    return logManager;
+  }
+  function reportRuntimeError(source, error) {
+    var message = String((error && (error.message || error.errMsg)) || error || source).slice(0, 500);
+    try {
+      var log = realtimeLog();
+      if (log && typeof log.error === 'function') log.error('[dsh-game-studio]', source + ': ' + message);
+    } catch (ignored) { /* logging is optional */ }
+  }
+
+  if (wx.onUnhandledRejection) {
+    wx.onUnhandledRejection(function (event) {
+      reportRuntimeError('unhandledRejection', (event && (event.reason || event)) || 'unhandled rejection');
+    });
+  }
   if (wx.onError) {
     wx.onError(function (error) {
+      reportRuntimeError('wx.onError', error);
       emit(windowEvents, 'error', { type: 'error', message: error && error.message ? error.message : String(error) });
     });
   }
 })();
+
+
 

@@ -257,6 +257,27 @@ test('a weak device gets a capped render scale, a fast one does not', async (t) 
   if (!high) return t.skip('no Chrome or Edge here')
 })
 
+test('boot metrics are reported and runtime errors reach the WeChat realtime log', async (t) => {
+  const { dir } = await tempProject(t)
+  await rasterSlots(dir)
+  const exported = await exportWechat(dir)
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    await page.waitForFunction('window.__G.__wechatRuntime.metrics().frames > 0', undefined, { timeout: 8000 })
+    await page.evaluate(() => window.__wxError({ message: 'boom-from-game' }))
+    const state = await page.evaluate(() => ({
+      metrics: window.__G.__wechatRuntime.metrics(),
+      logs: window.__wxLogs,
+    }))
+    assert.ok(state.metrics.bootMs !== null && state.metrics.bootMs >= 0, `bootMs ${state.metrics.bootMs}`)
+    assert.ok(state.metrics.bootMs < 10000, `boot should be under 10s, got ${state.metrics.bootMs}`)
+    assert.ok(state.metrics.frames > 0)
+    assert.ok(state.metrics.fps > 0, `fps ${state.metrics.fps}`)
+    assert.ok(state.logs.some(entry => entry.join(' ').includes('boom-from-game')), JSON.stringify(state.logs))
+    assert.deepEqual(errors, [])
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
 /** Serves one exported project plus a page that fakes the wx.* surface on a real canvas. */
 async function serveMockWx(root) {
   const mockHtml = `<!doctype html>
@@ -274,6 +295,7 @@ async function serveMockWx(root) {
   var G = {};
   window.__wxAds = { interstitial: 0, rewarded: 0, events: [] };
   window.__wxIap = { request: null, payment: null };
+  window.__wxLogs = [];
   var wx = {
     createCanvas: function () {
       if (!mainUsed) { mainUsed = true; return main; }
@@ -312,7 +334,15 @@ async function serveMockWx(root) {
     },
     onTouchStart: function (fn) { window.__touch = function (event) { fn(event); }; },
     onTouchMove: function () {}, onTouchEnd: function () {}, onTouchCancel: function () {},
-    onHide: function () {}, onShow: function () {}, onWindowResize: function () {}, onError: function () {},
+    onHide: function () {}, onShow: function () {}, onWindowResize: function () {},
+    onError: function (fn) { window.__wxError = fn; },
+    onUnhandledRejection: function (fn) { window.__wxRejection = fn; },
+    getRealtimeLogManager: function () {
+      return {
+        error: function () { window.__wxLogs.push([].slice.call(arguments)); },
+        info: function () { window.__wxLogs.push([].slice.call(arguments)); },
+      };
+    },
     getStorageSync: function (key) { try { return localStorage.getItem(key) || ''; } catch (error) { return ''; } },
     setStorageSync: function (key, value) { try { localStorage.setItem(key, value); } catch (error) {} },
     removeStorageSync: function (key) { try { localStorage.removeItem(key); } catch (error) {} },
@@ -432,5 +462,6 @@ test('the exported 3D game renders through WebGL on a mocked wx', async (t) => {
   })
   if (!ran) return t.skip('no Chrome or Edge here')
 })
+
 
 
