@@ -32,10 +32,19 @@ export async function verifyLaunch({ project, skipDevtools = false, quiet = fals
   }
 
   check('导出工程存在', existsSync(dir), dir, '先导出：侧栏点「导出微信小游戏」，它会生成 export/wechat/<游戏>/ 这样的目录')
-  const gameJson = readJson(join(dir, 'game.json'))
-  const projectJson = readJson(join(dir, 'project.config.json'))
-  check('game.json 与 project.config.json 都在', Boolean(gameJson && projectJson),
-    gameJson && projectJson ? 'ok' : 'missing', '重新导出一次；若刚移动过目录，请把 --project 指向新的导出目录')
+  const gamePath = join(dir, 'game.json')
+  const projectPath = join(dir, 'project.config.json')
+  const gameExists = existsSync(gamePath)
+  const projectExists = existsSync(projectPath)
+  const gameJson = readJson(gamePath)
+  const projectJson = readJson(projectPath)
+  const missingNames = [gameExists ? '' : 'game.json', projectExists ? '' : 'project.config.json'].filter(Boolean)
+  check('game.json 与 project.config.json 都在', gameExists && projectExists,
+    missingNames.length ? `缺少 ${missingNames.join('、')}` : 'ok',
+    '重新导出一次；若刚移动过目录，请把 --project 指向新的导出目录')
+  check('两个 JSON 都能解析', Boolean(gameJson && projectJson),
+    missingNames.length ? '文件缺失，无法解析' : gameJson && projectJson ? 'ok' : 'JSON 语法错误',
+    '文件内容被改坏时不要手改：重新导出，或从导出的备份里恢复这两个 JSON')
   check('分包设置', true, gameJson?.subpackages?.length
     ? JSON.stringify(gameJson.subpackages)
     : '无需分包（素材较小）；素材超过 1.5 MB 时会自动分包')
