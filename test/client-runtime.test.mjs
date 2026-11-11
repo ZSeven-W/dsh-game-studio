@@ -79,3 +79,11 @@ test('the built sidebar bundle loads and registers its tabs without a host', () 
       'each tool row is a component')
   }
 })
+
+test('the bundle defines the helpers it calls (no dangling import)', () => {
+  // The sidebar called commerceFormHints before its import existed, which only shows
+  // up when the panel renders. The bundle must carry the definition, not just use it.
+  const bundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+  assert.match(bundle, /function commerceFormHints\(/u, 'the client bundle must define commerceFormHints')
+  assert.match(bundle, /commerceFormHints\(\{ adsOn/u, 'the market panel must call it')
+})

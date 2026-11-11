@@ -10,6 +10,7 @@ import {
   mergeSources, onlineGameToShelfGame, parseWorkspaceSources, refreshSubscribedSource, saveFeedCache,
   saveStoredSources, shouldAutoRefresh, WORKSPACE_SOURCES_FILE, type SourceFetchState, type SubscribedSource,
 } from './feed.ts'
+import { commerceFormHints } from '../commerce-hints.ts'
 import { commandErrorCopy, en, liveShare, NS, publishState, shareCopy, zh, type Key, type PublishedInfo, type ShareHeartbeat } from './locales.ts'
 import {
   builtLocalGamesCount, dimensionCounts, localWallProjects, mergeShelfGames, scanShelf, viewGames,
