@@ -72,6 +72,9 @@ const s: Record<string, CSSProperties> = {
   frame: { position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, display: 'block' },
   hint: { padding: '6px 10px', color: tok.muted, fontSize: 12, borderBottom: `1px solid ${tok.border}` },
   error: { padding: '6px 10px', color: tok.danger, fontSize: 12, borderBottom: `1px solid ${tok.border}` },
+  noticeRow: { display: 'flex', alignItems: 'flex-start', gap: 8 },
+  noticeText: { flex: 1, minWidth: 0, maxHeight: 132, overflow: 'auto', whiteSpace: 'pre-wrap' },
+  noticeClose: { flexShrink: 0, font: 'inherit', fontSize: 14, lineHeight: 1, padding: '2px 6px', border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer' },
   panel: { flex: '1 1 45%', overflow: 'auto', padding: '8px 10px', minHeight: 0 },
   slot: { borderTop: `1px solid ${tok.border}`, padding: '8px 0' },
   slotHead: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 },
@@ -566,6 +569,12 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
         {publishing ? t('tab.publishing') : pubInfo.buttonLabel}
       </button>
     </div>
+    {notice && (
+      <div style={{ ...(notice.kind === 'error' ? s.error : s.hint), ...s.noticeRow }}>
+        <span style={s.noticeText}>{notice.text}</span>
+        <button type="button" style={s.noticeClose} aria-label={t('tab.dismissNotice')} onClick={() => { setNotice(undefined) }}>×</button>
+      </div>
+    )}
     {releaseOpen && <div style={s.releasePanel}>
       <div style={s.releaseHead}>
         <strong>{t('tab.release')}</strong>
@@ -669,7 +678,6 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
         </div>
       </div>
     </div>}
-    {notice && <div style={notice.kind === 'error' ? s.error : s.hint}>{notice.text}</div>}
     {state === undefined ? <div style={s.hint}>{t('tab.loading')}</div>
       : state === null || state.build === null ? <div style={s.hint}>{t('tab.noBuild')}</div>
         : <>
@@ -1085,7 +1093,12 @@ function ShelfTab(props: any): ReactNode {
       <button type="button" style={s.button}
         onClick={() => { void navigator.clipboard?.writeText(wallPublished.url).catch(() => undefined) }}>{t('tab.shareCopy')}</button>
     </div>}
-    {notice && <div style={notice.kind === 'error' ? s.error : s.hint}>{notice.text}</div>}
+    {notice && (
+      <div style={{ ...(notice.kind === 'error' ? s.error : s.hint), ...s.noticeRow }}>
+        <span style={s.noticeText}>{notice.text}</span>
+        <button type="button" style={s.noticeClose} aria-label={t('tab.dismissNotice')} onClick={() => { setNotice(undefined) }}>×</button>
+      </div>
+    )}
     {(!sessionId || !cwd) && allGames.length === 0 ? <div style={s.hint}>{t('shelf.noSession')}</div>
       : scan === undefined && sessionId && cwd && allGames.length === 0 ? <div style={s.hint}>{t('shelf.scanning')}</div>
         : <>
