@@ -296,6 +296,14 @@ test('the materials follow the monetization settings, before and after regenerat
   assert.match(secondText, /签名服务：未配置/u)
   assert.doesNotMatch(secondText, /未选择内购变现/u)
 
+  // The filing blurb and the privacy draft must match the payment setup.
+  assert.match(firstText, /不含社交与充值/u)
+  assert.doesNotMatch(firstText, /含道具直购/u)
+  assert.match(secondText, /含道具直购（虚拟支付）/u)
+  assert.doesNotMatch(secondText, /不含社交与充值/u)
+  assert.match(secondText, /已接入内购/u)
+  assert.match(secondText, /内购为道具直购，不涉及兑换/u)
+
   // And the status knows the file is fresh again after the regeneration.
   const state = await loadRelease(dir)
   const freshness = await releaseFreshness(dir, state)

@@ -487,6 +487,7 @@ export async function releaseMaterials(
   const orientation = options.orientation ?? manifest?.orientation
   const roundSeconds = Math.max(1, Math.round(Number(manifest?.rules?.duration ?? 60)))
   const commerce = await loadCommerce(dir).catch(() => null)
+  const hasIap = state.monetization === 'iap' || state.monetization === 'both'
   const runtimes = Array.isArray(manifest?.runtime) ? manifest.runtime : []
   const is3d = runtimes.includes('three')
   const rating = state.ageRating ?? '8+'
@@ -521,14 +522,16 @@ export async function releaseMaterials(
     '- 不需要在游戏内放隐私入口：平台只在调用受保护接口时才要求授权弹窗。',
     '- 广告与埋点只上报事件名和数值（如 `game_round_end` 带分数），不含个人信息。',
     '- 如果你之后加了微信登录、好友排行、客服或上传图片：先在后台补充对应指引，再在调用受保护接口前用 `wx.requirePrivacyAuthorize` 触发授权弹窗，并处理 `onNeedPrivacyAuthorization`。',
-    '- 如后续接入内购，按实际调用的接口补充声明（例如订单信息）。',
+    ...(hasIap
+      ? ['- 已接入内购：虚拟支付与订单由微信处理，游戏侧不保存支付凭证或订单个人信息。']
+      : ['- 如后续接入内购，按实际调用的接口补充声明（例如订单信息）。']),
     '',
     '## 4. 小游戏备案 / 小程序备案（内容说明）',
     '',
-    `${title} 是一款${options.style ? `${options.style} 风格的` : ''}休闲小游戏，单机运行，不含用户生成内容、不含社交与充值（如已接入内购，请改为「含虚拟支付」并附版号信息）。`,
+    `${title} 是一款${options.style ? `${options.style} 风格的` : ''}休闲小游戏，单机运行，不含用户生成内容、不含社交${hasIap ? '；含道具直购（虚拟支付），版号与商户号见第 6 节' : '与充值'}。`,
     '',
     '- 主要内容：收集道具、躲避障碍，单局时长约 1 分钟。',
-    '- 内容自查：无地图、无文字聊天、无真实货币兑换、无烟酒暴力元素。',
+    `- 内容自查：无地图、无文字聊天、无真实货币兑换${hasIap ? '（内购为道具直购，不涉及兑换）' : ''}、无烟酒暴力元素。`,
     '- 备案提醒：小游戏备案与小程序（ICP）备案是两个入口，按后台提示把两条都完成再提交审核。',
     '',
     '## 5. 版本审核说明',
