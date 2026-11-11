@@ -10,11 +10,13 @@ import { mkdir, readdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { findWechatExport } from './devtools.ts'
 import { loadManifest, paths } from './project.ts'
-import { loadRelease, type ReleaseState } from './release.ts'
+import { loadRelease, releasePlan, type ReleaseState } from './release.ts'
 
 export interface ReviewReason {
   id: string
   stage: 'material' | 'compliance' | 'build' | 'review' | 'monetization'
+  /** Wizard step (`wechat-release` step id) where the user fixes this. */
+  step: string
   title: string
   why: string
   fix: string
@@ -31,6 +33,7 @@ export interface ReviewRisk {
 export const REVIEW_REASONS: ReviewReason[] = [
   {
     id: 'category-mismatch',
+    step: 'category',
     stage: 'material',
     title: '服务类目与内容不符',
     why: '类目决定需要的资质；挂着休闲游戏类目却出现社交、直播、支付等能力，会被要求补资质或直接驳回。',
@@ -38,6 +41,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
   },
   {
     id: 'name-infringement',
+    step: 'basic-info',
     stage: 'material',
     title: '名称或图标侵权、蹭知名 IP',
     why: '名称、图标、简介里出现他人商标或知名作品名，是最高频的驳回原因之一。',
@@ -45,6 +49,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
   },
   {
     id: 'no-age-rating',
+    step: 'age-rating',
     stage: 'compliance',
     title: '缺少适龄提示',
     why: '按《网络游戏适龄提示》团体标准，游戏需要在显著位置展示 8+/12+/16+ 提示。',
@@ -52,6 +57,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
   },
   {
     id: 'no-privacy',
+    step: 'privacy',
     stage: 'compliance',
     title: '隐私保护指引缺失或不实',
     why: '收集信息但没有配置隐私指引，或声明与实际调用不符，会被限制接口或驳回。',
@@ -59,6 +65,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
   },
   {
     id: 'not-recorded',
+    step: 'record',
     stage: 'compliance',
     title: '小游戏备案未完成',
     why: '未完成备案的小游戏无法发布；备案与版本审核是两条线，顺序不能反。',
@@ -66,6 +73,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
   },
   {
     id: 'crash-or-black-screen',
+    step: 'devtools',
     stage: 'build',
     title: '审核时闪退、黑屏或无法进入',
     why: '审核员在一台普通设备上打开就失败，是最直接的驳回理由。',
@@ -73,6 +81,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
   },
   {
     id: 'no-test-account',
+    step: 'submit',
     stage: 'review',
     title: '没有给测试账号或审核路径',
     why: '需要登录或付费才能体验的游戏，若没提供测试账号，审核无法验证核心玩法。',
@@ -80,6 +89,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
   },
   {
     id: 'package-too-large',
+    step: 'devtools',
     stage: 'build',
     title: '包体超过限制',
     why: '主包 4 MB、总包 30 MB；超限无法上传或导致加载失败。',
@@ -87,6 +97,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
   },
   {
     id: 'misleading-ads',
+    step: 'basic-info',
     stage: 'monetization',
     title: '广告遮挡操作或诱导点击',
     why: '广告盖住按钮、伪装成游戏元素、强制观看，都会被驳回或限制流量主能力。',
@@ -94,6 +105,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
   },
   {
     id: 'iap-without-license',
+    step: 'submit',
     stage: 'monetization',
     title: '无版号开通内购',
     why: '网络游戏内购需要《网络游戏电子出版物审批》（版号）；没有版号不能开虚拟支付。',
@@ -101,6 +113,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
   },
   {
     id: 'forcing-share',
+    step: 'submit',
     stage: 'review',
     title: '诱导分享、诱导关注',
     why: '强制或奖励分享到群、朋友圈属于违规运营，会被限制能力。',
@@ -108,6 +121,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
   },
   {
     id: 'sensitive-content',
+    step: 'category',
     stage: 'review',
     title: '内容含违规元素',
     why: '地图、真实货币兑换、赌博玩法、烟酒暴力等元素在审核中会被重点检查。',
@@ -211,12 +225,14 @@ export function reviewMarkdown(risks: ReviewRisk[], title: string): string {
     ['material', '名称与素材'], ['compliance', '合规与资质'], ['build', '构建与体验'],
     ['review', '审核材料'], ['monetization', '商业化'],
   ]
+  const plan = releasePlan()
+  const stepTitle = (id: string): string => plan.find(step => step.id === id)?.title ?? id
   for (const [stage, label] of stages) {
     const items = REVIEW_REASONS.filter(reason => reason.stage === stage)
     if (items.length === 0) continue
     lines.push(`### ${label}`, '')
     for (const reason of items) {
-      lines.push(`- **${reason.title}**：${reason.why}`, `  - 怎么改：${reason.fix}`)
+      lines.push(`- **${reason.title}**（向导步骤：${stepTitle(reason.step)}）：${reason.why}`, `  - 怎么改：${reason.fix}`)
     }
     lines.push('')
   }

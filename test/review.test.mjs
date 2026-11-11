@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { updateRelease } from '../src/release.ts'
+import { releasePlan, updateRelease } from '../src/release.ts'
 import { REVIEW_REASONS, reviewGuide, reviewMarkdown, reviewRisks } from '../src/review.ts'
 
 async function tempGame(t) {
@@ -23,6 +23,20 @@ async function fakeExport(gameDir, name = 'moon-garden') {
   await writeFile(join(dir, 'project.config.json'), '{"compileType":"game"}')
   return dir
 }
+
+test('every rejection reason points at a wizard step that exists', async (t) => {
+  const dir = await tempGame(t)
+  const guide = await reviewGuide(dir, {})
+  const plan = releasePlan()
+  const ids = new Set(plan.map((step) => step.id))
+  assert.equal(REVIEW_REASONS.length, 12, 'the guide covers the twelve usual reasons')
+  for (const reason of REVIEW_REASONS) {
+    assert.ok(reason.step, `reason ${reason.id} has no wizard step`)
+    assert.ok(ids.has(reason.step), `reason ${reason.id} points at unknown step ${reason.step}`)
+    const title = plan.find((step) => step.id === reason.step).title
+    assert.ok(guide.markdown.includes(`（向导步骤：${title}）`), `the guide does not show the step for ${reason.id}`)
+  }
+})
 
 test('the rejection list is complete and each item says how to fix it', () => {
   const ids = REVIEW_REASONS.map(reason => reason.id)
