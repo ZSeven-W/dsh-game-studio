@@ -63,7 +63,7 @@ npm run upstream -- --build
 ```
 
 The series must apply cleanly, build, and pass the WeChat tests in the applied
-worktree (58 on the current series). `--build` creates its own worktree; a clean
+worktree (61 on the current series; it grows as tests are added). `--build` creates its own worktree; a clean
 `git status` afterwards is part of the check.
 
 ## 6. Update the documents that quote numbers
