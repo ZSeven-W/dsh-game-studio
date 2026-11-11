@@ -84,7 +84,7 @@ test('materials are written next to the export with everything the console asks 
   const materials = await releaseMaterials(dir, { exportDir, manifestTitle: 'Lantern Isle', style: 'voxel island', orientation: 'portrait' })
   assert.equal(materials.file, join(exportDir, 'RELEASE.md'))
   const text = await readFile(materials.file, 'utf8')
-  for (const section of ['## 1. 基本信息', '## 2. 适龄提示', '## 3. 用户隐私保护指引', '## 4. 小游戏备案', '## 5. 版本审核说明', '## 6. 变现', '## 8. 上线前检查']) {
+  for (const section of ['## 1. 基本信息', '## 2. 适龄提示', '## 3. 用户隐私保护指引', '## 4. 小游戏备案', '## 5. 版本审核说明', '## 6. 变现', '## 9. 上线前检查']) {
     assert.ok(text.includes(section), `missing ${section}`)
   }
   assert.match(text, /12 周岁及以上/u)
@@ -93,6 +93,9 @@ test('materials are written next to the export with everything the console asks 
   assert.match(text, /无需登录/u)
   assert.match(text, /小程序（ICP）备案/u)
   assert.match(text, /game_round_start/u)
+  assert.match(text, /## 8. 上线后看什么/u)
+  assert.match(text, /game_memory_warning/u)
+  assert.match(text, /流量主 → 数据/u)
   assert.match(text, /指标 \/ 事件管理/u)
   assert.match(text, /以微信后台[^。]*为准/u)
 })
