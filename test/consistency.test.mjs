@@ -106,6 +106,26 @@ test('the release materials agree with what the exported game actually embeds', 
   }
 })
 
+test('every ad error code the materials name is a real code with a fix', async (t) => {
+  const { dir, manifest } = await pngProject(t)
+  const exported = await exportWechat(dir)
+  const materials = await releaseMaterials(dir, { exportDir: exported.dir, manifestTitle: manifest.title })
+  const text = await readFile(materials.file, 'utf8')
+  const runtime = await readFile(new URL('../src/wechat-runtime.js', import.meta.url), 'utf8')
+
+  // The runtime's hint table: one entry per WeChat ad error code.
+  const hints = new Map([...runtime.matchAll(/(\d{4}): '([^']+)'/gu)].map((match) => [Number(match[1]), match[2]]))
+  assert.ok(hints.size >= 9, `expected the ad hint table, found ${hints.size} codes`)
+  for (const [code, hint] of hints) assert.match(hint, /[\u4e00-\u9fff]/u, `code ${code} has no Chinese hint`)
+
+  // The materials' "why did the ad fail" row lists the same codes: a code the
+  // user is sent to read must exist, and a runtime code must be documented.
+  const row = text.split('\n').find((line) => line.includes('广告为什么失败'))
+  assert.ok(row, 'the materials must keep the ad-failure row')
+  const named = new Set([...row.matchAll(/\b(1\d{3})\b/gu)].map((match) => Number(match[1])))
+  assert.deepEqual([...named].sort(), [...hints.keys()].sort(), 'materials and runtime list different ad codes')
+})
+
 test('materials do not claim ads the game does not carry', async (t) => {
   const { dir } = await pngProject(t)
   // The wizard says "ads", but the commerce panel was never configured.
