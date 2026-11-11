@@ -10,6 +10,8 @@
 // compare runs against each other, not against a phone.
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { mkdtemp } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createProject, loadManifest } from '../src/project.ts'
@@ -35,7 +37,9 @@ const GAMES = [
   { id: '3d', title: 'Bench Isle', template: 'voxel' },
 ]
 
-const report = { at: new Date().toISOString(), seconds, tier, node: process.version, games: [] }
+const pluginVersion = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).version
+const headShort = execFileSync('git', ['rev-parse', '--short=7', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim()
+const report = { at: new Date().toISOString(), seconds, tier, node: process.version, pluginVersion, head: headShort, games: [] }
 
 async function bench(spec) {
   const root = await mkdtemp(join(repo, '..', '.bench-'))
@@ -113,6 +117,7 @@ await writeFile(join(outDir, `bench-${tier}.json`), `${JSON.stringify(report, nu
 const lines = [
   '# WeChat export benchmark',
   '',
+  `- 插件 ${report.pluginVersion} · HEAD ${report.head}`,
   `- ${report.at} · node ${report.node} · ${seconds}s per game · ${tier} profile (benchmarkLevel ${profile.benchmarkLevel}, pixelRatio ${profile.pixelRatio})`,
   '- Headless Chrome uses software WebGL; 3D numbers are a lower bound. Compare runs, not phones.',
   '',
