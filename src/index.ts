@@ -109,6 +109,36 @@ function presentation(kind: string, project: string, extra: Record<string, unkno
   return { studio: 1, kind, project, ...extra } as any
 }
 
+/** The sidebar command is the first surface an agent or user types into. */
+const COMMAND_ACTIONS: Array<[string, string]> = [
+  ['apply', 'put a generated candidate into its slot'],
+  ['revert', 'restore the previous art of a slot'],
+  ['build', 'rebuild the game and refresh the preview'],
+  ['export', 'export the playable HTML build'],
+  ['export-wechat', 'export the WeChat mini-game project (optional "appid")'],
+  ['wechat-devtools', 'op: open | preview | upload'],
+  ['wechat-release', 'op: status | update | materials | review'],
+  ['wechat-commerce', 'op: status | configure (ad units, IAP, analytics)'],
+  ['wechat-ci', 'write the CI upload kit (optional version/desc)'],
+  ['restore', 'go back to an earlier build'],
+  ['share', 'open a play link (optional minutes, scope "public")'],
+  ['unshare', 'close the play link'],
+  ['status', 'what is in this game folder'],
+  ['wall', 'export one HTML page with every built game'],
+  ['publish', 'publish to GitHub Pages'],
+  ['unpublish', 'remove the published copy'],
+]
+const COMMAND_HELP = [
+  'Game Studio actions — send /game-studio <action> {"project": "...", ...}',
+  '',
+  ...COMMAND_ACTIONS.map(([action, what]) => `  ${action.padEnd(15)} ${what}`),
+  '',
+  'Examples:',
+  '  /game-studio export-wechat {"project": "moon-garden", "appid": "wx1234567890abcdef"}',
+  '  /game-studio wechat-release {"project": "moon-garden", "op": "materials"}',
+  '  /game-studio wechat-devtools {"project": "moon-garden", "op": "preview"}',
+].join('\n')
+
 export function apply(ctx: any, config: Config = {}): void {
   const model = config.openaiModel ?? OPENAI_DEFAULT_MODEL
   const credentialName = config.openaiCredential ?? 'OPENAI_API_KEY'
@@ -1240,6 +1270,7 @@ export function apply(ctx: any, config: Config = {}): void {
           const input = String(rawInput).trim()
           const space = input.search(/\s/u)
           const action = space < 0 ? input : input.slice(0, space)
+          if (!action) return { kind: 'success', text: COMMAND_HELP }
           const payload = space < 0 ? {} : JSON.parse(input.slice(space + 1))
           const cwd = await ctx.workingDirectory.ensure(agent)
           if (action === 'wall') {
@@ -1348,7 +1379,10 @@ export function apply(ctx: any, config: Config = {}): void {
           else if (action === 'share') result = await shareGame(dir, Number(payload.minutes ?? 30), payload.scope === 'public' ? 'public' : 'lan')
           else if (action === 'unshare') { stopShare(dir); await writeState(dir); result = { stopped: true } }
           else if (action === 'status') { const state = await writeState(dir); result = { share: state.share } }
-          else return { kind: 'error', text: `Unknown action "${action}"` }
+          else return {
+            kind: 'error',
+            text: `Unknown action "${action}". Valid actions: ${COMMAND_ACTIONS.map(([name]) => name).join(', ')}. Send /game-studio with no action for details.`,
+          }
           return { kind: 'success', text: JSON.stringify(result) }
         } catch (error) {
           if (error instanceof StudioError && error.code === 'NO_TUNNEL') {

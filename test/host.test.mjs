@@ -429,6 +429,21 @@ test('/game-studio wechat-* refuses a misspelt action instead of guessing', asyn
   assert.match(release.text, /Unknown release action/u)
 })
 
+test('/game-studio without an action explains itself, and a typo lists the real ones', async (t) => {
+  const { runCommand } = await harness(t)
+  const empty = await runCommand('')
+  assert.equal(empty.kind, 'success')
+  assert.match(empty.text, /Game Studio actions/u)
+  assert.match(empty.text, /export-wechat/u)
+  assert.match(empty.text, /wechat-release/u)
+
+  const typo = await runCommand('export-wechatt {"project": "moon-garden"}')
+  assert.equal(typo.kind, 'error')
+  assert.match(typo.text, /Unknown action "export-wechatt"/u)
+  assert.match(typo.text, /Valid actions: apply, revert, build, export, export-wechat/u)
+  assert.match(typo.text, /no action for details/u)
+})
+
 // ---------------------------------------------------------------- playtest
 
 /** Stand-ins for the Harness's attachment store and model catalog. */
