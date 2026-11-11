@@ -56,11 +56,13 @@ function announceRefresh(project: string): void {
 
 const tok = {
   text: 'var(--dsw-alias-label-primary, inherit)',
-  muted: 'var(--dsw-alias-label-secondary, #888)',
+  // Fallbacks are used when the host does not define the variable; they meet 4.5:1
+  // against the light page (#5f6875 = 5.2:1 on #f3f4f6, #b91c1c = 5.9:1).
+  muted: 'var(--dsw-alias-label-secondary, #5f6875)',
   border: 'var(--dsw-alias-border-l2, rgba(128,128,128,.3))',
   layer: 'var(--dsw-alias-bg-layer-1, rgba(128,128,128,.08))',
   active: 'var(--dsw-alias-interactive-bg-active, rgba(128,128,128,.18))',
-  danger: 'var(--dsw-alias-label-danger, #d33)',
+  danger: 'var(--dsw-alias-label-danger, #b91c1c)',
 }
 
 const s: Record<string, CSSProperties> = {

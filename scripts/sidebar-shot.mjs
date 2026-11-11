@@ -64,6 +64,40 @@ if (!browser) {
   console.log('no Chrome or Edge installed: screenshots skipped')
   process.exit(0)
 }
+const parseRgb = (value) => {
+  const text = String(value).trim()
+  const hex = text.match(/^#([0-9a-f]{6})$/iu)
+  if (hex) {
+    const int = Number.parseInt(hex[1], 16)
+    return { r: (int >> 16) & 255, g: (int >> 8) & 255, b: int & 255 }
+  }
+  const match = text.match(/rgba?\(([^)]+)\)/u)
+  if (!match) return null
+  const [r, g, b] = match[1].split(',').map((part) => Number(part.trim()))
+  return { r, g, b }
+}
+const luminance = ({ r, g, b }) => {
+  const channel = (value) => {
+    const v = value / 255
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+}
+const contrastRatio = (foreground, background) => {
+  const a = luminance(parseRgb(foreground))
+  const b = luminance(parseRgb(background))
+  const [light, dark] = a >= b ? [a, b] : [b, a]
+  return (light + 0.05) / (dark + 0.05)
+}
+const contrastChecks = []
+const expectContrast = (label, foreground, background, minimum) => {
+  const ratio = contrastRatio(foreground, background)
+  const ok = ratio >= minimum
+  contrastChecks.push({ label, ratio: Number(ratio.toFixed(2)), minimum, ok })
+  console.log(`${ok ? 'PASS' : 'FAIL'}  contrast ${label}: ${ratio.toFixed(2)}:1 (needs ${minimum}:1) — ${foreground} on ${background}`)
+  if (!ok) process.exitCode = 1
+}
+
 const page = await browser.newPage({ viewport: { width: 400, height: 900 }, deviceScaleFactor: 2 })
 const errors = []
 page.on('pageerror', (error) => errors.push(String(error?.stack ?? error)))
@@ -108,6 +142,22 @@ try {
     await page.waitForTimeout(500)
     await page.screenshot({ path: join(outDir, 'sidebar-env.png'), fullPage: true })
   }
+
+  const lightColours = await page.evaluate(() => {
+    const styleOf = (text) => {
+      const node = [...document.querySelectorAll('div, span, button')]
+        .filter((el) => el.childElementCount === 0)
+        .find((el) => el.textContent.trim().includes(text))
+      return node ? getComputedStyle(node) : null
+    }
+    return {
+      muted: styleOf('点一下画面开始玩')?.color ?? null,
+      danger: styleOf('环境检查')?.color ?? null,
+      background: getComputedStyle(document.body).backgroundColor,
+    }
+  })
+  if (lightColours.muted) expectContrast('light muted hint', lightColours.muted, lightColours.background, 4.5)
+  if (lightColours.danger) expectContrast('light error notice', lightColours.danger, lightColours.background, 4.5)
 
   // Preview writes a QR file; the panel shows it so the user can scan directly.
   const previewButton = await page.$('text=预览二维码')
@@ -166,12 +216,21 @@ try {
   await dark.waitForTimeout(400)
   const themed = await dark.evaluate(() => {
     const heading = [...document.querySelectorAll('strong')].find((node) => node.textContent.includes('上线向导'))
-    return heading ? getComputedStyle(heading).color : null
+    const hint = [...document.querySelectorAll('div, span')]
+      .filter((node) => node.childElementCount === 0)
+      .find((node) => node.textContent.trim().includes('点一下画面开始玩'))
+    return {
+      heading: heading ? getComputedStyle(heading).color : null,
+      hint: hint ? getComputedStyle(hint).color : null,
+      background: '#11151c',
+    }
   })
-  console.log(`dark theme heading colour: ${themed} (${darkErrors.length} page errors)`)
+  console.log(`dark theme heading colour: ${themed.heading} (${darkErrors.length} page errors)`)
+  if (themed.heading) expectContrast('dark primary text', themed.heading, themed.background, 7)
+  if (themed.hint) expectContrast('dark muted hint', themed.hint, themed.background, 4.5)
   await dark.screenshot({ path: join(outDir, 'sidebar-dark.png'), fullPage: true })
   await dark.close()
-  if (themed !== 'rgb(232, 236, 245)') {
+  if (themed.heading !== 'rgb(232, 236, 245)') {
     console.error('the panel ignores the host label colour in a dark theme')
     process.exitCode = 1
   }
