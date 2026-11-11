@@ -184,6 +184,12 @@ Each game is a plain folder in your workspace:
 npm ci
 npm run build   # lib/index.js, lib/client.js and the bundled three.js runtime
 npm test        # node --test; browser tests are skipped when no Chrome or Edge is found
+npm run acceptance # 2D + 3D game → WeChat export → boot in the mock wx harness; writes
+                   # screenshots and REPORT.md to ../artifacts/acceptance
+```
+
+The acceptance run uses the same mock-wx harness as the tests, so it fails when the
+shipped adapter breaks — re-run it after an upstream update.
 ```
 
 ## Ecosystem
