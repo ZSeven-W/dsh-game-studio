@@ -5,6 +5,7 @@
 // The browser-free tests use PNG slot art so exporting needs no Chrome; the two
 // browser tests skip themselves where neither Chrome nor Edge is installed.
 import assert from 'node:assert/strict'
+import { randomFillSync } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -311,6 +312,32 @@ test('large art goes into an assets subpackage and the game waits for it', async
     // The game code only runs after the subpackage callback, so the title screen
     // appearing proves the boot wrapper waited.
     await page.waitForFunction('window.__G.__gameState && window.__G.__gameState().phase === "title"', undefined, { timeout: 10000 })
+    assert.deepEqual(errors, [])
+  })
+  if (!ran) return t.skip('no Chrome or Edge here')
+})
+
+test('a 3D game with large art waits for its subpackage before it renders', async (t) => {
+  const { dir } = await tempProject(t, { template: 'voxel' })
+  await rasterSlots(dir)
+  const manifest = await loadManifest(dir)
+  const slot = Object.keys(manifest.slots)[0]
+  // Incompressible 900x900 art: a valid PNG big enough to split, so the 3D path is
+  // exercised with real textures rather than a placeholder.
+  const png = new PNG({ width: 900, height: 900 })
+  randomFillSync(png.data)
+  for (let i = 3; i < png.data.length; i += 4) png.data[i] = 255
+  await writeFile(join(dir, manifest.slots[slot].file), PNG.sync.write(png))
+
+  const exported = await exportWechat(dir)
+  assert.equal(exported.subpackage, true)
+  const ran = await withMockWx(exported.dir, async ({ page, errors }) => {
+    await page.waitForFunction('window.__wxSubpackages.length > 0', undefined, { timeout: 20000 })
+    assert.deepEqual(await page.evaluate(() => window.__wxSubpackages), ['assets'])
+    await page.waitForFunction('window.__G.__gameState && window.__G.__gameState().phase === "title"', undefined, { timeout: 20000 })
+    const state = await page.evaluate(() => window.__G.__gameState())
+    assert.equal(state.renderer, 'webgl', 'three.js still gets a WebGL context after the subpackage wait')
+    assert.equal(await page.evaluate(() => Boolean(window.__G.__wechatRuntime.webgl)), true)
     assert.deepEqual(errors, [])
   })
   if (!ran) return t.skip('no Chrome or Edge here')
