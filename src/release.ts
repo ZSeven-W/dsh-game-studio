@@ -513,6 +513,8 @@ export async function releaseMaterials(
     '',
     '提示：这些事件要先在「数据 → 指标 / 事件管理」建同名事件（见上一节），否则后台看不到。',
     '',
+    '**上线前自检**：在开发者工具打开调试器 → Console，输入 `__wechatRuntime.summary()`，打一局后应看到 `rounds: 1`、`completedRounds: 1`、`adShows: 1`。数字不动说明埋点或广告没接上；`adFailures` 增长就去查广告位状态。',
+    '',
     '## 9. 上线前检查',
     '',
     '- [ ] 已在真机预览：能开始、能玩完一局、结算页可重开。',
@@ -521,6 +523,7 @@ export async function releaseMaterials(
     '- [ ] 小游戏备案已通过；需要时报关小程序（ICP）备案。',
     '- [ ] 适龄提示与隐私指引已按实际内容填写。',
     '- [ ] 要看的埋点事件已在后台建好（见上一节）。',
+    '- [ ] 在开发者工具里打过一局，`__wechatRuntime.summary()` 的 rounds/completedRounds/adShows 都在动。',
     '',
   ]
   const markdown = lines.join('\n')

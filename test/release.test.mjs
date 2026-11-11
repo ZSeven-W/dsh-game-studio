@@ -102,6 +102,7 @@ test('materials are written next to the export with everything the console asks 
   assert.match(text, /wx.requirePrivacyAuthorize/u)
   assert.match(text, /服务内容声明 → 用户隐私保护指引/u)
   assert.match(text, /指标 \/ 事件管理/u)
+  assert.match(text, /__wechatRuntime.summary\(\)/u, 'the materials must show how to self-check the event plumbing')
   assert.match(text, /以微信后台[^。]*为准/u)
   // Section 5 must describe this game, not a generic template.
   assert.match(text, /游戏名称：Lantern Isle/u)
