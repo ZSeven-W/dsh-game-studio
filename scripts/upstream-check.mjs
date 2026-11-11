@@ -157,10 +157,12 @@ async function applySeries() {  const patchDir = await mkdtemp(join(tmpdir(), 'd
 }
 
 try {
-  report.base = git(repo, ['rev-list', '--max-parents=0', 'HEAD']).out.split('\n').pop()
   report.head = git(repo, ['rev-parse', 'HEAD']).out
-  report.patchCount = Number(git(repo, ['rev-list', '--count', `${report.base}..HEAD`]).out) || 0
 
+  // Resolve upstream before the base: with full history the branch point is the
+  // merge-base with upstream, not the repository root (a shallow clone's root
+  // happens to be the branch point, which is why the first version worked
+  // locally and would have compared against the fork itself in CI).
   if (OVERRIDE) {
     git(repo, ['fetch', '--quiet', REMOTE, OVERRIDE], { allowFail: true })
     const resolved = git(repo, ['rev-parse', '--verify', `${OVERRIDE}^{commit}`], { allowFail: true })
@@ -168,9 +170,6 @@ try {
     if (!report.upstream) {
       report.status = 'skipped'
       report.message = `cannot resolve ${OVERRIDE}`
-    } else {
-      report.status = report.upstream === report.base ? 'up-to-date' : 'upstream-moved'
-      report.message = `checking against ${OVERRIDE}`
     }
   } else {
     const remote = git(repo, ['ls-remote', '--heads', REMOTE, BRANCH], { allowFail: true })
@@ -182,13 +181,23 @@ try {
       if (!report.upstream) {
         report.status = 'skipped'
         report.message = `${REMOTE}/${BRANCH} does not exist (or has no commits)`
-      } else if (report.upstream === report.base) {
-        report.status = 'up-to-date'
-        report.message = 'upstream still points at the commit this fork branched from'
       } else {
-        report.status = 'upstream-moved'
-        report.message = `upstream moved from ${report.base.slice(0, 12)} to ${report.upstream.slice(0, 12)}`
+        git(repo, ['fetch', '--quiet', REMOTE, BRANCH], { allowFail: true })
       }
+    }
+  }
+
+  if (report.upstream) {
+    const merged = git(repo, ['merge-base', 'HEAD', report.upstream], { allowFail: true })
+    report.base = (merged.ok && merged.out)
+      || git(repo, ['rev-list', '--max-parents=0', 'HEAD']).out.split('\n').pop()
+    report.patchCount = Number(git(repo, ['rev-list', '--count', `${report.base}..HEAD`]).out) || 0
+    if (report.upstream === report.base) {
+      report.status = 'up-to-date'
+      report.message = 'upstream still points at the commit this fork branched from'
+    } else {
+      report.status = 'upstream-moved'
+      report.message = `upstream moved from ${report.base.slice(0, 12)} to ${report.upstream.slice(0, 12)}`
     }
   }
 

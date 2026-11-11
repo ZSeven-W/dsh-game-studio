@@ -71,6 +71,18 @@ produced by the installed plugin.
 ```sh
 npm run upstream   # is upstream still at the base commit, and does the series still apply?
 npm run upstream -- --build   # also apply the series in a worktree, build it and run the WeChat tests there
+
+Expected output when the fork is healthy:
+
+```text
+upstream origin/main: up-to-date
+  series    applies cleanly
+  build     ok
+  tests     58 pass, 0 fail, 0 skipped
+```
+
+CI runs the same command nightly (`.github/workflows/upstream-drift.yml`); in a GitHub fork origin
+is the fork, so the workflow adds the original repository as `upstream` and passes `--remote upstream`.
 git format-patch 93459aa..HEAD -o ../artifacts/upstream-pr --no-signature
 ```
 

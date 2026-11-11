@@ -1,0 +1,36 @@
+# Upstream drift check: the WeChat target lives in a fork, so upstream moving is
+# expected. Once a night (and on demand) this applies the patch series to current
+# upstream, builds it, and runs the WeChat tests there — proving the fork still
+# works on top of upstream, not just that the patches apply.
+name: Upstream drift
+
+on:
+  schedule:
+    # 03:00 Asia/Shanghai; GitHub cron is UTC.
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Apply, build and test on upstream
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      # In a GitHub fork origin is the fork itself, so the check must compare
+      # against the repository this fork came from.
+      - name: Add the original repository as upstream
+        run: git remote add upstream https://github.com/ZSeven-W/dsh-game-studio.git
+      - name: Check the series against upstream
+        run: npm run upstream -- --remote upstream --build
