@@ -74,6 +74,8 @@ worktree (58 on the current series). `--build` creates its own worktree; a clean
   `下一步待办.md` — version, patch count, test count, acceptance count, trace count.
 - `node ../artifacts/status-check.mjs` and `node ../artifacts/audit-docs.mjs`
   must both pass; they compare the documents with the repository.
+- `node ../artifacts/audit-cross.mjs` must pass: every "部分/未证" acceptance item
+  has a residual-risk row.
 
 ## 7. Commit
 
