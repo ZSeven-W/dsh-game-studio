@@ -23,3 +23,11 @@ test('CI runs a Node major that satisfies the declared engines', () => {
   const major = Number(check.match(/node-version:\s*'?(\d+)'?/u)?.[1])
   assert.ok(major >= requiredMajor, `CI uses Node ${major}, engines requires ${required}`)
 })
+
+test('the DSH host requirement is declared and documented', () => {
+  const range = pkg.engines?.dsh ?? ''
+  assert.match(range, /^>=?\d+\.\d+\.\d+/u, `engines.dsh should be a semver range, got ${range}`)
+  const documented = readme.match(/DeepSeek Harness `([\d.]+(?:-rc\.\d+)?)` or later/u)?.[1]
+  assert.ok(documented, 'the README should state the DSH requirement')
+  assert.equal(range, `>=${documented}`, `README says ${documented}, engines.dsh says ${range}`)
+})

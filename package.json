@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/dsh-game-studio",
-  "version": "0.1.0-rc.75",
+  "version": "0.1.0-rc.76",
   "description": "Describe a small game in one sentence, play it in the DeepSeek Harness sidebar, swap in AI art, and publish to GitHub Pages or Cloudflare in one click.",
   "license": "MIT",
   "repository": {
@@ -45,7 +45,8 @@
     "github-pages"
   ],
   "engines": {
-    "node": ">=24.11.0"
+    "node": ">=24.11.0",
+    "dsh": ">=0.2.1-rc.5"
   },
   "scripts": {
     "build": "node scripts/build.mjs",

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.75</code> &middot; Tested with DSH <code>0.2.1-rc.5</code></sub><br />
+  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.76</code> &middot; Tested with DSH <code>0.2.1-rc.5</code></sub><br />
   🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>Live Demo Game Wall (10 playable 2D &amp; 3D games)</strong></a> &middot; <sub>Subscribe in Online Sources: <code>finiking/dsh-games</code></sub>
 </p>
 
@@ -123,7 +123,7 @@ The sidebar's buttons (apply, revert, build, export, export WeChat, restore, sha
 
 ## Requirements
 
-- DeepSeek Harness `0.2.1` or later (web or desktop), Node.js `24.11` or later.
+- DeepSeek Harness `0.2.1-rc.5` or later (web or desktop), Node.js `24.11` or later.
 - Google Chrome or Microsoft Edge on the same computer for playtests, and for rasterising SVG art when exporting a WeChat mini-game.
 - For AI art, either an OpenAI API key or the Codex CLI signed in. Without either, games still work with their code-drawn characters.
 - Optional: `cloudflared` (`brew install cloudflared` on macOS) for temporary public share links; `gh` (`brew install gh` and `gh auth login`) for publishing to GitHub Pages.
