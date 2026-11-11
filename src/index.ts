@@ -899,6 +899,7 @@ export function apply(ctx: any, config: Config = {}): void {
       action: { type: 'string', enum: ['open', 'preview', 'upload', 'doctor'], description: 'What to do in the IDE. "doctor" only checks the environment (CLI, service port, AppID) and returns what to fix. Defaults to open.' },
       version: { type: 'string', description: 'Upload version, e.g. "1.0.0". Defaults to 1.0.0.' },
       desc: { type: 'string', description: 'Upload description shown in the WeChat admin version list.' },
+      cli: { type: 'string', description: 'Path to the WeChat DevTools CLI, for a non-standard install. Defaults to the usual locations.' },
     },
     output: {
       schema: json,
@@ -908,23 +909,24 @@ export function apply(ctx: any, config: Config = {}): void {
     async execute(args: any, exec: any) {
       const dir = await projectDir(exec, args.path)
       const action = String(args.action ?? 'open')
+      const cli = typeof args.cli === 'string' && args.cli !== '' ? args.cli : undefined
       if (action === 'doctor') {
         const exportDir = findWechatExport(dir)
         if (!exportDir) throw new StudioError('No WeChat mini-game export found; run the WeChat export first.', 'NO_WECHAT_EXPORT')
-        return { project: dir, ...(await devtoolsDoctor(exportDir)) }
+        return { project: dir, ...(await devtoolsDoctor(exportDir, { configuredCli: cli })) }
       }
       if (action === 'open') {
-        const result = await openInDevtools(dir)
+        const result = await openInDevtools(dir, { cli })
         await markReleaseDone(dir, 'devtools', 'opened in WeChat DevTools').catch(() => undefined)
         return { project: dir, ...result }
       }
-      if (action === 'preview') return { project: dir, ...(await previewInDevtools(dir)) }
+      if (action === 'preview') return { project: dir, ...(await previewInDevtools(dir, { cli })) }
       if (action === 'upload') {
-        const result = await uploadFromDevtools(dir, { version: args.version, desc: args.desc })
+        const result = await uploadFromDevtools(dir, { version: args.version, desc: args.desc, cli })
         await markReleaseDone(dir, 'upload', `uploaded ${args.version ?? '1.0.0'}`).catch(() => undefined)
         return { project: dir, ...result }
       }
-      throw new StudioError(`Unknown DevTools action "${action}"; use open, preview or upload.`, 'BAD_ACTION')
+      throw new StudioError(`Unknown DevTools action "${action}"; use open, preview, upload or doctor.`, 'BAD_ACTION')
     },
   }))
 
@@ -1317,17 +1319,18 @@ export function apply(ctx: any, config: Config = {}): void {
           else if (action === 'wechat-devtools') {
             const op = String(payload.op ?? 'open')
             if (!['open', 'preview', 'upload', 'doctor'].includes(op)) throw new StudioError(`Unknown DevTools action "${op}". Use open, preview, upload or doctor.`, 'BAD_ACTION')
+            const cli = typeof payload.cli === 'string' && payload.cli !== '' ? payload.cli : undefined
             if (op === 'doctor') {
               const exportDir = findWechatExport(dir)
               if (!exportDir) throw new StudioError('No WeChat mini-game export found; run the WeChat export first.', 'NO_WECHAT_EXPORT')
-              result = await devtoolsDoctor(exportDir)
+              result = await devtoolsDoctor(exportDir, { configuredCli: cli })
             }
-            else if (op === 'preview') result = await previewInDevtools(dir)
+            else if (op === 'preview') result = await previewInDevtools(dir, { cli })
             else if (op === 'upload') {
-              result = await uploadFromDevtools(dir, { version: typeof payload.version === 'string' ? payload.version : undefined, desc: typeof payload.desc === 'string' ? payload.desc : undefined })
+              result = await uploadFromDevtools(dir, { version: typeof payload.version === 'string' ? payload.version : undefined, desc: typeof payload.desc === 'string' ? payload.desc : undefined, cli })
               await markReleaseDone(dir, 'upload', `uploaded ${String(payload.version ?? '1.0.0')}`).catch(() => undefined)
             } else {
-              result = await openInDevtools(dir)
+              result = await openInDevtools(dir, { cli })
               await markReleaseDone(dir, 'devtools', 'opened in WeChat DevTools').catch(() => undefined)
             }
           }
