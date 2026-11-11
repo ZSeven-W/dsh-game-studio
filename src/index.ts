@@ -933,7 +933,7 @@ export function apply(ctx: any, config: Config = {}): void {
       iapEnabled: { type: 'boolean', description: 'Switch in-app purchases on. Requires a game licence number and a WeChat Pay merchant ID.' },
       licenseNumber: { type: 'string', description: '游戏版号 / 审批文号. Required for IAP.' },
       merchantId: { type: 'string', description: '微信支付商户号. Required for IAP.' },
-      payUrl: { type: 'string', description: 'https endpoint that returns signData/paySig/signature for wx.requestVirtualPayment. Without it IAP runs in demo mode.' },
+      payUrl: { type: 'string', description: 'https endpoint that returns the signed parameters (signData/paySig/signature) for wx.requestMidasPaymentGameItem. Without it IAP runs in demo mode.' },
     },
     output: {
       schema: json,

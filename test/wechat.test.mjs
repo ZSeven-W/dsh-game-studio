@@ -193,7 +193,7 @@ test('a game with ads shows one interstitial between rounds and can revive on a 
   if (!ran) return t.skip('no Chrome or Edge here')
 })
 
-test('in-app purchases run in demo mode without a pay server, and through wx.requestVirtualPayment with one', async (t) => {
+test('in-app purchases run in demo mode without a pay server, and through wx.requestMidasPaymentGameItem with one', async (t) => {
   const { dir } = await tempProject(t)
   await rasterSlots(dir)
   await updateCommerce(dir, { iapEnabled: true, licenseNumber: 'ISBN 978-7-498-12345-6', merchantId: '1900000109' })
@@ -216,12 +216,15 @@ test('in-app purchases run in demo mode without a pay server, and through wx.req
   assert.equal(paid.monetization?.iap?.dryRun, false)
   const paidTail = await withMockWx(paid.dir, async ({ page, errors }) => {
     const result = await page.evaluate(() => window.__G.__commerce.iap.buy('gem-10'))
-    assert.equal(result.errMsg, 'requestVirtualPayment:ok')
+    // Mini-games pay through the Midas game-item API; the server owns the signing.
+    assert.equal(result.errMsg, 'requestMidasPaymentGameItem:ok')
     const iap = await page.evaluate(() => window.__wxIap)
     assert.match(iap.request.url, /pay\.example\.com/u)
     assert.equal(iap.request.data.sku, 'gem-10')
-    assert.equal(iap.payment.mode, 'game')
+    assert.equal(iap.payment.api, 'midas')
+    assert.equal(iap.payment.signData, '{"offerId":"x"}')
     assert.equal(iap.payment.paySig, 'pay-sig')
+    assert.equal(iap.payment.signature, 'sig')
     assert.deepEqual(errors, [])
   })
   if (!paidTail) return t.skip('no Chrome or Edge here')

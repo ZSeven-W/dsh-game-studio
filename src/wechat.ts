@@ -109,7 +109,7 @@ function readme(manifest: GameManifest, appid: string): string {
     '- SVG 素材已转成 PNG，因为微信小游戏的 Image 不保证支持 SVG。',
     '- 音效已适配：模板用到的 WebAudio 子集（振荡器 + 增益包络）被渲染成小 WAV，用 wx.createInnerAudioContext 播放；设备没有音频能力时静音但不报错。',
     '- 广告不强推：配置广告位后两局之间最多一次插屏，激励视频只由「看广告复活」触发；未配置则不加载广告代码。',
-    '- 内购需要版号与微信支付商户号才能开启；配了签名服务地址才会真正调 wx.requestVirtualPayment，否则只跑演示流程。',
+    '- 内购需要版号与微信支付商户号才能开启；配了签名服务地址才会真正调 wx.requestMidasPaymentGameItem，否则只跑演示流程。',
     '- 低端机会自动降级：按设备 benchmark 把渲染倍率限制在 1×（中端 1.5×、高端 2×），低端机帧率上限 30。',
     '- 导出结果里的 report 是包体报告：最大文件、是否超过 4 MB 主包、该压缩什么。',
     '- 运行时暴露 __wechatRuntime.metrics()（启动耗时、帧数、平均帧率）和 __wechatRuntime.quality（设备档位）；崩溃与未处理异常会写进 wx.getRealtimeLogManager。',

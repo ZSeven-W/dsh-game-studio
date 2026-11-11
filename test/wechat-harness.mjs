@@ -72,6 +72,10 @@ const MOCK_INJECT = `(function () {
       window.__wxIap.request = { url: options.url, data: options.data };
       setTimeout(function () { options.success({ statusCode: 200, data: { signData: '{"offerId":"x"}', paySig: 'pay-sig', signature: 'sig' } }); }, 10);
     },
+    requestMidasPaymentGameItem: function (options) {
+      window.__wxIap.payment = { api: 'midas', signData: options.signData, paySig: options.paySig, signature: options.signature };
+      setTimeout(function () { options.success({ errMsg: 'requestMidasPaymentGameItem:ok' }); }, 10);
+    },
     requestVirtualPayment: function (options) {
       window.__wxIap.payment = { signData: options.signData, paySig: options.paySig, signature: options.signature, mode: options.mode };
       setTimeout(function () { options.success({ errMsg: 'requestVirtualPayment:ok' }); }, 10);

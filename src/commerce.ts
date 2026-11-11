@@ -18,7 +18,7 @@ export interface IapConfig {
   licenseNumber?: string
   /** 微信支付商户号. Required to switch IAP on. */
   merchantId?: string
-  /** Endpoint that returns the signed parameters for wx.requestVirtualPayment. */
+  /** Endpoint that returns signData/paySig/signature for wx.requestMidasPaymentGameItem. */
   payUrl?: string
 }
 
@@ -85,8 +85,12 @@ export function commerceCheck(state: CommerceState): CommerceCheck {
     if (state.iap.payUrl && !/^https:\/\//iu.test(state.iap.payUrl)) problems.push('内购签名服务的地址必须是 https://（微信要求安全传输）。')
     if (state.iap.licenseNumber && state.iap.merchantId) {
       notes.push(state.iap.payUrl
-        ? '内购会先请求你的签名服务，再调用 wx.requestVirtualPayment；插件不代签、不代收款。'
+        ? '内购会先请求你的签名服务，再调用 wx.requestMidasPaymentGameItem（小游戏道具直购）；插件不代签、不代收款。'
         : '没有配置签名服务地址：内购以「演示模式」运行，只验证流程，不会产生真实订单。')
+      if (state.iap.payUrl) {
+        notes.push('签名服务需要返回 signData（JSON 字符串，含 mode:"goods"、offerId、buyQuantity、env、currencyType、platform、zoneId、productId、goodsPrice、outTradeNo、attach）、paySig 和 signature。')
+        notes.push('paySig = HMAC-SHA256(支付 AppKey, "requestMidasPaymentGameItem&" + signData)；signature 为用户态签名，两者都必须在服务端算。')
+      }
     }
   }
   return { ok: problems.length === 0, problems, notes }
