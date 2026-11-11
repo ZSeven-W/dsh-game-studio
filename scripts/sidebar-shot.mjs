@@ -226,18 +226,30 @@ try {
 
   // Preview writes a QR file; the panel shows it so the user can scan directly.
   const previewButton = await page.$('text=预览二维码')
-  if (previewButton) {
+  if (!previewButton) {
+    console.error('the preview button did not render')
+    process.exitCode = 1
+  } else {
     await previewButton.click()
-    await page.waitForSelector('img[alt="preview QR"]', { timeout: 5000 }).catch(() => undefined)
+    const qr = await page.waitForSelector('img[alt="preview QR"]', { timeout: 5000 }).catch(() => null)
+    const loaded = qr ? await qr.evaluate((img) => Boolean(img.getAttribute('src')) && img.complete && img.naturalWidth > 0) : false
+    console.log(`preview QR rendered: ${loaded}`)
+    if (!loaded) process.exitCode = 1
     await page.waitForTimeout(500)
     await page.screenshot({ path: join(outDir, 'sidebar-preview.png'), fullPage: true })
   }
 
   // Upload with the fake CLI: the wizard must show the upload step done afterwards.
   const uploadButton = await page.$('text=上传版本')
-  if (uploadButton) {
+  if (!uploadButton) {
+    console.error('the upload button did not render')
+    process.exitCode = 1
+  } else {
     await uploadButton.click()
     await page.waitForSelector('text=已上传版本', { timeout: 5000 }).catch(() => undefined)
+    const recorded = await page.evaluate(() => document.body.innerText.includes('已上传版本'))
+    console.log(`upload feedback rendered: ${recorded}`)
+    if (!recorded) process.exitCode = 1
     await page.waitForTimeout(600)
     await page.screenshot({ path: join(outDir, 'sidebar-uploaded.png'), fullPage: true })
   }
@@ -336,6 +348,19 @@ try {
     const moved = /已完成 [1-9]\d*\/15/u.test(after) && before !== after
     console.log(`wizard step toggle: ${moved ? 'progress moved' : 'NO CHANGE'}`)
     if (!moved) process.exitCode = 1
+  }
+
+  // The export button must do something visible: the notice carries the directory.
+  const exportButton = await page.$('button:has-text("导出微信小游戏")')
+  if (!exportButton) {
+    console.error('the WeChat export button did not render')
+    process.exitCode = 1
+  } else {
+    await exportButton.click()
+    await page.waitForTimeout(600)
+    const shown = await page.evaluate(() => document.body.innerText.includes('export/wechat/lantern-isle-3d'))
+    console.log(`export button result: ${shown ? 'directory shown' : 'NOTHING SHOWN'}`)
+    if (!shown) process.exitCode = 1
   }
 
   console.log(`screenshots written to ${outDir} (${errors.length} page errors)`)
