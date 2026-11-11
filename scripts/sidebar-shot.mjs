@@ -33,13 +33,12 @@ try {
   await writeFile(join(dir, 'game.json'), `${JSON.stringify(project, null, 2)}\n`)
   const built = await buildProject(dir, 'Screenshot fixture')
   fixtures.state = await writeState(dir, built)
-  // The panel shows that these two files already exist; generate them for the fixture.
-  await markMaterialsWritten(dir)
-  await markReviewWritten(dir)
+  // Start without the two generated files: the screenshot run clicks the buttons and
+  // requires the chips to appear, so the click is proven, not just rendered.
   fixtures.release = {
     ...releaseStatus(dir, await loadRelease(dir), releasePlan(false)),
-    materialsPresent: true,
-    reviewPresent: true,
+    materialsPresent: false,
+    reviewPresent: false,
     uploads: [{ version: '0.9.0', at: new Date().toISOString(), note: 'uploaded 0.9.0 · 主包 803 KB · upload ok' }],
   }
   fixtures.commerce = {
@@ -133,6 +132,26 @@ try {
   await page.click('text=上线向导')
   await page.waitForSelector('text=注册', { timeout: 20000 })
   await page.waitForTimeout(400)
+  // Generating the two documents must make their chips appear. This is the browser
+  // evidence for step 5 of the shortest path (the command layer is covered by tests).
+  const beforeChips = await page.evaluate(() => document.body.innerText.includes('材料已生成'))
+  const materialsButton = await page.$('text=生成发布材料')
+  const reviewButton = await page.$('text=审核自查')
+  if (!materialsButton || !reviewButton) {
+    console.error('the materials/review buttons did not render')
+    process.exitCode = 1
+  } else {
+    await materialsButton.click()
+    await page.waitForTimeout(400)
+    await reviewButton.click()
+    await page.waitForTimeout(500)
+    const afterChips = await page.evaluate(() => ({
+      materials: document.body.innerText.includes('材料已生成'),
+      review: document.body.innerText.includes('自查已生成'),
+    }))
+    console.log(`materials/review chips: before=${beforeChips} after=${afterChips.materials && afterChips.review}`)
+    if (beforeChips || !afterChips.materials || !afterChips.review) process.exitCode = 1
+  }
   await page.screenshot({ path: join(outDir, 'sidebar-wizard.png'), fullPage: true })
 
   // The step list scrolls inside the panel; a second shot shows the rest.

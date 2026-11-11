@@ -392,10 +392,11 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
       if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
       const file = (JSON.parse(result.text) as { file?: string }).file ?? ''
       setNotice({ kind: 'info', text: t('tab.releaseMaterialsSaved', { file }) })
+      void loadRelease()
     } finally {
       setReleaseBusy(false)
     }
-  }, [runCommand, sessionId, project, t])
+  }, [runCommand, sessionId, project, t, loadRelease])
 
   const writeReviewGuide = useCallback(async () => {
     setReleaseBusy(true)
@@ -404,6 +405,7 @@ function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, r
       if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
       const parsed = JSON.parse(result.text) as { file?: string; risks?: unknown[] }
       setNotice({ kind: 'info', text: t('tab.releaseReviewSaved', { file: parsed.file ?? '', count: String(parsed.risks?.length ?? 0) }) })
+      void loadRelease()
     } finally {
       setReleaseBusy(false)
     }

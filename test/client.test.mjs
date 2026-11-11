@@ -48,6 +48,16 @@ test('the sidebar only calls command actions and ops that the host defines', () 
   for (const op of ops) assert.ok(allowedOps.has(op), `the sidebar sends unknown op "${op}"`)
 })
 
+test('writing the materials or the review refreshes the wizard view', () => {
+  const source = readFileSync(new URL('../src/client/index.tsx', import.meta.url), 'utf8')
+  // Both writers must reload the status, otherwise the chips only appear after a
+  // manual reload (the screenshot run caught this).
+  assert.match(source, /releaseMaterialsSaved[\s\S]{0,400}void loadRelease\(\)/u,
+    'the materials handler must reload the status after writing')
+  assert.match(source, /releaseReviewSaved[\s\S]{0,400}void loadRelease\(\)/u,
+    'the review handler must reload the status after writing')
+})
+
 test('the README describes the controls the panel actually has', () => {
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8')
   const source = readFileSync(new URL('../src/client/locales.ts', import.meta.url), 'utf8')

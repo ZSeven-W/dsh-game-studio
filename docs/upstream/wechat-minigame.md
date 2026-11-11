@@ -84,7 +84,7 @@ repository's existing `release: 0.1.0-rc.N` convention.
 
 ## Testing
 
-- `npm test`: 240 tests, 187 pass. The 49 failures are environmental on this
+- `npm test`: 241 tests, 188 pass. The 49 failures are environmental on this
   Windows machine and identical before this series (no `gh` CLI, no `cloudflared`,
   Codex CLI tests, path-separator assertions); 4 tests skip without a browser.
 - New suites: `test/wechat.test.mjs` (23), `test/devtools.test.mjs` (6),

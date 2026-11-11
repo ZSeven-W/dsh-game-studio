@@ -74,6 +74,19 @@ const runCommand = async (_session: string, input: string) => {
   // host's markReleaseDone does.
   if (input.startsWith('wechat-release {')) {
     const base = fixtures.release as { steps?: Array<{ id: string; status: string }>; progress?: unknown }
+    // Generating the two documents flips their chips, like the host's markers do.
+    if (input.includes('"op":"materials"')) {
+      const view = fixtures.release as Record<string, unknown>
+      view.materialsAt = new Date().toISOString()
+      view.materialsPresent = true
+      return { ok: true, text: JSON.stringify({ file: 'export/wechat/lantern-isle-3d/RELEASE.md', markdown: '# materials' }) }
+    }
+    if (input.includes('"op":"review"')) {
+      const view = fixtures.release as Record<string, unknown>
+      view.reviewAt = new Date().toISOString()
+      view.reviewPresent = true
+      return { ok: true, text: JSON.stringify({ file: 'export/wechat/lantern-isle-3d/REVIEW.md', risks: [] }) }
+    }
     // A step click sends an update: flip that step so the panel really re-renders.
     if (Array.isArray(base.steps) && input.includes('"step"')) {
       const payload = JSON.parse(input.slice('wechat-release '.length)) as { step?: string }
