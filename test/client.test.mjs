@@ -48,6 +48,15 @@ test('the sidebar only calls command actions and ops that the host defines', () 
   for (const op of ops) assert.ok(allowedOps.has(op), `the sidebar sends unknown op "${op}"`)
 })
 
+test('the README describes the controls the panel actually has', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../src/client/locales.ts', import.meta.url), 'utf8')
+  for (const label of ['检查环境', '预览二维码', '上传版本', '下一步', '上线向导']) {
+    assert.ok(readme.includes(label), `README no longer mentions "${label}"`)
+    assert.ok(source.includes(label), `the sidebar has no "${label}" string`)
+  }
+})
+
 test('the WeChat export button, the launch wizard and the monetization panel are wired in', () => {
   // A key that exists but is never referenced means the panel was removed while
   // the copy stayed behind; referencing it without copy shows the raw key.
