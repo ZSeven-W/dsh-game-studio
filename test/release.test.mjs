@@ -8,6 +8,7 @@ import { test } from 'node:test'
 import {
   loadRelease, markReleaseDone, releaseFile, releaseMaterials, releasePlan, releaseStatus, updateRelease,
 } from '../src/release.ts'
+import { createProject } from '../src/project.ts'
 
 async function tempGame(t) {
   const root = await mkdtemp(join(tmpdir(), 'wechat-release-'))
@@ -101,6 +102,24 @@ test('materials are written next to the export with everything the console asks 
   assert.match(text, /服务内容声明 → 用户隐私保护指引/u)
   assert.match(text, /指标 \/ 事件管理/u)
   assert.match(text, /以微信后台[^。]*为准/u)
+  // Section 5 must describe this game, not a generic template.
+  assert.match(text, /游戏名称：Lantern Isle/u)
+  assert.match(text, /单局约 \d+ 秒 → 结算页可直接重开/u)
+  assert.match(text, /广告位置：/u)
+  assert.match(text, /虚拟支付：仅道具直购/u)
+  assert.match(text, /voxel island 风格/u)
+  assert.match(text, /已知限制：无特殊权限要求/u)
+  // A three.js project must switch the limitation text; runtime is an array.
+  const threeRoot = await mkdtemp(join(tmpdir(), 'wechat-release-3d-'))
+  t.after(() => rm(threeRoot, { recursive: true, force: true }))
+  const threeDir = join(threeRoot, 'isle')
+  await createProject(threeDir, { title: 'Lantern Isle', template: 'voxel' })
+  await updateRelease(threeDir, { ageRating: '8+' })
+  const threeExport = join(threeDir, 'export', 'wechat', 'isle')
+  await mkdir(threeExport, { recursive: true })
+  const threeMaterials = await releaseMaterials(threeDir, { exportDir: threeExport, manifestTitle: 'Lantern Isle' })
+  const threeText = await readFile(threeMaterials.file, 'utf8')
+  assert.match(threeText, /3D 画面需要支持 WebGL2/u)
 })
 
 

@@ -14,7 +14,7 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { paths } from './project.ts'
+import { loadManifest, paths } from './project.ts'
 import { readJson, StudioError, writeJson } from './util.ts'
 
 export type ReleaseStage = 'account' | 'material' | 'compliance' | 'build' | 'review' | 'launch' | 'growth'
@@ -405,7 +405,14 @@ export async function releaseMaterials(
   options: { exportDir?: string; manifestTitle: string; style?: string; orientation?: string; slots?: number },
 ): Promise<ReleaseMaterials> {
   const state = await loadRelease(dir)
-  const title = state.gameName || options.manifestTitle
+  // The materials should describe this game, not a generic template.
+  const manifest = await loadManifest(dir).catch(() => null)
+  const title = state.gameName || options.manifestTitle || manifest?.title || '未命名小游戏'
+  const style = options.style ?? manifest?.style
+  const orientation = options.orientation ?? manifest?.orientation
+  const roundSeconds = Math.max(1, Math.round(Number(manifest?.rules?.duration ?? 60)))
+  const runtimes = Array.isArray(manifest?.runtime) ? manifest.runtime : []
+  const is3d = runtimes.includes('three')
   const rating = state.ageRating ?? '8+'
   const category = state.category || '游戏 > 休闲游戏（以微信后台可选项为准）'
   const monetization = state.monetization ?? 'none'
@@ -418,9 +425,9 @@ export async function releaseMaterials(
     '## 1. 基本信息',
     '',
     `- 名称：${title}`,
-    `- 一句话简介：${options.style ? `${options.style} 风格的小游戏，` : ''}收集与躲避的轻度玩法，单局约一分钟。`,
+    `- 一句话简介：${style ? `${style} 风格的小游戏，` : ''}收集与躲避的轻度玩法，单局约 ${roundSeconds} 秒。`,
     `- 建议类目：${category}`,
-    `- 屏幕方向：${options.orientation === 'landscape' ? '横屏' : '竖屏'}`,
+    `- 屏幕方向：${orientation === 'landscape' ? '横屏' : '竖屏'}`,
     `- 游戏标签：休闲、收集、单机（以后台可选项为准）`,
     '',
     '## 2. 适龄提示',
@@ -451,10 +458,13 @@ export async function releaseMaterials(
     '## 5. 版本审核说明',
     '',
     `- 版本：${state.appid ? `AppID ${state.appid}` : '（上传时使用真实 AppID）'}`,
-    `- 游戏入口：启动即进入标题页，点击屏幕开始。`,
+    `- 游戏名称：${title}`,
+    `- 审核路径：启动即进入标题页（底部显示「适龄提示 ${rating}」）→ 点击/轻触开始 → 单局约 ${roundSeconds} 秒 → 结算页可直接重开。`,
+    `- 玩法概述：${style ? `${style} 风格；` : ''}收集道具、躲避障碍的轻度玩法，无文字聊天、无用户生成内容。`,
+    ...(monetization === 'iaa' || monetization === 'both' ? ['- 广告位置：两局之间最多展示一次插屏；激励视频只在失败后主动点击「看广告复活」时出现。'] : []),
+    ...(monetization === 'iap' || monetization === 'both' ? ['- 虚拟支付：仅道具直购，版号与商户号需在后台开通后才能使用。'] : []),
     '- 测试账号：无需登录。',
-    '- 审核路径：打开小游戏 → 点击开始 → 游玩一局 → 结算页。',
-    '- 已知限制：3D 游戏需要支持 WebGL2 的机型；低端机可能掉帧。',
+    is3d ? '- 已知限制：3D 画面需要支持 WebGL2 的机型；低端机会自动降低分辨率与帧率。' : '- 已知限制：无特殊权限要求。',
     '',
     '## 6. 变现（当前选择：' + monetization + '）',
     '',
