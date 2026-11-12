@@ -157,6 +157,7 @@ If DevTools is installed somewhere unusual, pass its CLI path with the `cli` par
 | `BAD_RELEASE_STEP` | A wizard step id does not exist | Use the ids from `wechat-release status` |
 | `BAD_RELEASE_STATUS` | A step status is not todo/done/skipped | Use todo, done or skipped |
 | `BAD_RELEASE_STATE` | .studio/wechat-release.json cannot be parsed or is not a release state | It was moved aside as *.corrupt-<time>.json; fix or delete it, then retry |
+| `EXPORT_DIR_BUSY` | The export folder is still open in WeChat DevTools | Close the project in the IDE (or quit DevTools), then export again |
 | `BAD_COMMERCE_STATE` | .studio/wechat-commerce.json cannot be parsed or is not a commerce state | It was moved aside as *.corrupt-<time>.json; recreate the ad unit config |
 | `BAD_ACTION` | The command action is not one of the known ones | Run `/game-studio` with no action for the list |
 

@@ -850,7 +850,23 @@
   G.innerHeight = cssH;
   G.devicePixelRatio = dpr;
   G.performance = { now: function () { return Date.now(); } };
-  G.navigator = { userAgent: 'wechat-minigame', platform: 'wechat' };
+  // Mini-games are touch devices. Without these three, games that use browser
+  // feature detection decide "no touch" and only listen for the keyboard.
+  G.navigator = { userAgent: 'wechat-minigame', platform: 'wechat', maxTouchPoints: 5 };
+  G.ontouchstart = null;
+  G.matchMedia = G.matchMedia || function (query) {
+    var coarse = /coarse/u.test(String(query));
+    return {
+      matches: coarse,
+      media: String(query),
+      onchange: null,
+      addListener: function () {},
+      removeListener: function () {},
+      addEventListener: function () {},
+      removeEventListener: function () {},
+      dispatchEvent: function () { return false; },
+    };
+  };
   G.location = { href: '', search: '', hash: '' };
   G.screen = { width: cssW, height: cssH };
   G.addEventListener = function (type, fn) { on(windowEvents, type, fn); };

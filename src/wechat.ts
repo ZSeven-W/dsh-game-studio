@@ -156,7 +156,14 @@ export async function exportWechat(dir: string, options: WechatExportOptions = {
   const slug = slugify(manifest.title)
   const outDir = join(paths.exportDir(dir), 'wechat', slug)
   const assetDir = join(outDir, 'assets')
-  await rm(outDir, { recursive: true, force: true })
+  try {
+    await rm(outDir, { recursive: true, force: true })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EBUSY' || (error as NodeJS.ErrnoException).code === 'EPERM') {
+      throw new StudioError('导出目录正被微信开发者工具占用：先在 IDE 里关闭该项目（或退出开发者工具），再重新导出。', 'EXPORT_DIR_BUSY')
+    }
+    throw error
+  }
   await mkdir(assetDir, { recursive: true })
 
   const warnings: string[] = []
