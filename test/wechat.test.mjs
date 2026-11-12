@@ -655,7 +655,35 @@ test('the exported 3D game renders through WebGL on a mocked wx', async (t) => {
   if (!ran) return t.skip('no Chrome or Edge here')
 })
 
+test('a voxel game moves on a touch drag, not only on keys', async (t) => {
+  const { dir } = await tempProject(t, { template: 'voxel' })
+  await rasterSlots(dir)
+  const result = await exportWechat(dir).catch((error) => {
+    if (error?.code === 'MISSING_RUNTIME') return null
+    throw error
+  })
+  if (!result) return t.skip('run npm run build first: lib/vendor/three.js is missing')
 
+  await withMockWx(result.dir, async ({ page, errors }) => {
+    await page.waitForTimeout(900)
+    // Start from the title card, then release so the drag state is clean.
+    await page.evaluate(() => window.__touch({ changedTouches: [{ identifier: 1, clientX: 250, clientY: 450 }] }))
+    await page.evaluate(() => window.__touchEnd({ changedTouches: [{ identifier: 1, clientX: 250, clientY: 450 }] }))
+    await page.waitForTimeout(700)
+    const started = await page.evaluate(() => window.__G.__gameState())
+    assert.equal(started.phase, 'playing')
 
+    const fromX = started.hero.x
+    await page.evaluate(() => window.__touch({ changedTouches: [{ identifier: 2, clientX: 260, clientY: 700 }] }))
+    for (const x of [220, 180, 140]) {
+      await page.evaluate((clientX) => window.__touchMove({ changedTouches: [{ identifier: 2, clientX, clientY: 700 }] }), x)
+      await page.waitForTimeout(140)
+    }
+    await page.waitForTimeout(500)
+    const moved = await page.evaluate(() => window.__G.__gameState())
+    await page.evaluate(() => window.__touchEnd({ changedTouches: [{ identifier: 2, clientX: 140, clientY: 700 }] }))
 
-
+    assert.notEqual(moved.hero.x, fromX, `hero.x ${fromX} → ${moved.hero.x}`)
+    assert.deepEqual(errors, [])
+  })
+})

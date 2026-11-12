@@ -105,7 +105,9 @@ const MOCK_INJECT = `(function () {
       };
     },
     onTouchStart: function (fn) { window.__touch = function (event) { fn(event); }; },
-    onTouchMove: function () {}, onTouchEnd: function () {}, onTouchCancel: function () {},
+    onTouchMove: function (fn) { window.__touchMove = function (event) { fn(event); }; },
+    onTouchEnd: function (fn) { window.__touchEnd = function (event) { fn(event); }; },
+    onTouchCancel: function (fn) { window.__touchCancel = function (event) { fn(event); }; },
     onHide: function () {}, onShow: function () {}, onWindowResize: function () {},
     onError: function (fn) { window.__wxError = fn; },
     onMemoryWarning: function (fn) { window.__wxMemoryWarning = fn; },
