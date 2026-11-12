@@ -376,7 +376,7 @@ export function releaseStatus(dir: string, state: ReleaseState, plan: ReleaseSte
   const done = relevant.filter(step => step.status === 'done').length
   const next = relevant.filter(step => step.status === 'todo' && !step.blocked)
   const uploads = (state.uploads ?? []).slice(-10)
-  return {
+  const status: ReleaseStatus = {
     game: dir,
     appid: state.appid ?? '',
     monetization: state.monetization ?? 'none',
@@ -391,6 +391,9 @@ export function releaseStatus(dir: string, state: ReleaseState, plan: ReleaseSte
       .filter(step => step.status === 'todo' && step.blocked)
       .map(step => ({ id: step.id, title: step.title, missing: (step.needs ?? []).filter(id => !isDone(state, id)) })),
   }
+  // The host rejects tool output that is not lossless JSON: an undefined step note
+  // would make the whole status call fail even though the state was read fine.
+  return JSON.parse(JSON.stringify(status)) as ReleaseStatus
 }
 
 /** Merge the caller's answers and one optional step update into the saved state. */

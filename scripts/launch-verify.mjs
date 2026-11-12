@@ -22,7 +22,7 @@ const readJson = (path) => {
  */
 const BOUNDARY = '自检通过只代表工程可导入、AppID 与材料就绪、开发者工具可用；过审、备案与上线由微信决定，自检不承诺通过。'
 
-export async function verifyLaunch({ project, skipDevtools = false, quiet = false }) {
+export async function verifyLaunch({ project, skipDevtools = false, quiet = false, port }) {
   const dir = resolve(project)
   const checks = []
   const check = (name, ok, detail, next) => {
@@ -64,7 +64,7 @@ export async function verifyLaunch({ project, skipDevtools = false, quiet = fals
 
   if (!skipDevtools) {
     try {
-      const doctor = await devtoolsDoctor()
+      const doctor = await devtoolsDoctor(project, { port: typeof port === 'number' ? port : undefined })
       check('开发者工具 CLI 能找到', doctor.cliFound, doctor.cli ?? 'not found',
         '先安装微信开发者工具；装好后在「工具 → 设置 → 安全设置」里能看到 CLI 与服务端口')
       check('开发者工具服务端口已开', doctor.portOpen, `port ${doctor.port}`,
@@ -93,12 +93,14 @@ if (invokedDirectly) {
     return index >= 0 ? args[index + 1] : undefined
   }
   const project = value('--project')
+  const portValue = Number(value('--port'))
+  const port = Number.isFinite(portValue) && portValue > 0 ? portValue : undefined
   if (!project) {
-    console.error('usage: node scripts/launch-verify.mjs --project <export/wechat/game> [--skip-devtools]')
+    console.error('usage: node scripts/launch-verify.mjs --project <export/wechat/game> [--skip-devtools] [--port <ide service port>]')
     process.exit(1)
   }
   const asJson = args.includes('--json')
-  const result = await verifyLaunch({ project, skipDevtools: args.includes('--skip-devtools'), quiet: asJson })
+  const result = await verifyLaunch({ project, skipDevtools: args.includes('--skip-devtools'), quiet: asJson, port })
   if (asJson) console.log(JSON.stringify(result, null, 2))
   if (!result.ok) process.exitCode = 1
 }

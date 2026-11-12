@@ -536,3 +536,12 @@ test('a corrupt release file is moved aside and reported, not silently reset', a
   assert.ok(files.some((name) => name.startsWith('wechat-release.json.corrupt-')), files.join(', '))
   await rm(root, { recursive: true, force: true })
 })
+
+test('status stays lossless JSON when a step has no note', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wechat-release-json-'))
+  await mkdir(join(root, '.studio'), { recursive: true })
+  await updateRelease(root, { step: 'export' })
+  const status = releaseStatus(root, await loadRelease(root), releasePlan('none'))
+  assert.deepEqual(JSON.parse(JSON.stringify(status)), status)
+  await rm(root, { recursive: true, force: true })
+})

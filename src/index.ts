@@ -911,6 +911,7 @@ export function apply(ctx: any, config: Config = {}): void {
       version: { type: 'string', description: 'Upload version, e.g. "1.0.0". Defaults to 1.0.0.' },
       desc: { type: 'string', description: 'Upload description shown in the WeChat admin version list.' },
       cli: { type: 'string', description: 'Path to the WeChat DevTools CLI, for a non-standard install. Defaults to the usual locations.' },
+      port: { type: 'number', description: 'Optional IDE service port for "doctor" (the IDE shows it in 设置 → 安全设置); defaults to 9420.' },
     },
     output: {
       schema: json,
@@ -924,7 +925,7 @@ export function apply(ctx: any, config: Config = {}): void {
       if (action === 'doctor') {
         const exportDir = findWechatExport(dir)
         if (!exportDir) throw new StudioError('No WeChat mini-game export found; run the WeChat export first.', 'NO_WECHAT_EXPORT')
-        return { project: dir, ...(await devtoolsDoctor(exportDir, { configuredCli: cli })) }
+        return { project: dir, ...(await devtoolsDoctor(exportDir, { configuredCli: cli, port: typeof args.port === 'number' ? args.port : undefined })) }
       }
       if (action === 'open') {
         const result = await openInDevtools(dir, { cli })
