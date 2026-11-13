@@ -31,7 +31,7 @@ test('the materials number their sections and every section has content', async 
   assert.ok(headings.length >= 9, `expected the full set of sections, found ${headings.length}`)
   assert.deepEqual(headings.map((heading) => heading.number), headings.map((_, index) => index + 1), 'sections are numbered 1..N in order')
   assert.match(headings[0].title, /基本信息/u)
-  assert.match(headings[headings.length - 1].title, /上线前检查/u)
+  assert.match(headings[headings.length - 1].title, /(上线前检查|小游戏备案填写稿)/u)
 
   // Every section must say something: a heading followed by an empty line and a heading is a copy bug.
   const bodies = text.split(/^## \d+\. .+$/gmu).slice(1)
@@ -130,6 +130,9 @@ test('materials are written next to the export with everything the console asks 
   assert.match(text, /服务内容声明 → 用户隐私保护指引/u)
   assert.match(text, /指标 \/ 事件管理/u)
   assert.match(text, /__wechatRuntime.summary\(\)/u, 'the materials must show how to self-check the event plumbing')
+  assert.match(text, /## 10\. 小游戏备案填写稿/u)
+  assert.match(text, /场景（≥30 字 \+ 3 张截图）/u)
+  assert.match(text, /至少 3 个/u)
   assert.match(text, /以微信后台[^。]*为准/u)
   // Section 5 must describe this game, not a generic template.
   assert.match(text, /游戏名称：Lantern Isle/u)

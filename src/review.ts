@@ -46,7 +46,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
     stage: 'material',
     title: '名称或图标侵权、蹭知名 IP',
     why: '名称、图标、简介里出现他人商标或知名作品名，是最高频的驳回原因之一。',
-    fix: '用原创名称与图标；简介只描述玩法，不写「官方」「正版」等词。',
+    fix: '用原创名称与图标；名称/头像/游戏内标题/备案/截图必须完全一致；改名后要重新导出上传包含新标题的版本。',
   },
   {
     id: 'no-age-rating',
@@ -70,7 +70,7 @@ export const REVIEW_REASONS: ReviewReason[] = [
     stage: 'compliance',
     title: '小游戏备案未完成',
     why: '未完成备案的小游戏无法发布；备案与版本审核是两条线，顺序不能反。',
-    fix: '先在后台完成小游戏备案，再提交版本审核。',
+    fix: '先在后台完成小游戏备案（场景≥30字+3图、玩法≥50字+3张不同图、系统≥3个各≥30字+1图），再提交版本审核；红色受伤特效/尖刺、截图重复、名称不一致都会驳回。',
   },
   {
     id: 'crash-or-black-screen',
@@ -161,7 +161,7 @@ export async function reviewRisks(dir: string, state?: ReleaseState, options: Re
     risks.push({ id: 'category', severity: 'warning', title: '还没确定服务类目', fix: '在后台选与内容一致的类目，并把结果记进向导。' })
   }
   if (!stepDone(release, 'record')) {
-    risks.push({ id: 'record', severity: 'blocker', title: '小游戏备案还没完成', fix: '后台「设置 → 基本设置 → 小游戏备案」；备案通过后再提交版本。' })
+    risks.push({ id: 'record', severity: 'blocker', title: '小游戏备案还没完成', fix: '后台「账号设置 → 小程序备案 → 小游戏备案」：场景≥30字+3图、玩法≥50字+3张不同图、系统≥3个各≥30字+1图；平台初审 1–2 天、主管部门 10–20 天；通过后再提交版本审核。' })
   }
   if (!stepDone(release, 'record-icp')) {
     risks.push({

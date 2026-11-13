@@ -21,7 +21,7 @@ Run this before tagging a release or opening a pull request.
 ```sh
 npm ci
 npm run build
-npm test            # 258 tests; 49 fail on a Windows box without gh/cloudflared/Codex
+npm test            # 259 tests; 49 fail on a Windows box without gh/cloudflared/Codex
 npm run acceptance  # 39 checks; browser checks skip when no Chrome is installed
 npm run trace       # the requirement→evidence table still points at real tests
 ```
@@ -101,7 +101,7 @@ Expected output when the fork is healthy:
 upstream origin/main: up-to-date
   series    applies cleanly
   build     ok
-  tests     89 pass, 0 fail, 0 skipped
+  tests     90 pass, 0 fail, 0 skipped
   pack      ok (468 KB, 40 files)   # sources/tests/docs never enter the tarball
 
 `--no-apply` skips the worktree and reports only the fork/upstream relationship

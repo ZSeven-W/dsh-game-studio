@@ -84,3 +84,19 @@ test('without the upload key the script stops with the console hint', async (t) 
     },
   )
 })
+
+test('the upload script explains a missing miniprogram-ci install', async (t) => {
+  const { root, exportDir } = await exportedProject(t)
+  await writeWechatCi(exportDir, { appid: 'wx1234567890abcdef' })
+  const key = join(root, 'private.key')
+  await writeFile(key, 'key', 'utf8')
+  await assert.rejects(
+    run(process.execPath, [join(exportDir, 'ci', 'upload.mjs')], { cwd: exportDir, env: { ...process.env, WECHAT_PRIVATE_KEY: key } }),
+    (error) => {
+      assert.equal(error.code, 1)
+      assert.match(String(error.stderr), /npm install miniprogram-ci/u)
+      assert.doesNotMatch(String(error.stderr), /ERR_MODULE_NOT_FOUND/u)
+      return true
+    },
+  )
+})

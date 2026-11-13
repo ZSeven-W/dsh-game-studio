@@ -37,8 +37,6 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import ci from 'miniprogram-ci'
-
 const here = dirname(fileURLToPath(import.meta.url))
 const projectPath = join(here, '..')
 const appid = process.env.WECHAT_APPID || '${appid}'
@@ -55,6 +53,17 @@ if (!privateKeyPath.includes('/') && !privateKeyPath.includes('\\\\')) {
   const dir = await mkdtemp(join(tmpdir(), 'wechat-key-'))
   privateKeyPath = join(dir, 'private.key')
   await writeFile(privateKeyPath, Buffer.from(process.env.WECHAT_PRIVATE_KEY, 'base64'))
+}
+
+let ci
+try {
+  ci = (await import('miniprogram-ci')).default
+} catch (error) {
+  if (error && /cannot find (module|package)/i.test(String(error.message || ''))) {
+    console.error('miniprogram-ci is not installed. Run npm install miniprogram-ci in this folder or the repo root first.')
+    process.exit(1)
+  }
+  throw error
 }
 
 const project = new ci.Project({
