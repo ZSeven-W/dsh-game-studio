@@ -101,7 +101,7 @@ Expected output when the fork is healthy:
 upstream origin/main: up-to-date
   series    applies cleanly
   build     ok
-  tests     90 pass, 0 fail, 0 skipped
+  tests     89 pass, 0 fail, 0 skipped
   pack      ok (468 KB, 40 files)   # sources/tests/docs never enter the tarball
 
 `--no-apply` skips the worktree and reports only the fork/upstream relationship
