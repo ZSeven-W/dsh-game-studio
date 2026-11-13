@@ -21,7 +21,7 @@ Run this before tagging a release or opening a pull request.
 ```sh
 npm ci
 npm run build
-npm test            # 259 tests; 49 fail on a Windows box without gh/cloudflared/Codex
+npm test            # 260 tests; 49 fail on a Windows box without gh/cloudflared/Codex
 npm run acceptance  # 39 checks; browser checks skip when no Chrome is installed
 npm run trace       # the requirement→evidence table still points at real tests
 ```
@@ -101,7 +101,7 @@ Expected output when the fork is healthy:
 upstream origin/main: up-to-date
   series    applies cleanly
   build     ok
-  tests     89 pass, 0 fail, 0 skipped
+  tests     90 pass, 0 fail, 0 skipped
   pack      ok (468 KB, 40 files)   # sources/tests/docs never enter the tarball
 
 `--no-apply` skips the worktree and reports only the fork/upstream relationship
@@ -157,6 +157,7 @@ If DevTools is installed somewhere unusual, pass its CLI path with the `cli` par
 | `BAD_RELEASE_STEP` | A wizard step id does not exist | Use the ids from `wechat-release status` |
 | `BAD_RELEASE_STATUS` | A step status is not todo/done/skipped | Use todo, done or skipped |
 | `BAD_RELEASE_STATE` | .studio/wechat-release.json cannot be parsed or is not a release state | It was moved aside as *.corrupt-<time>.json; fix or delete it, then retry |
+| `EMPTY_REJECTION` | action=rejection was called with no reason | Paste the console rejection text, then record the step again |
 | `EXPORT_DIR_BUSY` | The export folder is still open in WeChat DevTools | Close the project in the IDE (or quit DevTools), then export again |
 | `BAD_COMMERCE_STATE` | .studio/wechat-commerce.json cannot be parsed or is not a commerce state | It was moved aside as *.corrupt-<time>.json; recreate the ad unit config |
 | `BAD_ACTION` | The command action is not one of the known ones | Run `/game-studio` with no action for the list |

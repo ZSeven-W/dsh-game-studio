@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.82</code> &middot; Tested with DSH <code>0.2.1-rc.5</code></sub><br />
+  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.83</code> &middot; Tested with DSH <code>0.2.1-rc.5</code></sub><br />
   🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>Live Demo Game Wall (10 playable 2D &amp; 3D games)</strong></a> &middot; <sub>Subscribe in Online Sources: <code>finiking/dsh-games</code></sub>
 </p>
 

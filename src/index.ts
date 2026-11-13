@@ -14,7 +14,7 @@ import { buildProject } from './build.ts'
 import { commerceCheck, embedCommerce, loadCommerce, updateCommerce } from './commerce.ts'
 import { writeWechatCi } from './ci.ts'
 import { devtoolsDoctor, findWechatExport, openInDevtools, previewInDevtools, uploadFromDevtools } from './devtools.ts'
-import { loadRelease, markExported, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFilePresence, releaseFreshness, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
+import { addRejection, loadRelease, markExported, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFilePresence, releaseFreshness, releaseMaterials, releasePlan, releaseStatus, updateRelease } from './release.ts'
 import { reviewGuide } from './review.ts'
 import { exportWechat } from './wechat.ts'
 import { runCodexBatch, type CodexBatch } from './generation.ts'
@@ -1019,7 +1019,9 @@ export function apply(ctx: any, config: Config = {}): void {
       + 'to paste into the console. Steps marked "需在微信后台完成" cannot be automated by the plugin.',
     parameters: {
       path: projectParam,
-      action: { type: 'string', enum: ['status', 'update', 'materials', 'review'], description: 'status, update a step, write the release materials, or write the review-risk guide.' },
+      action: { type: 'string', enum: ['status', 'update', 'materials', 'review', 'rejection'], description: 'status, update a step, write the release materials/review guide, or record a rejection the console returned.' },
+      kind: { type: 'string', enum: ['filing', 'review'], description: 'Rejection kind for action=rejection: filing (小游戏备案) or review (版本审核).' },
+      reason: { type: 'string', description: 'The rejection text from the console (action=rejection).' },
       step: { type: 'string', description: 'Step id for update: register, verify, appid, basic-info, category, age-rating, privacy, record, export, devtools, upload, submit, publish, analytics, iaa, iap.' },
       status: { type: 'string', enum: ['todo', 'done', 'skipped'], description: 'New status for the step; defaults to done.' },
       note: { type: 'string', description: 'Short note stored with the step (certificate number, rejection reason, ...).' },
@@ -1053,6 +1055,16 @@ export function apply(ctx: any, config: Config = {}): void {
         })
         await markMaterialsWritten(dir)
         return { project: dir, file: materials.file, markdown: materials.markdown }
+      }
+      if (action === 'rejection') {
+        const result = await addRejection(dir, { kind: args.kind, reason: String(args.reason ?? '') })
+        const presence = await releaseFilePresence(dir)
+        const freshness = await releaseFreshness(dir, result.state)
+        return {
+          project: dir, ...releaseStatus(dir, result.state, releasePlan(result.state.monetization ?? 'none')),
+          materialsPresent: presence.materials, reviewPresent: presence.review,
+          materialsStale: freshness.materialsStale, reviewStale: freshness.reviewStale, exportStale: freshness.exportStale, uploadStale: freshness.uploadStale,
+        }
       }
       if (action === 'update') {
         const result = await updateRelease(dir, {

@@ -60,6 +60,8 @@ export interface ReleaseState {
   reviewAt?: string
   /** Every version the plugin uploaded, newest last. */
   uploads?: Array<{ version: string; at: string; note?: string }>
+  /** WeChat's actual filing/review rejections, newest last. */
+  rejections?: Array<{ kind: 'filing' | 'review'; reason: string; at: string }>
   /** When appid/name/category/age/monetization last changed (materials go stale after). */
   answersAt?: string
   /** When the WeChat project was last exported (settings changes make it stale). */
@@ -90,6 +92,7 @@ export interface ReleaseStatus {
   /** True when the newest upload predates the current export or settings. */
   uploadStale?: boolean
   uploads: Array<{ version: string; at: string; note?: string }>
+  rejections: Array<{ kind: 'filing' | 'review'; reason: string; at: string }>
   blocked: Array<{ id: string; title: string; missing: string[] }>
 }
 
@@ -380,6 +383,7 @@ export function releaseStatus(dir: string, state: ReleaseState, plan: ReleaseSte
   const done = relevant.filter(step => step.status === 'done').length
   const next = relevant.filter(step => step.status === 'todo' && !step.blocked)
   const uploads = (state.uploads ?? []).slice(-10)
+  const rejections = (state.rejections ?? []).slice(-5)
   const status: ReleaseStatus = {
     game: dir,
     appid: state.appid ?? '',
@@ -388,6 +392,7 @@ export function releaseStatus(dir: string, state: ReleaseState, plan: ReleaseSte
     materialsAt: state.materialsAt ?? null,
     reviewAt: state.reviewAt ?? null,
     uploads,
+    rejections,
     progress: { done, total: relevant.length, percent: relevant.length === 0 ? 0 : Math.round((done / relevant.length) * 100) },
     steps,
     next: next.slice(0, 3).map(step => ({ id: step.id, title: step.title, owner: step.owner, how: step.how })),
@@ -398,6 +403,21 @@ export function releaseStatus(dir: string, state: ReleaseState, plan: ReleaseSte
   // The host rejects tool output that is not lossless JSON: an undefined step note
   // would make the whole status call fail even though the state was read fine.
   return JSON.parse(JSON.stringify(status)) as ReleaseStatus
+}
+
+/** Record a rejection the user pasted from the WeChat console. */
+export async function addRejection(
+  dir: string,
+  input: { kind?: 'filing' | 'review'; reason: string },
+): Promise<{ state: ReleaseState; rejection: { kind: 'filing' | 'review'; reason: string; at: string } }> {
+  const kind = input.kind === 'review' ? 'review' : 'filing'
+  const reason = String(input.reason ?? '').trim()
+  if (!reason) throw new StudioError('Rejection reason is empty', 'EMPTY_REJECTION')
+  const state = await loadRelease(dir)
+  const rejection = { kind, reason: reason.slice(0, 2000), at: now() }
+  state.rejections = [...(state.rejections ?? []), rejection].slice(-20)
+  await saveRelease(dir, state)
+  return { state, rejection }
 }
 
 /** Merge the caller's answers and one optional step update into the saved state. */
@@ -702,6 +722,9 @@ export async function releaseMaterials(
     '- 平台初审 1–2 个工作日，主管部门 10–20 个工作日；审核中不要改名或换主体。',
     '- 顺序：小游戏备案 →（如适用）小程序备案 → 版本审核 → 发布；备案通过前不要提交版本审核。',
     '',
+    '### 10.7 已记录的驳回',
+    '__REJECTIONS__',
+    '',
     '---',
     '',
     '## English summary',
@@ -722,7 +745,11 @@ export async function releaseMaterials(
     '> Review and filings are decided by WeChat and the competent authorities; this file only prepares the text.',
     '',
   ]
-  const markdown = lines.join('\n')
+  const rejectionLog = (state.rejections ?? []).slice(-5).map((entry) => {
+    const when = entry.at.slice(0, 10)
+    return `- ${when} · ${entry.kind === 'review' ? '版本审核' : '小游戏备案'}：${entry.reason}`
+  }).join('\n') || '（还没有记录驳回；被驳回后把原文发给我，我记在这里并给整改建议。）'
+  const markdown = lines.join('\n').replace('__REJECTIONS__', rejectionLog)
   const target = options.exportDir ? join(options.exportDir, 'RELEASE.md') : join(paths.exportDir(dir), 'wechat-release.md')
   await mkdir(dirname(target), { recursive: true })
   await writeFile(target, markdown, 'utf8')

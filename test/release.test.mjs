@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
-  loadRelease, markExported, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFile, releaseFilePresence, releaseFreshness, releaseMaterials, releasePlan, releaseStatus, updateRelease,
+  addRejection, loadRelease, markExported, markMaterialsWritten, markReleaseDone, markReviewWritten, markUploaded, releaseFile, releaseFilePresence, releaseFreshness, releaseMaterials, releasePlan, releaseStatus, updateRelease,
 } from '../src/release.ts'
 import { createProject } from '../src/project.ts'
 import { reviewRisks } from '../src/review.ts'
@@ -547,4 +547,18 @@ test('status stays lossless JSON when a step has no note', async () => {
   const status = releaseStatus(root, await loadRelease(root), releasePlan('none'))
   assert.deepEqual(JSON.parse(JSON.stringify(status)), status)
   await rm(root, { recursive: true, force: true })
+})
+
+test('a recorded filing rejection is kept in status and the materials', async (t) => {
+  const dir = await tempGame(t)
+  const exportDir = join(dir, 'export', 'wechat', 'reject')
+  await mkdir(exportDir, { recursive: true })
+  await addRejection(dir, { kind: 'filing', reason: '游戏名称与提审游戏存在不一致' })
+  const status = releaseStatus(dir, await loadRelease(dir), releasePlan('none'))
+  assert.equal(status.rejections.length, 1)
+  assert.equal(status.rejections[0].kind, 'filing')
+  assert.match(status.rejections[0].reason, /名称/u)
+  const materials = await releaseMaterials(dir, { exportDir, manifestTitle: 'Reject Game' })
+  assert.match(materials.markdown, /### 10\.7 已记录的驳回/u)
+  assert.match(materials.markdown, /游戏名称与提审游戏存在不一致/u)
 })
