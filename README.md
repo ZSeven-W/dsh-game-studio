@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Describe a small game in one sentence — play it in the sidebar of a <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> conversation, swap in AI art, export one HTML file.</strong><br />
-  <sub>10 agent tools &bull; live sidebar preview &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art with a cost check first &bull; self-playing playtests &bull; version history &bull; one-file export</sub>
+  <sub>18 agent tools &bull; live sidebar preview &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art with a cost check first &bull; self-playing playtests &bull; version history &bull; one-file HTML export &bull; WeChat mini-game export</sub>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.5</code> &middot; Tested with DSH <code>0.2.1-rc.5</code></sub><br />
+  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.83</code> &middot; Tested with DSH <code>0.2.1-rc.5</code></sub><br />
   🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>Live Demo Game Wall (10 playable 2D &amp; 3D games)</strong></a> &middot; <sub>Subscribe in Online Sources: <code>finiking/dsh-games</code></sub>
 </p>
 
@@ -41,8 +41,12 @@ Ask the agent for a game in plain words — "a 3D game: a red panda collects bam
 | 🤖 **Self-playing playtests** | `game_studio_playtest` plays the latest code in a headless Chrome or Edge and reports phases, score, frame rate, script errors and screenshots. Games that are not steered with arrow keys (grids, cards, aiming, rhythm…) define `window.__autoplay`, so the playtest plays their real loop. |
 | 🕰️ **Version history** | Every build that changed the game is saved; `game_studio_restore_version` brings back code, rules and art together. |
 | 📦 **One-file export** | `game_studio_export` writes a self-contained HTML file with no network access — open it in any browser or put it on any static host. |
+| 🟢 **Export WeChat mini-game** | `game_studio_export_wechat` writes an importable 微信小游戏 project (`game.js`, `game.json`, `project.config.json`, `assets/*.png`) under `export/wechat/<slug>/`. The game code is left untouched and boots on the bundled `wx.*` runtime adapter; SVG art is rasterised to PNG; slot art over 1.5 MB goes into an assets subpackage that is downloaded before the game starts. 2D canvas and 3D three.js/voxel games both work: WebGL renders offscreen and is composited onto the screen canvas, and the HUD is redrawn from `__gameState` (mini-games have no DOM), and the templates' WebAudio bleeps are rendered to small WAV files and played through `wx.createInnerAudioContext`. Each export carries a package report (largest files, 4 MB main package limit, what to cut) and the runtime caps the render scale by device benchmark: 1× on weak phones, 1.5× mid, 2× fast, with 30 fps on weak ones. `__wechatRuntime.metrics()` reports boot time, frames and fps, and crashes go to `wx.getRealtimeLogManager`. From there `game_studio_wechat_devtools` opens, previews or uploads the project through the IDE's own CLI (and reads back the IDE's compiled package sizes); `action: "doctor"` answers "what is missing before preview?" (CLI found, service port reachable, real AppID) without touching the IDE, and `cli` points the plugin at a non-standard install, and `game_studio_wechat_ci` writes a workflow for uploading from CI with the console's upload key. |
 | 📱 **Try it on your phone** | `game_studio_share` opens a temporary read-only link on your local network — or a temporary public link via a Cloudflare Quick Tunnel (`cloudflared`) so friends on any network can play — with a QR code in the sidebar. |
 | 🌐 **Publish to GitHub Pages** | `game_studio_publish` pushes the built HTML (or the whole game wall) to a public repository under your signed-in `gh` account and enables GitHub Pages for a permanent link that stays live after you close your computer. |
+| 🕒 **Staleness rules** | Changing an answer, an ad unit or `game.js` makes the materials, the export or the upload out of date; the wizard header says which one to redo. The rule is one page: [`docs/FRESHNESS.md`](docs/FRESHNESS.md). |
+| 🚀 **Launch wizard** | The sidebar wizard and `game_studio_wechat_release` track every step from registering the mini-game and filing 小游戏备案 to review and release, says who does what (WeChat console / the plugin / you), marks the steps the plugin really ran, and writes `RELEASE.md` next to the export with copy-paste texts: intro, category, age-rating card, privacy draft, filing blurb and the review note. Write release materials produces the texts; Pre-review check writes `REVIEW.md`: the 12 reasons mini-games actually get rejected, each with the wizard step that fixes it. In the panel the wizard button shows progress (`上线向导 · 5/15`) and the header pins **下一步 / Next**, so the next action is visible without scrolling the list. 检查环境 / Check environment reports the three blockers (CLI, service port, tourist AppID) with the fix; 预览二维码 / Preview QR shows the QR image inline; 上传版本 / Upload version uploads the version you type. Notices are dismissible. |
+| 💰 **Ads and purchases, never forced** | `game_studio_wechat_commerce` stores the ad unit IDs and the in-app purchase settings. The runtime shows at most one interstitial between two rounds and a rewarded video only when the player taps 看广告复活; round and ad events go to `wx.reportEvent`. Purchases stay off until a game licence (版号) and a WeChat Pay merchant ID are recorded; with a signing endpoint it calls `wx.requestMidasPaymentGameItem`, without one it runs in demo mode. The plugin never signs a payment or collects money. The sidebar 商业化 / **Monetization** panel edits the same settings without touching a file.
 | 🗂️ **My games** | Open the sidebar's **+** and pick **Game Studio · My games**: every game in the workspace as a tile with its latest playtest picture, filtered by 2D/3D and sorted by recency, versions or name. Click one to play it — no agent, no tokens. You can also subscribe to online game sources (`owner/repo`, GitHub repository URL, or GitHub Pages URL) to browse and play published games alongside your own. **Export wall** packs your local games into one offline page to send to friends. |
 
 ## Games made with it
@@ -84,15 +88,20 @@ Measured in a real DSH with DeepSeek-V4.1-Flash, each game made from one sentenc
 | `game_studio_generate_asset` | Generate 1–4 candidate images for one slot with `openai` or `codex`, optionally following a reference picture. Asks for approval before spending. Codex runs in the background. |
 | `game_studio_apply_asset` | Put a candidate into the game by its number, rebuild and refresh. |
 | `game_studio_revert_asset` | Go back to a slot's previous art. |
+| `game_studio_wechat_devtools` | Drive WeChat DevTools for the exported mini-game: `open` imports the folder into the IDE, `preview` writes a device QR code next to the export, `upload` submits a version (`version`, `desc`). Needs the IDE's service port switched on (工具 → 设置 → 安全设置 → 服务端口); a closed port comes back as `DEVTOOLS_PORT_CLOSED` with the steps, and the plugin never changes that setting itself. |
+| `game_studio_wechat_ci` | Write a CI upload kit next to the export: `ci/upload.mjs` (miniprogram-ci), `.github/workflows/wechat-upload.yml` and `ci/README.md`. Needs the real AppID; the user adds `WECHAT_APPID` and `WECHAT_PRIVATE_KEY` as CI secrets. Uploads a version only — review submission still happens in the console. |
+| `game_studio_wechat_commerce` | Store the ad unit IDs (`interstitial`, `rewarded`) and the in-app purchase settings (`iapEnabled`, `licenseNumber`, `merchantId`, `payUrl`), switch ads/analytics on or off, and report what the export will embed. IAP needs a licence and a merchant ID; without `payUrl` it runs in demo mode through `__commerce.iap.buy()`. |
+| `game_studio_wechat_release` | The launch checklist and materials: `status` returns every step with its owner (WeChat console / plugin / user), blockers and the next 3 actions; `update` records a step plus the real AppID, name, category, age rating and monetization choice; `materials` writes `RELEASE.md` next to the export with the texts to paste into the console, and `review` writes `REVIEW.md` with the rejection risks this project still has. |
 | `game_studio_versions` | List saved versions, newest first. |
 | `game_studio_restore_version` | Restore an earlier version of the whole game. |
 | `game_studio_export` | Export one self-contained, offline HTML file. |
+| `game_studio_export_wechat` | Export the game as a WeChat mini-game project (`game.js`/`game.json`/`project.config.json` + the `wx.*` runtime) into `<game>/export/wechat/<slug>/`, ready to import in WeChat DevTools. The game code is unchanged; SVG art is rasterised to PNG; three.js games get the engine inlined. 2D and 3D are supported: WebGL frames are composited onto the screen canvas and the HUD is redrawn from `__gameState`. |
 | `game_studio_share` | Open (or close) a temporary read-only link on the local network, or pass `public: true` for a temporary public link via `cloudflared` so anyone with the link can play. |
 | `game_studio_list` | List the games in the working directory with title, 2D/3D, build state and versions, so the agent finds "the penguin game" by name. |
 | `game_studio_export_wall` | Export the game wall: one offline HTML page with a tile per built game; click a tile to play it. |
 | `game_studio_publish` | Publish the built game (or `wall: true` for the game wall) to GitHub Pages via the local signed-in `gh` CLI, or pass `remove: true` to delete it. Asks for approval first and only writes to repositories carrying its `.dsh-game-studio.json` marker. |
 
-The sidebar's buttons (apply, revert, build, export, restore, share, publish) call the same operations through the `/game-studio` command.
+The sidebar's buttons (apply, revert, build, export, export WeChat, restore, share, publish) call the same operations through the `/game-studio` command.
 
 ## Image services and spending
 
@@ -114,8 +123,8 @@ The sidebar's buttons (apply, revert, build, export, restore, share, publish) ca
 
 ## Requirements
 
-- DeepSeek Harness `0.2.1` or later (web or desktop), Node.js `24.11` or later.
-- Google Chrome or Microsoft Edge on the same computer for playtests.
+- DeepSeek Harness `0.2.1-rc.5` or later (web or desktop), Node.js `24.11` or later.
+- Google Chrome or Microsoft Edge on the same computer for playtests, and for rasterising SVG art when exporting a WeChat mini-game.
 - For AI art, either an OpenAI API key or the Codex CLI signed in. Without either, games still work with their code-drawn characters.
 - Optional: `cloudflared` (`brew install cloudflared` on macOS) for temporary public share links; `gh` (`brew install gh` and `gh auth login`) for publishing to GitHub Pages.
 
@@ -175,8 +184,28 @@ Each game is a plain folder in your workspace:
 ```sh
 npm ci
 npm run build   # lib/index.js, lib/client.js and the bundled three.js runtime
-npm test        # node --test; playtest tests are skipped when no Chrome or Edge is found
+npm test        # node --test; browser tests are skipped when no Chrome or Edge is found
+npm run acceptance # 2D + 3D game → WeChat export → boot in the mock wx harness; writes
+                   # screenshots and REPORT.md to ../artifacts/acceptance
+Releasing a build: `docs/RELEASING.md`.
+
+See `docs/CHANGELOG.md` for what this target adds and the behaviour changes to
+know when rebuilding an older export.
+
+npm run upstream   # is upstream still where this fork branched from, and does the series apply?
+# add -- to also apply, build and test the series: npm run upstream -- --build
+npm run trace      # do the requirement→test references in docs/TRACEABILITY.md still exist?
+npm run installed  # smoke-test the installed plugin (export, wizard, materials, runtime boot)
+npm run bench      # 2D + 3D frame rate, boot time and memory warnings (BENCH_TIER=low for low-end)
+npm run shots      # screenshot the sidebar panels into artifacts/sidebar/
 ```
+
+The acceptance run uses the same mock-wx harness as the tests, so it fails when the
+shipped adapter breaks — re-run it after an upstream update.
+
+More detail: `docs/RELEASE.md` is the maintainer release checklist (which test covers
+which WeChat capability), and `docs/TRACEABILITY.md` maps every V4.0 requirement to the
+code and test that prove it.
 
 ## Ecosystem
 
@@ -195,3 +224,14 @@ npm test        # node --test; playtest tests are skipped when no Chrome or Edge
 - See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for the full notices.
 
 **License**: MIT
+
+
+
+
+
+
+
+
+
+
+

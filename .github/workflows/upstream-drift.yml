@@ -1,0 +1,63 @@
+# Upstream drift check: the WeChat target lives in a fork, so upstream moving is
+# expected. Once a night (and on demand) this applies the patch series to current
+# upstream, builds it, and runs the WeChat tests there — proving the fork still
+# works on top of upstream, not just that the patches apply.
+name: Upstream drift
+
+on:
+  schedule:
+    # 03:00 Asia/Shanghai; GitHub cron is UTC.
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Apply, build and test on upstream
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      # In a GitHub fork origin is the fork itself, so the check must compare
+      # against the repository this fork came from.
+      - name: Add the original repository as upstream
+        run: git remote add upstream https://github.com/ZSeven-W/dsh-game-studio.git
+      - name: Check the series against upstream
+        run: npm run upstream -- --remote upstream --build --out artifacts/upstream-drift/report.json
+      # Name the regression in the log: a drifted tree must not go green.
+      - name: Fail when the applied tree regressed
+        if: always()
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const path = "artifacts/upstream-drift/report.json";
+            if (!fs.existsSync(path)) { console.error("no report"); process.exit(1); }
+            const r = JSON.parse(fs.readFileSync(path, "utf8"));
+            const bad = [];
+            if (r.applied === false) bad.push("patches do not apply");
+            if (r.build && r.build !== "ok") bad.push("build " + r.build);
+            if (r.tests && r.tests.fail) bad.push("tests " + r.tests.fail + " fail");
+            if (r.pack && !r.pack.ok) bad.push("pack not clean");
+            if (bad.length) { console.error(bad.join("; ")); process.exit(1); }
+            console.log("applied, built, tested and packed cleanly on upstream");
+          '
+      - name: Drift report tail
+        if: always()
+        run: test -f artifacts/upstream-drift/report.json && tail -n 60 artifacts/upstream-drift/report.json || true
+      - name: Upload the drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-drift
+          path: artifacts/upstream-drift/report.json
+          if-no-files-found: warn

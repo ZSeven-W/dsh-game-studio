@@ -1,0 +1,763 @@
+/**
+ * The WeChat mini-game release wizard.
+ *
+ * Publishing a mini-game is mostly work in the WeChat admin console that no
+ * plugin can do for the user: register the mini-game, verify the company,
+ * choose a category, show an age rating, file the 小游戏备案, apply for a game
+ * licence before in-app purchases, and submit the build for review. What this
+ * module does is turn that into a checklist with owners, prerequisites and
+ * copy-paste materials, so a user with no game experience can follow it and the
+ * agent can say exactly what to do next.
+ *
+ * It never claims a step is done because it guessed: only the user marks console
+ * steps, and the plugin marks the steps it really ran (export, upload).
+ */
+import { existsSync } from 'node:fs'
+import { mkdir, stat, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { loadManifest, paths } from './project.ts'
+import { commerceFile, loadCommerce } from './commerce.ts'
+import { backupBrokenJson, readJson, StudioError, writeJson } from './util.ts'
+import { findWechatExport } from './devtools.ts'
+
+export type ReleaseStage = 'account' | 'material' | 'compliance' | 'build' | 'review' | 'launch' | 'growth'
+export type ReleaseOwner = 'wechat' | 'plugin' | 'user'
+export type ReleaseStepStatus = 'todo' | 'done' | 'skipped'
+export type Monetization = 'none' | 'iaa' | 'iap' | 'both'
+export type AgeRating = '8+' | '12+' | '16+'
+
+export interface ReleaseStep {
+  id: string
+  stage: ReleaseStage
+  title: string
+  /** wechat = 需在微信后台完成, plugin = 插件可自动, user = 在本机/开发者工具里做 */
+  owner: ReleaseOwner
+  why: string
+  how: string[]
+  /** Steps that must be done first. */
+  needs?: string[]
+  /** Marked when the plugin has a tool for it. */
+  automate?: 'export-wechat' | 'devtools-open' | 'devtools-upload'
+  /** Only shown for these monetization choices; undefined = always. */
+  onlyFor?: Monetization[]
+}
+
+export interface ReleaseStepState {
+  status: ReleaseStepStatus
+  note?: string
+  updatedAt: string
+}
+
+export interface ReleaseState {
+  schema: 1
+  appid?: string
+  gameName?: string
+  category?: string
+  ageRating?: AgeRating
+  monetization?: Monetization
+  /** Set by the plugin when it writes RELEASE.md / REVIEW.md next to the export. */
+  materialsAt?: string
+  reviewAt?: string
+  /** Every version the plugin uploaded, newest last. */
+  uploads?: Array<{ version: string; at: string; note?: string }>
+  /** WeChat's actual filing/review rejections, newest last. */
+  rejections?: Array<{ kind: 'filing' | 'review'; reason: string; at: string }>
+  /** When appid/name/category/age/monetization last changed (materials go stale after). */
+  answersAt?: string
+  /** When the WeChat project was last exported (settings changes make it stale). */
+  exportAt?: string
+  steps: Record<string, ReleaseStepState>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReleaseStatus {
+  game: string
+  appid: string
+  monetization: Monetization
+  ageRating: AgeRating | null
+  progress: { done: number; total: number; percent: number }
+  steps: Array<ReleaseStep & { status: ReleaseStepStatus; blocked: boolean; note?: string }>
+  next: Array<{ id: string; title: string; owner: ReleaseOwner; how: string[] }>
+  materialsAt: string | null
+  reviewAt: string | null
+  /** False when the timestamp exists but the file was deleted (or never exported). */
+  materialsPresent: boolean
+  reviewPresent: boolean
+  /** Filled by the host after checking the file timestamps (optional in the pure status). */
+  materialsStale?: boolean
+  reviewStale?: boolean
+  /** True when the export predates the current answers or monetization settings. */
+  exportStale?: boolean
+  /** True when the newest upload predates the current export or settings. */
+  uploadStale?: boolean
+  uploads: Array<{ version: string; at: string; note?: string }>
+  rejections: Array<{ kind: 'filing' | 'review'; reason: string; at: string }>
+  blocked: Array<{ id: string; title: string; missing: string[] }>
+}
+
+const STAGE_LABEL: Record<ReleaseStage, string> = {
+  account: '账号与主体',
+  material: '名称与素材',
+  compliance: '合规与资质',
+  build: '构建与上传',
+  review: '审核与发布',
+  launch: '上线',
+  growth: '运营与商业化',
+}
+
+export const RELEASE_STAGE_LABELS = STAGE_LABEL
+
+/** Everything the plugin knows about launching a WeChat mini-game in China. */
+export function releasePlan(monetization: Monetization = 'none'): ReleaseStep[] {
+  const steps: ReleaseStep[] = [
+    {
+      id: 'register',
+      stage: 'account',
+      title: '注册小游戏账号',
+      owner: 'wechat',
+      why: '小游戏账号的外壳是「小程序」：注册时选「小程序」，类目里只有「游戏」这个一级类目。测试号只能开发调试，不能备案/审核/发布；一个小游戏账号只能发布 1 款游戏。',
+      how: [
+        '打开 https://mp.weixin.qq.com → 立即注册 → 小程序；不要用「小游戏测试号」，测试号只有 AppID/AppSecret，没有名称、类目、备案和发布入口。',
+        '注册时勾选「游戏」一级类目；一个邮箱只能注册一个账号，2D 与 3D 要各用一个账号。',
+        '同一主体可注册多个账号（个人/个体户最多 5 个，企业等最多 50 个），但每个账号只能发布 1 款游戏。',
+        '名称必须唯一：与已有小程序/小游戏重复会提示改名；名称、头像、游戏内标题、备案材料、截图里的名称必须完全一致。',
+      ],
+    },
+    {
+      id: 'verify',
+      stage: 'account',
+      title: '主体认证',
+      owner: 'wechat',
+      why: '个人主体可以发布基础小游戏，但内购、部分流量主能力和部分类目要求企业主体并完成微信认证。',
+      how: [
+        '后台「设置 → 基本设置 → 主体信息」发起微信认证（企业通常 300 元/年，以页面为准）。',
+        '认证期间按提示提交营业执照、法人信息等材料。',
+        '个人主体开发者可跳过，但发布前请先确认你要用的类目和变现方式是否允许个人主体。',
+      ],
+      needs: ['register'],
+    },
+    {
+      id: 'appid',
+      stage: 'account',
+      title: '把 AppID 填进工程',
+      owner: 'plugin',
+      why: '开发者工具编译/预览可以用测试号，但上传版本必须使用真实 AppID。',
+      how: [
+        '把后台的 AppID 告诉 agent，或自行修改导出目录里的 project.config.json 的 appid。',
+        '也可以用插件的微信导出重新导出并传入 appid。',
+      ],
+      needs: ['register'],
+      automate: 'export-wechat',
+    },
+    {
+      id: 'basic-info',
+      stage: 'material',
+      title: '填写名称、简介与图标',
+      owner: 'wechat',
+      why: '审核会看名称是否与内容相符、简介是否描述清楚玩法，图标要清晰无明显侵权。',
+      how: [
+        '后台「设置 → 基本设置 → 小程序基本信息」填写名称、头像、简介；名称被占用时换原创名，改名前先想好。',
+        '名称、头像、游戏内标题、备案名称、截图里的名称必须完全一致；改名后要重新导出并上传包含新标题的版本。',
+        '头像用插件导出的 icon-512.png，不要用其他游戏或旧名字的图标；简介一句话说清玩法，不写「最好玩」等绝对化用语。',
+      ],
+      needs: ['register'],
+    },
+    {
+      id: 'category',
+      stage: 'material',
+      title: '选择服务类目',
+      owner: 'wechat',
+      why: '类目决定需要的资质。小游戏通常选「游戏」下的子类目（如休闲游戏），选错会被驳回或要求补资质。',
+      how: [
+        '后台「设置 → 基本设置 → 服务类目」选择与小游戏内容一致的类目。',
+        '如果计划接内购，类目和资质要求会更严格，先按后台提示准备材料。',
+      ],
+      needs: ['register'],
+    },
+    {
+      id: 'age-rating',
+      stage: 'compliance',
+      title: '适龄提示',
+      owner: 'plugin',
+      why: '按《网络游戏适龄提示》团体标准，游戏需要在启动/显著位置展示 8+/12+/16+ 适龄提示。',
+      how: [
+        '在向导里选择适龄级别，插件会给出对应的展示文案。',
+        '把提示做进游戏的首屏（当前模板会在标题页留位置），或至少在启动时展示。',
+      ],
+    },
+    {
+      id: 'privacy',
+      stage: 'compliance',
+      title: '用户隐私保护指引',
+      owner: 'wechat',
+      why: '只要收集或使用用户信息（登录、手机号、位置等），就必须在后台配置隐私保护指引，否则相关接口会被限制。',
+      how: [
+        '后台「设置 → 服务内容声明 → 用户隐私保护指引」按实际收集的信息填写。',
+        '插件会生成一份可直接改的草案（get 材料）。不收集信息也要如实声明。',
+      ],
+      needs: ['register'],
+    },
+    {
+      id: 'record',
+      stage: 'compliance',
+      title: '小游戏备案',
+      owner: 'wechat',
+      why: '小游戏备案是上线前的硬门槛：平台初审 1–2 个工作日，主管部门 10–20 个工作日；未备案不能发布，备案审核中不要改名或换主体。',
+      how: [
+        '后台「账号设置 → 小程序备案 → 小游戏备案」发起；备案分三块：场景（≥30 字 + 3 张截图）、玩法（≥50 字 + 3 张不同截图）、系统功能（至少 3 个，每个 ≥30 字 + 1 张截图）。',
+        '截图要求 60KB–5MB，画面里能看到当前游戏名；场景/玩法/系统各用不同截图，不能复用；画面必须和提审版本一致。',
+        '系统功能按实际填（如货币/关卡/技能），不要为了凑数写没有的系统；每项说明 ≥30 字。',
+        '常见驳回：红色受伤特效/尖刺被判血腥暴力、名称与账号或提审版本不一致、截图重复、系统不足 3 个、文字少于 30 字；按驳回原文整改后重新提交。',
+        '平台初审 1–2 个工作日 → 主管部门 10–20 个工作日；备案通过后再提交版本审核，顺序不要反。',
+      ],
+      needs: ['register', 'verify'],
+    },
+    {
+      id: 'record-icp',
+      stage: 'compliance',
+      title: '小程序备案（如适用）',
+      owner: 'wechat',
+      why: '「小游戏备案」之外，部分主体和服务还需要完成小程序备案（ICP 备案）；两条线都要过，缺一条会影响发布。',
+      how: [
+        '后台「设置 → 基本设置」查看是否还有「小程序备案 / ICP 备案」的待办提示。',
+        '按提示提交主体与服务信息；它和小游戏备案是两个入口，不要只做一条。',
+        '两项都完成后再提交版本审核；是否适用以后台提示为准。',
+      ],
+      needs: ['register', 'verify'],
+    },
+    {
+      id: 'export',
+      stage: 'build',
+      title: '导出微信小游戏工程',
+      owner: 'plugin',
+      why: '导出目录就是开发者工具要导入的工程，2D/3D 都支持。',
+      how: ['在侧栏点「导出微信小游戏」，或让 agent 调用 game_studio_export_wechat。'],
+      automate: 'export-wechat',
+    },
+    {
+      id: 'devtools',
+      stage: 'build',
+      title: '在开发者工具里编译与真机预览',
+      owner: 'user',
+      why: '上传前必须真机跑一遍：触摸、安全区、机型性能、分包加载都只能在这里发现。',
+      how: [
+        '打开微信开发者工具 → 导入项目 → 选择导出目录 → 项目类型选「小游戏」。',
+        '需要先在「工具 → 设置 → 安全设置」打开服务端口，插件才能调用 CLI。',
+        '用「预览」扫码在真机上试玩，重点看：能否开始、按钮是否可点、低端机帧率、切后台再回来是否正常。',
+      ],
+      needs: ['export'],
+      automate: 'devtools-open',
+    },
+    {
+      id: 'upload',
+      stage: 'build',
+      title: '上传版本',
+      owner: 'plugin',
+      why: '上传后版本才出现在后台「版本管理」里，才能提交审核。',
+      how: [
+        '确认 project.config.json 已是真实 AppID。',
+        '让 agent 调用 game_studio_wechat_devtools（action=upload）或自己用开发者工具「上传」。',
+      ],
+      needs: ['appid', 'devtools'],
+      automate: 'devtools-upload',
+    },
+    {
+      id: 'submit',
+      stage: 'review',
+      title: '提交审核',
+      owner: 'wechat',
+      why: '提交时要填写版本说明、测试账号、功能页面路径；信息缺失是最常见的驳回原因。',
+      how: [
+        '后台「版本管理」选择包含最终名称/图标/画面的版本；改名或改视觉后要重新上传，不要提交旧版本。',
+        '提交前核对：账号名称、头像、游戏内标题、备案名称、截图名称完全一致；不一致会按「名称与提审游戏不一致」驳回。',
+        '按插件生成的材料填写版本说明与测试账号（如无需登录就写「无需登录」）。',
+        '审核通常 1–7 个工作日；被驳回时按驳回理由改完再提。',
+      ],
+      needs: ['record', 'record-icp', 'upload'],
+    },
+    {
+      id: 'publish',
+      stage: 'launch',
+      title: '发布上线',
+      owner: 'wechat',
+      why: '审核通过后仍需手动点「发布」，版本才会对用户可见。',
+      how: ['后台「版本管理 → 审核通过 → 发布」。', '发布后用微信搜索小游戏名称，确认可以打开。'],
+      needs: ['submit'],
+    },
+    {
+      id: 'analytics',
+      stage: 'growth',
+      title: '接数据与错误监控',
+      owner: 'plugin',
+      why: '没有数据就不知道玩家卡在哪；小游戏有现成的数据与异常上报能力。',
+      how: [
+        '后台「数据分析」看留存、时长、来源；小游戏支持每日/实时数据。',
+        '接入 wx.getRealtimeLogManager / wx.onError 上报异常（插件可给接入片段）。',
+      ],
+      needs: ['publish'],
+    },
+    {
+      id: 'iaa',
+      stage: 'growth',
+      title: '接入广告（IAA）',
+      owner: 'wechat',
+      why: '广告是免费游戏的主要变现方式，需要先开通流量主，且对用户量有门槛。',
+      how: [
+        '后台「流量主」申请开通；微信对开通有独立访客（UV）门槛（以后台显示的当前要求为准）。',
+        '开通后创建广告位，把广告位 ID 填进游戏；插件可生成激励视频/插屏的接入骨架。',
+        '广告不能强制观看、不能遮挡操作区域，否则会被驳回或限制能力。',
+      ],
+      needs: ['publish'],
+      onlyFor: ['iaa', 'both'],
+    },
+    {
+      id: 'iap',
+      stage: 'growth',
+      title: '接入内购（IAP）',
+      owner: 'wechat',
+      why: '内购需要《网络游戏电子出版物审批》（版号）、企业主体与微信支付商户号，三样缺一不可。',
+      how: [
+        '先确认游戏有版号；没有版号的游戏不能开内购，这是硬性要求。',
+        '后台开通微信支付并绑定商户号（企业主体）。',
+        '用虚拟支付接口实现购买，插件可生成最小接入骨架与订单校验说明。',
+      ],
+      needs: ['publish'],
+      onlyFor: ['iap', 'both'],
+    },
+  ]
+  return steps.filter(step => !step.onlyFor || step.onlyFor.includes(monetization))
+}
+
+function now(): string {
+  return new Date().toISOString()
+}
+
+export function releaseFile(dir: string): string {
+  return join(paths.studio(dir), 'wechat-release.json')
+}
+
+export async function loadRelease(dir: string): Promise<ReleaseState> {
+  const file = releaseFile(dir)
+  if (existsSync(file)) {
+    let saved: ReleaseState | null = null
+    try {
+      saved = await readJson<ReleaseState>(file)
+    } catch {
+      const backup = await backupBrokenJson(file)
+      throw new StudioError(`发布进度文件无法解析，已备份为 ${backup.split(/[\\/]/u).at(-1)}。修好或删除它后重试；侧栏会重新生成默认进度。`, 'BAD_RELEASE_STATE')
+    }
+    if (!saved || saved.schema !== 1 || !saved.steps) {
+      const backup = await backupBrokenJson(file)
+      throw new StudioError(`发布进度文件内容不是发布状态，已备份为 ${backup.split(/[\\/]/u).at(-1)}。删除它后重试即可重建。`, 'BAD_RELEASE_STATE')
+    }
+    return saved
+  }
+  const stamp = now()
+  return { schema: 1, steps: {}, createdAt: stamp, updatedAt: stamp }
+}
+
+export async function saveRelease(dir: string, state: ReleaseState): Promise<ReleaseState> {
+  state.updatedAt = now()
+  await writeJson(releaseFile(dir), state)
+  return state
+}
+
+function isDone(state: ReleaseState, id: string): boolean {
+  return state.steps[id]?.status === 'done'
+}
+
+/** Steps that are relevant and not yet done, plus the ones held back by a prerequisite. */
+export function releaseStatus(dir: string, state: ReleaseState, plan: ReleaseStep[]): ReleaseStatus {
+  const steps = plan.map((step) => {
+    const entry = state.steps[step.id]
+    const missing = (step.needs ?? []).filter(id => !isDone(state, id))
+    return {
+      ...step,
+      status: entry?.status ?? 'todo' as ReleaseStepStatus,
+      blocked: missing.length > 0,
+      note: entry?.note,
+    }
+  })
+  const relevant = steps.filter(step => step.status !== 'skipped')
+  const done = relevant.filter(step => step.status === 'done').length
+  const next = relevant.filter(step => step.status === 'todo' && !step.blocked)
+  const uploads = (state.uploads ?? []).slice(-10)
+  const rejections = (state.rejections ?? []).slice(-5)
+  const status: ReleaseStatus = {
+    game: dir,
+    appid: state.appid ?? '',
+    monetization: state.monetization ?? 'none',
+    ageRating: state.ageRating ?? null,
+    materialsAt: state.materialsAt ?? null,
+    reviewAt: state.reviewAt ?? null,
+    uploads,
+    rejections,
+    progress: { done, total: relevant.length, percent: relevant.length === 0 ? 0 : Math.round((done / relevant.length) * 100) },
+    steps,
+    next: next.slice(0, 3).map(step => ({ id: step.id, title: step.title, owner: step.owner, how: step.how })),
+    blocked: relevant
+      .filter(step => step.status === 'todo' && step.blocked)
+      .map(step => ({ id: step.id, title: step.title, missing: (step.needs ?? []).filter(id => !isDone(state, id)) })),
+  }
+  // The host rejects tool output that is not lossless JSON: an undefined step note
+  // would make the whole status call fail even though the state was read fine.
+  return JSON.parse(JSON.stringify(status)) as ReleaseStatus
+}
+
+/** Record a rejection the user pasted from the WeChat console. */
+export async function addRejection(
+  dir: string,
+  input: { kind?: 'filing' | 'review'; reason: string },
+): Promise<{ state: ReleaseState; rejection: { kind: 'filing' | 'review'; reason: string; at: string } }> {
+  const kind = input.kind === 'review' ? 'review' : 'filing'
+  const reason = String(input.reason ?? '').trim()
+  if (!reason) throw new StudioError('Rejection reason is empty', 'EMPTY_REJECTION')
+  const state = await loadRelease(dir)
+  const rejection = { kind, reason: reason.slice(0, 2000), at: now() }
+  state.rejections = [...(state.rejections ?? []), rejection].slice(-20)
+  await saveRelease(dir, state)
+  return { state, rejection }
+}
+
+/** Merge the caller's answers and one optional step update into the saved state. */
+export async function updateRelease(
+  dir: string,
+  patch: { step?: string; status?: ReleaseStepStatus; note?: string; appid?: string; gameName?: string; category?: string; ageRating?: AgeRating; monetization?: Monetization },
+): Promise<{ state: ReleaseState; status: ReleaseStatus }> {
+  const state = await loadRelease(dir)
+  const answerChanged = ['appid', 'gameName', 'category', 'ageRating', 'monetization'].some((key) => (patch as Record<string, unknown>)[key] !== undefined)
+  if (answerChanged) state.answersAt = now()
+  if (patch.appid !== undefined) state.appid = patch.appid.trim()
+  if (patch.gameName !== undefined) state.gameName = patch.gameName.trim()
+  if (patch.category !== undefined) state.category = patch.category.trim()
+  if (patch.ageRating !== undefined) state.ageRating = patch.ageRating
+  if (patch.monetization !== undefined) state.monetization = patch.monetization
+  if (patch.step !== undefined) {
+    const plan = releasePlan(state.monetization ?? 'none')
+    if (!plan.some(entry => entry.id === patch.step)) {
+      throw new StudioError(`Unknown release step "${patch.step}"; known steps: ${plan.map(entry => entry.id).join(', ')}`, 'BAD_RELEASE_STEP')
+    }
+    const status = patch.status ?? 'done'
+    if (!['todo', 'done', 'skipped'].includes(status)) {
+      throw new StudioError(`Unknown release status "${status}"; use todo, done or skipped.`, 'BAD_RELEASE_STATUS')
+    }
+    state.steps[patch.step] = { status, note: patch.note, updatedAt: now() }
+  }
+  await saveRelease(dir, state)
+  return { state, status: releaseStatus(dir, state, releasePlan(state.monetization ?? 'none')) }
+}
+
+/** Was the newest upload made against something older than the current state? */
+function uploadStaleAt(
+  state: Pick<ReleaseState, 'uploads'>,
+  exportAt: number,
+  commerceMtime: number,
+  answersAt: number,
+  sourceMtime: number,
+): boolean {
+  const last = state.uploads?.at(-1)
+  if (!last) return false
+  const uploadedAt = Date.parse(last.at)
+  if (!Number.isFinite(uploadedAt)) return false
+  return exportAt > uploadedAt || commerceMtime > uploadedAt || answersAt > uploadedAt || sourceMtime > uploadedAt
+}
+
+/**
+ * Are the generated files older than the answers or the monetization settings?
+ * Returns both flags so the panel can say "regenerate" instead of showing a stale
+ * document as current.
+ */
+export async function releaseFreshness(
+  dir: string,
+  state: Pick<ReleaseState, 'materialsAt' | 'reviewAt' | 'answersAt' | 'exportAt' | 'uploads'>,
+): Promise<{ materialsStale: boolean; reviewStale: boolean; exportStale: boolean; uploadStale: boolean }> {
+  const commerceMtime = await stat(commerceFile(dir)).then((info) => info.mtimeMs).catch(() => 0)
+  const answersAt = state.answersAt ? Date.parse(state.answersAt) : 0
+  const materialsAt = state.materialsAt ? Date.parse(state.materialsAt) : 0
+  const reviewAt = state.reviewAt ? Date.parse(state.reviewAt) : 0
+  const exportAt = state.exportAt ? Date.parse(state.exportAt) : 0
+  // The exporter reads game.js and game.json straight from the project, so editing
+  // the game after exporting leaves the WeChat project with the old code.
+  const sourceMtime = Math.max(
+    await stat(paths.code(dir)).then((info) => info.mtimeMs).catch(() => 0),
+    await stat(paths.manifest(dir)).then((info) => info.mtimeMs).catch(() => 0),
+  )
+  return {
+    materialsStale: materialsAt > 0 && (commerceMtime > materialsAt || answersAt > materialsAt),
+    reviewStale: reviewAt > 0 && answersAt > reviewAt,
+    exportStale: exportAt > 0 && (commerceMtime > exportAt || answersAt > exportAt || sourceMtime > exportAt),
+    uploadStale: uploadStaleAt(state, exportAt, commerceMtime, answersAt, sourceMtime),
+  }
+}
+
+/** Whether RELEASE.md / REVIEW.md still exist next to the export. */
+export async function releaseFilePresence(dir: string): Promise<{ materials: boolean; review: boolean }> {
+  const exportDir = await findWechatExport(dir)
+  if (!exportDir) return { materials: false, review: false }
+  return {
+    materials: existsSync(join(exportDir, 'RELEASE.md')),
+    review: existsSync(join(exportDir, 'REVIEW.md')),
+  }
+}
+
+/** Record that the WeChat project was exported from the current settings. */
+export async function markExported(dir: string): Promise<void> {
+  const state = await loadRelease(dir)
+  state.exportAt = now()
+  await saveRelease(dir, state)
+}
+
+/** Complete the upload step and keep the versions that were really uploaded. */
+export async function markUploaded(dir: string, version: string, note: string): Promise<void> {
+  const state = await loadRelease(dir)
+  state.uploads = [...(state.uploads ?? []), { version, at: now(), note }].slice(-20)
+  state.steps.upload = { status: 'done', note, updatedAt: now() }
+  await saveRelease(dir, state)
+}
+
+/** Record that the materials / review file was written (shown in the sidebar). */
+export async function markMaterialsWritten(dir: string): Promise<void> {
+  const state = await loadRelease(dir)
+  state.materialsAt = now()
+  await saveRelease(dir, state)
+}
+
+export async function markReviewWritten(dir: string): Promise<void> {
+  const state = await loadRelease(dir)
+  state.reviewAt = now()
+  await saveRelease(dir, state)
+}
+
+/** Trigger markers the plugin may set by itself, because it really did the work. */
+export async function markReleaseDone(dir: string, step: string, note: string): Promise<void> {
+  const state = await loadRelease(dir)
+  state.steps[step] = { status: 'done', note, updatedAt: now() }
+  await saveRelease(dir, state)
+}
+
+const AGE_RATING_COPY: Record<AgeRating, string> = {
+  '8+': '本游戏适合 8 周岁及以上用户使用。',
+  '12+': '本游戏适合 12 周岁及以上用户使用。',
+  '16+': '本游戏适合 16 周岁及以上用户使用。',
+}
+
+export interface ReleaseMaterials {
+  markdown: string
+  file: string
+}
+
+/**
+ * Copy-paste text for the console: category suggestion, age-rating card, privacy
+ * policy draft, filing blurb and the review note. Written next to the export so
+ * it sits in the same folder the user imports.
+ */
+export async function releaseMaterials(
+  dir: string,
+  options: { exportDir?: string; manifestTitle: string; style?: string; orientation?: string; slots?: number },
+): Promise<ReleaseMaterials> {
+  const state = await loadRelease(dir)
+  // The materials should describe this game, not a generic template.
+  const manifest = await loadManifest(dir).catch(() => null)
+  const title = state.gameName || options.manifestTitle || manifest?.title || '未命名小游戏'
+  const style = options.style ?? manifest?.style
+  const orientation = options.orientation ?? manifest?.orientation
+  const roundSeconds = Math.max(1, Math.round(Number(manifest?.rules?.duration ?? 60)))
+  const commerce = await loadCommerce(dir).catch(() => null)
+  const hasIap = state.monetization === 'iap' || state.monetization === 'both'
+  const runtimes = Array.isArray(manifest?.runtime) ? manifest.runtime : []
+  const is3d = runtimes.includes('three')
+  const rating = state.ageRating ?? null
+  const privacyDone = state.steps.privacy?.status === 'done'
+  const recordDone = state.steps.record?.status === 'done'
+  const recordIcpDone = state.steps['record-icp']?.status === 'done'
+  const category = state.category || '游戏 > 休闲游戏（以微信后台可选项为准）'
+  const monetization = state.monetization ?? 'none'
+  const lines = [
+    `# ${title} · 微信小游戏发布材料`,
+    '',
+    '> 这些文字可以直接复制到微信公众平台的对应表单里。提交前请按实际情况修改，尤其是主体信息和隐私相关表述。',
+    '> 要求与门槛以微信后台最新要求为准，过审与备案由微信和主管部门决定。',
+    '',
+    '## 1. 基本信息',
+    '',
+    `- 名称：${title}`,
+    `- 一句话简介：${style ? `${style} 风格的小游戏，` : ''}收集与躲避的轻度玩法，单局约 ${roundSeconds} 秒。`,
+    `- 建议类目：${category}`,
+    `- 屏幕方向：${orientation === 'landscape' ? '横屏' : '竖屏'}`,
+    `- 游戏标签：休闲、收集、单机（以后台可选项为准）`,
+    '',
+    '## 2. 适龄提示',
+    '',
+    `- 适龄级别：${rating ?? '尚未选择（导出暂时内嵌草案 8+；提交前请在向导里选定）'}`,
+    `- 游戏内展示文案：${rating ? AGE_RATING_COPY[rating] : `待选定后生成（草案：${AGE_RATING_COPY['8+']}）`}`,
+    '- 展示位置：启动首屏（模板标题页）固定展示，不遮挡开始按钮。',
+    '- 依据：《网络游戏适龄提示》团体标准；最终以审核意见为准。',
+    '',
+    '## 3. 用户隐私保护指引（草案）',
+    '',
+    privacyDone
+      ? '- 状态：已在后台完成「不收集」声明（向导里已打勾）。'
+      : '- 状态：**尚未完成**——提交前到后台「设置 → 服务内容声明 → 用户隐私保护指引」按「不收集」如实勾选，并在向导里打勾。',
+    '',
+    '**自检结论：本游戏不处理用户个人信息**——没有登录、手机号、位置、相册、通讯录；分数与静音状态只写在 `wx.setStorage` 的本机缓存里，不上传。',
+    '',
+    '- 后台位置：设置 → 服务内容声明 → 用户隐私保护指引，按「不收集」如实勾选，不要多勾。',
+    '- 不需要在游戏内放隐私入口：平台只在调用受保护接口时才要求授权弹窗。',
+    '- 广告与埋点只上报事件名和数值（如 `game_round_end` 带分数），不含个人信息。',
+    '- 如果你之后加了微信登录、好友排行、客服或上传图片：先在后台补充对应指引，再在调用受保护接口前用 `wx.requirePrivacyAuthorize` 触发授权弹窗，并处理 `onNeedPrivacyAuthorization`。',
+    ...(hasIap
+      ? ['- 已接入内购：虚拟支付与订单由微信处理，游戏侧不保存支付凭证或订单个人信息。']
+      : ['- 如后续接入内购，按实际调用的接口补充声明（例如订单信息）。']),
+    '',
+    '## 4. 小游戏备案 / 小程序备案（内容说明）',
+    '',
+    `${title} 是一款${options.style ? `${options.style} 风格的` : ''}休闲小游戏，单机运行，不含用户生成内容、不含社交${hasIap ? '；含道具直购（虚拟支付），版号与商户号见第 6 节' : '与充值'}。`,
+    '',
+    '- 主要内容：收集道具、躲避障碍，单局时长约 1 分钟。',
+    `- 内容自查：无地图、无文字聊天、无真实货币兑换${hasIap ? '（内购为道具直购，不涉及兑换）' : ''}、无烟酒暴力元素。`,
+    '- 备案提醒：小游戏备案与小程序（ICP）备案是两个入口，按后台提示把两条都完成再提交审核。',
+    `- 小游戏备案：${recordDone ? '已完成（向导里已打勾）。' : '**尚未完成**——后台「设置 → 基本设置 → 小游戏备案」提交并等通过。'}`,
+    `- 小程序备案（ICP）：${recordIcpDone ? '已完成或已确认不适用（向导里已打勾）。' : '**尚未确认**——先在后台确认是否需要，需要就提交。'}`,
+    '',
+    '## 5. 版本审核说明',
+    '',
+    `- 版本：${state.appid ? `AppID ${state.appid}` : '（上传时使用真实 AppID）'}`,
+    `- 游戏名称：${title}`,
+    `- 审核路径：启动即进入标题页（底部显示「适龄提示 ${rating ?? '待选定'}」）→ 点击/轻触开始 → 单局约 ${roundSeconds} 秒 → 结算页可直接重开。`,
+    `- 玩法概述：${style ? `${style} 风格；` : ''}收集道具、躲避障碍的轻度玩法，无文字聊天、无用户生成内容。`,
+    ...(monetization === 'iaa' || monetization === 'both' ? ['- 广告位置：两局之间最多展示一次插屏；激励视频只在失败后主动点击「看广告复活」时出现。'] : []),
+    ...(monetization === 'iap' || monetization === 'both' ? ['- 虚拟支付：仅道具直购，版号与商户号需在后台开通后才能使用。'] : []),
+    '- 测试账号：无需登录。',
+    is3d ? '- 已知限制：3D 画面需要支持 WebGL2 的机型；低端机会自动降低分辨率与帧率。' : '- 已知限制：无特殊权限要求。',
+    '',
+    '## 6. 变现（当前选择：' + monetization + '）',
+    '',
+    ...(monetization === 'iaa' || monetization === 'both'
+      ? [
+        '- 广告：需要先在后台开通流量主并满足 UV 门槛，再创建广告位并把 ID 填进商业化面板。',
+        `  - 插屏广告位：${commerce?.ads?.interstitial || '未填写'}`,
+        `  - 激励视频广告位：${commerce?.ads?.rewarded || '未填写'}`,
+        ...(commerce?.enabled ? [] : ['  - 注意：商业化面板里广告总开关还没打开，导出后不会展示广告。']),
+      ]
+      : ['- 未选择广告变现。']),
+    ...(monetization === 'iap' || monetization === 'both'
+      ? [
+        '- 内购：需要《网络游戏电子出版物审批》（版号）、企业主体与微信支付商户号，三样缺一不可。',
+        `  - 版号：${commerce?.iap?.licenseNumber || '未填写'}`,
+        `  - 商户号：${commerce?.iap?.merchantId || '未填写'}`,
+        `  - 签名服务：${commerce?.iap?.payUrl ? '已配置' : '未配置（内购跑演示模式，不会产生真实订单）'}`,
+      ]
+      : ['- 未选择内购变现。']),
+    ...(commerce?.enabled && monetization === 'none'
+      ? ['- 注意：向导选择「不变现」，但商业化面板已开启广告/内购；导出按面板配置生效，提交审核前请统一。']
+      : []),
+    '- 插件只做接入骨架与合规检查，不承诺过审、备案或收入。',
+    '',
+    '## 7. 数据事件（可选）',
+    '',
+    '- 游戏会用 `wx.reportEvent` 上报这些事件，名称固定：',
+    '  `game_round_start`、`game_round_end`、`game_ad_interstitial`、`game_ad_rewarded`、',
+    '  `game_iap_order`、`game_iap_dry_run`、`game_iap_paid`、`game_iap_failed`、',
+    '  `game_ad_error`（带错误码）、`game_memory_warning`（带等级）。',
+    '- 事件必须现在后台建好同名事件（「数据 → 指标 / 事件管理」），否则上报会被丢弃、后台看不到数据。',
+    '- 基础库需 2.14.4 及以上；低版本会自动降级到 `wx.reportAnalytics`（如果宿主支持）。',
+    '',
+    '## 8. 上线后看什么',
+    '',
+    '| 想看什么 | 后台位置 | 对应事件 / 指标 | 怎么判断 |',
+    '| --- | --- | --- | --- |',
+    '| 有人玩吗、留得住吗 | 数据分析 → 概况 / 留存 | — | 次留有数就说明有人回来；全是 0 先查分享与入口 |',
+    '| 一局能不能玩完 | 数据分析 → 自定义分析 | `game_round_start` / `game_round_end` | 两者数量接近说明多数人能打完一局 |',
+    '| 广告有没有展示 | 流量主 → 数据 / 自定义分析 | `game_ad_interstitial` / `game_ad_rewarded` | 有播放但收入长期为 0，先查流量主与广告位状态 |',
+    '| 广告为什么失败 | 实时日志 + 广告事件 | `game_ad_error`（带错误码） | 1004 偶尔出现正常；1000/1003 稍后重试；1001 查调用参数；1002 核对广告位 ID；1005 审核中；1006/1007 看审核结果；1008 广告位已关闭 |',
+    '| 内购有没有成交 | 虚拟支付后台 + 自定义分析 | `game_iap_order` / `game_iap_paid` / `game_iap_failed` | 没有 `game_iap_paid` 且是演示模式 → 属正常（未接签名服务） |',
+    '| 线上报错 | 实时日志 | RealtimeLog（最多前 20 条，之后折叠） | 出现折叠提示说明错误很多，先看第一条 |',
+    '| 是不是快撑爆内存了 | 自定义分析 | `game_memory_warning`（带 level） | 零星可接受；持续出现要换小素材或降分包 |',
+    '',
+    '提示：这些事件要先在「数据 → 指标 / 事件管理」建同名事件（见上一节），否则后台看不到。',
+    '',
+    '**上线前自检**：在开发者工具打开调试器 → Console，输入 `__wechatRuntime.summary()`，打一局后应看到 `rounds: 1`、`completedRounds: 1`、`adShows: 1`。数字不动说明埋点或广告没接上；`adFailures` 增长就去查广告位状态。',
+    '',
+    '## 9. 上线前检查',
+    '',
+    '- [ ] 已在真机预览：能开始、能玩完一局、结算页可重开。',
+    '- [ ] 已确认包体（主包 4 MB / 总包 30 MB）与基础库版本。',
+    '- [ ] AppID 已替换为真实值（不是 touristappid）。',
+    '- [ ] 小游戏备案已通过；需要时报关小程序（ICP）备案。',
+    '- [ ] 适龄提示与隐私指引已按实际内容填写。',
+    '- [ ] 要看的埋点事件已在后台建好（见上一节）。',
+    '- [ ] 在开发者工具里打过一局，`__wechatRuntime.summary()` 的 rounds/completedRounds/adShows 都在动。',
+    '',
+    '## 10. 小游戏备案填写稿（实战版）',
+    '',
+    '### 10.1 名称一致性（先查）',
+    '- 账号名称、头像、游戏内标题、备案名称、三组截图里的名称必须完全一致。',
+    '- 测试号（只有 AppID/AppSecret/服务器域名）不能备案/审核/发布；正式账号的「小程序基本信息」里应有名称、头像、简介、类目和备案入口。',
+    '- 一个小游戏账号只能发布 1 款游戏；同一主体可注册多个账号（个人/个体户 5 个，企业等 50 个），2D 与 3D 必须各用一个账号。',
+    '- 名称与已有游戏重复会被要求改名；改名后要重新导出、上传包含新标题的版本，并同步改备案和截图。',
+    '',
+    '### 10.2 场景（≥30 字 + 3 张截图）',
+    `${title} 的主界面和游戏界面需要各写清楚：场景/画风、顶部显示什么、中部有什么、底部操作区是什么。${style ? `本作风格：${style}。` : ''}`,
+    '截图：标题页、游戏中、下坠/推进中各 1 张；画面里要能看到名称。',
+    '',
+    '### 10.3 玩法（≥50 字 + 3 张不同截图）',
+    `玩家如何操作、平台/敌人如何变化、目标是什么、单局约 ${roundSeconds} 秒。不要写「受伤/血液/尖刺」这类词，用「障碍/生命值归零」代替。`,
+    '截图：第 2–3 层、技能/交互、后续层数各 1 张；不要和场景截图重复。',
+    '',
+    '### 10.4 系统功能（至少 3 个，每个 ≥30 字 + 1 张截图）',
+    '按实际系统填；没有的系统不要凑数。常见写法：',
+    '- 货币系统：金币/分数只用于本局计分，不可购买、充值、兑换或提现，无商城/红包/会员/支付。',
+    '- 关卡系统：逐层/波次推进，目标与难度如何变化，不设付费解锁或广告门槛。',
+    '- 技能系统：主动技能与冷却，不能购买/升级/付费解锁；没有技能就换成实际有的系统（如道具/生存），不要硬写。',
+    '截图：每个系统 1 张，且不能和场景/玩法截图重复。',
+    '',
+    '### 10.5 截图规则（最容易驳回）',
+    '- 场景 3 张、玩法 3 张、每个系统 1 张；不同模块不能复用同一张图。',
+    '- 每张 60KB–5MB；画面里能看到当前游戏名；用与提审版本一致的画面。',
+    '- 不要出现红色受伤特效、血液、尖刺、骷髅、烟酒、赌博等；平台会按暴力/血腥驳回。',
+    '- 被驳回时按原文整改：换图/改文字后重新提交，不要重复提交同一份。',
+    '',
+    '### 10.6 时间与顺序',
+    '- 平台初审 1–2 个工作日，主管部门 10–20 个工作日；审核中不要改名或换主体。',
+    '- 顺序：小游戏备案 →（如适用）小程序备案 → 版本审核 → 发布；备案通过前不要提交版本审核。',
+    '',
+    '### 10.7 已记录的驳回',
+    '__REJECTIONS__',
+    '',
+    '---',
+    '',
+    '## English summary',
+    '',
+    `- Game: ${title} — ${is3d ? '3D (three.js, WebGL2)' : '2D canvas'}, ${orientation === 'landscape' ? 'landscape' : 'portrait'}, one round ≈ ${roundSeconds} s.`,
+    `- Category: ${category}`,
+    `- Age rating: ${rating ?? 'not chosen yet (the export embeds a draft 8+)'}; the badge is shown on the title screen and must not cover the start button.`,
+    '- Privacy: the game collects no personal data; scores and mute state stay in wx.setStorage.',
+    monetization === 'none'
+      ? '- Monetization: off — nothing is billed or shown.'
+      : `- Monetization: ${monetization}; interstitial at most once between rounds, rewarded video only when the player taps "watch to revive".`,
+    ...(commerce?.ads?.interstitial || commerce?.ads?.rewarded
+      ? [`- Ad units: ${[commerce?.ads?.interstitial, commerce?.ads?.rewarded].filter(Boolean).join(', ')}`]
+      : []),
+    '- Analytics: ten wx.reportEvent events named game_* (section 7); register them first or the dashboard stays empty.',
+    '- Console steps: register, verify, AppID, name/category, age rating, privacy guide, mini-game record, ICP record, review, publish.',
+    '',
+    '> Review and filings are decided by WeChat and the competent authorities; this file only prepares the text.',
+    '',
+  ]
+  const rejectionLog = (state.rejections ?? []).slice(-5).map((entry) => {
+    const when = entry.at.slice(0, 10)
+    return `- ${when} · ${entry.kind === 'review' ? '版本审核' : '小游戏备案'}：${entry.reason}`
+  }).join('\n') || '（还没有记录驳回；被驳回后把原文发给我，我记在这里并给整改建议。）'
+  const markdown = lines.join('\n').replace('__REJECTIONS__', rejectionLog)
+  const target = options.exportDir ? join(options.exportDir, 'RELEASE.md') : join(paths.exportDir(dir), 'wechat-release.md')
+  await mkdir(dirname(target), { recursive: true })
+  await writeFile(target, markdown, 'utf8')
+  return { markdown, file: target }
+}
+
+
+
+
+
+

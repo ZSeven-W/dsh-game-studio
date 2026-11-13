@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>一句话描述一个小游戏 —— 在 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> 对话的侧栏里直接玩，换上 AI 美术，导出成一个 HTML 文件。</strong><br />
-  <sub>10 个 agent 工具 &bull; 侧栏实时预览 &bull; 2D 与 3D 体素模板 &bull; OpenAI 或 Codex 生图、花钱前先确认 &bull; 自动试玩 &bull; 版本历史 &bull; 单文件导出</sub>
+  <sub>15 个 agent 工具 &bull; 侧栏实时预览 &bull; 2D 与 3D 体素模板 &bull; OpenAI 或 Codex 生图、花钱前先确认 &bull; 自动试玩 &bull; 版本历史 &bull; 单文件 HTML 导出 &bull; 微信小游戏导出</sub>
 </p>
 
 <p align="center">
@@ -41,8 +41,11 @@
 | 🤖 **自动试玩** | `game_studio_playtest` 在无界面的 Chrome 或 Edge 里玩最新代码，报告阶段、得分、帧率、脚本错误并附截图。不靠方向键操作的游戏（格子、卡牌、瞄准、节奏……）定义 `window.__autoplay`，试玩就能玩到真正的玩法。 |
 | 🕰️ **版本历史** | 每次让游戏发生变化的构建都会保存；`game_studio_restore_version` 把代码、规则和美术一起恢复。 |
 | 📦 **单文件导出** | `game_studio_export` 生成一个不联网、自包含的 HTML 文件，用任何浏览器打开，或放到任意静态托管上。 |
+| 🟢 **导出微信小游戏** | `game_studio_export_wechat` 在 `export/wechat/<slug>/` 下生成可直接导入微信开发者工具的工程（`game.js`、`game.json`、`project.config.json`、`assets/*.png`）。游戏代码不改，由内置的 `wx.*` 运行时适配层跑起来；SVG 素材自动转成 PNG；素材超过 1.5 MB 时自动放进 assets 分包，游戏启动前预下载。2D canvas 与 3D three.js/voxel 都可用：WebGL 渲染到离屏画布再合成到上屏画布，HUD 按 `__gameState` 用 canvas 重绘（小游戏没有 DOM）；模板的 WebAudio 音效被渲染成小 WAV，用 `wx.createInnerAudioContext` 播放。每次导出附带包体报告（最大文件、4 MB 主包限制、该删什么），运行时按设备 benchmark 限制渲染倍率：低端 1×、中端 1.5×、高端 2×，低端机锁定 30fps；`__wechatRuntime.metrics()` 给出启动耗时、帧数与平均帧率，崩溃会写进 `wx.getRealtimeLogManager`。之后可以用 `game_studio_wechat_devtools` 通过 IDE 自带的 CLI 打开、预览、上传（并读回 IDE 编译后的包体大小），或让 `game_studio_wechat_ci` 生成一套带上传密钥的 CI 工作流。 |
 | 📱 **在手机上试玩** | `game_studio_share` 在本地网络上开一个临时只读链接（或通过 `cloudflared` 开启 Cloudflare 临时公网链接，发给任何网络下的朋友都能玩），侧栏里会显示二维码。 |
 | 🌐 **发布到 GitHub Pages** | `game_studio_publish` 用本机已登录的 `gh` 把构建好的 HTML（或整面游戏墙）推到你名下的公开仓库并开启 GitHub Pages，生成关掉电脑也能长期游玩的网址。 |
+| 🚀 **上线向导** | 侧栏「上线向导」和 `game_studio_wechat_release` 跟踪从小游戏注册、小游戏备案到审核发布的每一步，标明谁来做（微信后台 / 插件 / 你），只把插件真的做完的步骤标成完成，并在导出目录写一份 `RELEASE.md`：一句话简介、建议类目、适龄提示、隐私指引草案、备案说明、审核说明，直接复制到后台表单。另一个动作「审核自查」会写 `REVIEW.md`：12 条真实常见驳回原因 + 你这个工程当前踩中的那几条。 |
+| 💰 **广告与内购，都不强推** | `game_studio_wechat_commerce` 存广告位 ID 和内购设置。运行时最多在两局之间展示一次插屏，激励视频只由玩家点「看广告复活」触发；开局、结算和广告事件通过 `wx.reportEvent` 上报。内购必须记录版号与微信支付商户号才能开启；配了签名服务就调 `wx.requestMidasPaymentGameItem`，没配则跑演示模式。插件既不代签也不代收款。侧栏「商业化」面板改的是同一份配置，不用碰文件。 |
 | 🗂️ **游戏墙** | 点右栏的 **+**，选 **游戏工坊 · 游戏墙**：工作区里做过的游戏铺满一面墙，封面是最近一次试玩的画面，可按 2D/3D 筛选，按最近修改、版本数或名称排序。点一下就能玩，不经过 agent，也不花 token。你还可以订阅在线游戏源（`owner/repo`、GitHub 仓库地址或 GitHub Pages 网址），把别人发布的游戏合入墙内直接游玩。**导出游戏墙**会把本地游戏打包成一个离线网页，发给朋友就能玩。 |
 
 ## 用它做出来的游戏
@@ -84,15 +87,20 @@
 | `game_studio_generate_asset` | 用 `openai` 或 `codex` 给一个槽位生成 1–4 张候选图，可选参考图。花钱前先审批；Codex 在后台运行。 |
 | `game_studio_apply_asset` | 按编号把候选图放进游戏，重新构建并刷新。 |
 | `game_studio_revert_asset` | 把某个槽位恢复成上一张美术。 |
+| `game_studio_wechat_devtools` | 驱动微信开发者工具：`open` 把导出目录导入 IDE，`preview` 在导出目录写一张真机二维码，`upload` 上传一个版本（`version`、`desc`）。需要先打开 IDE 服务端口（工具 → 设置 → 安全设置 → 服务端口）；端口关闭时返回 `DEVTOOLS_PORT_CLOSED` 并给出开启步骤，插件不会替你改这个设置。 |
+| `game_studio_wechat_ci` | 在导出目录生成 CI 上传套件：`ci/upload.mjs`（miniprogram-ci）、`.github/workflows/wechat-upload.yml`、`ci/README.md`。需要真实 AppID；你在 CI 里加 `WECHAT_APPID` 与 `WECHAT_PRIVATE_KEY` 两个 secret。它只上传版本，提交审核仍需在后台点。 |
+| `game_studio_wechat_commerce` | 保存广告位 ID（`interstitial`、`rewarded`）和内购设置（`iapEnabled`、`licenseNumber`、`merchantId`、`payUrl`），开关广告与埋点，并说明下次导出会写入什么。内购必须有版号与商户号；没配 `payUrl` 时通过 `__commerce.iap.buy()` 跑演示模式。 |
+| `game_studio_wechat_release` | 上线清单与材料：`status` 返回每一步的负责人（微信后台 / 插件 / 用户）、阻塞项和接下来 3 件事；`update` 记录某一步以及真实 AppID、名称、类目、适龄级别、变现方式；`materials` 在导出目录写 `RELEASE.md`，内容可直接粘进后台表单；`review` 写 `REVIEW.md`，列出这个工程还剩下的审核风险。 |
 | `game_studio_versions` | 列出已保存的版本，最新的在前。 |
 | `game_studio_restore_version` | 把整个游戏恢复到较早的版本。 |
 | `game_studio_export` | 导出一个自包含、可离线游玩的 HTML 文件。 |
+| `game_studio_export_wechat` | 把游戏导出成微信小游戏工程（`game.js`/`game.json`/`project.config.json` + `wx.*` 运行时）到 `<游戏>/export/wechat/<slug>/`，在微信开发者工具里导入该目录即可。游戏代码不改，SVG 素材自动转 PNG，three.js 游戏会把引擎内联进去。支持 2D 与 3D；WebGL 逐帧合成到上屏画布，HUD 按 `__gameState` 重绘。 |
 | `game_studio_share` | 在本地网络开启（或关闭）一个临时只读链接让手机试玩；传 `public: true` 则通过 `cloudflared` 生成任何网络都能打开的临时公网链接。 |
 | `game_studio_list` | 列出工作区里的游戏（标题、2D/3D、是否已构建、版本数），agent 能按名字找到「那个企鹅游戏」。 |
 | `game_studio_export_wall` | 导出游戏墙：一个离线 HTML 页面，每个已构建的游戏一个格子，点格子就能玩。 |
 | `game_studio_publish` | 通过本机已登录的 `gh` CLI 把已构建的游戏（或传 `wall: true` 把整面游戏墙）发布到 GitHub Pages，传 `remove: true` 则从仓库删除。操作前先经你批准，且只写入带有 `.dsh-game-studio.json` 标记的仓库。 |
 
-侧栏上的按钮（应用、撤回、构建、导出、恢复、分享、发布）通过 `/game-studio` 命令调用同样的操作。
+侧栏上的按钮（应用、撤回、构建、导出、导出微信小游戏、恢复、分享、发布）通过 `/game-studio` 命令调用同样的操作。
 
 ## 生图服务与费用
 
@@ -115,7 +123,7 @@
 ## 环境要求
 
 - DeepSeek Harness `0.2.1` 或更新（网页版或桌面版），Node.js `24.11` 或更新。
-- 同一台电脑上装有 Google Chrome 或 Microsoft Edge，用于自动试玩。
+- 同一台电脑上装有 Google Chrome 或 Microsoft Edge，用于自动试玩，以及导出微信小游戏时把 SVG 素材转成 PNG。
 - 生成 AI 美术需要 OpenAI API key 或已登录的 Codex CLI。都没有时，游戏仍可用代码画的角色正常运行。
 - 可选：安装 `cloudflared`（macOS 可用 `brew install cloudflared`）以使用公网临时分享链接；安装并登录 `gh`（`brew install gh` 并运行 `gh auth login`）以发布到 GitHub Pages。
 
@@ -175,7 +183,7 @@ dsh web
 ```sh
 npm ci
 npm run build   # 生成 lib/index.js、lib/client.js 和打包好的 three.js 运行时
-npm test        # node --test；找不到 Chrome 或 Edge 时跳过试玩相关测试
+npm test        # node --test；找不到 Chrome 或 Edge 时跳过需要浏览器的测试
 ```
 
 ## 生态
@@ -195,3 +203,14 @@ npm test        # node --test；找不到 Chrome 或 Edge 时跳过试玩相关�
 - 完整声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
 
 **许可证**：MIT
+
+
+
+
+
+
+
+
+
+
+

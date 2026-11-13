@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/dsh-game-studio",
-  "version": "0.1.0-rc.5",
+  "version": "0.1.0-rc.83",
   "description": "Describe a small game in one sentence, play it in the DeepSeek Harness sidebar, swap in AI art, and publish to GitHub Pages or Cloudflare in one click.",
   "license": "MIT",
   "repository": {
@@ -45,11 +45,19 @@
     "github-pages"
   ],
   "engines": {
-    "node": ">=24.11.0"
+    "node": ">=24.11.0",
+    "dsh": ">=0.2.1-rc.5"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "acceptance": "node scripts/acceptance.mjs",
+    "upstream": "node scripts/upstream-check.mjs",
+    "trace": "node scripts/trace-check.mjs",
+    "installed": "node scripts/installed-check.mjs",
+    "bench": "node scripts/bench.mjs",
+    "shots": "node scripts/sidebar-shot.mjs",
+    "launch-verify": "node scripts/launch-verify.mjs"
   },
   "dsh": {
     "bundle": {
@@ -102,6 +110,9 @@
   "devDependencies": {
     "esbuild": "^0.25.0",
     "qrcode-generator": "2.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "semver": "^7.8.6",
     "three": "0.187.0"
   },
   "publishConfig": {

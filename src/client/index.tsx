@@ -10,6 +10,7 @@ import {
   mergeSources, onlineGameToShelfGame, parseWorkspaceSources, refreshSubscribedSource, saveFeedCache,
   saveStoredSources, shouldAutoRefresh, WORKSPACE_SOURCES_FILE, type SourceFetchState, type SubscribedSource,
 } from './feed.ts'
+import { commerceFormHints } from '../commerce-hints.ts'
 import { commandErrorCopy, en, liveShare, NS, publishState, shareCopy, zh, type Key, type PublishedInfo, type ShareHeartbeat } from './locales.ts'
 import {
   builtLocalGamesCount, dimensionCounts, localWallProjects, mergeShelfGames, scanShelf, viewGames,
@@ -56,22 +57,27 @@ function announceRefresh(project: string): void {
 
 const tok = {
   text: 'var(--dsw-alias-label-primary, inherit)',
-  muted: 'var(--dsw-alias-label-secondary, #888)',
+  // Fallbacks are used when the host does not define the variable; they meet 4.5:1
+  // against the light page (#5f6875 = 5.2:1 on #f3f4f6, #b91c1c = 5.9:1).
+  muted: 'var(--dsw-alias-label-secondary, #5f6875)',
   border: 'var(--dsw-alias-border-l2, rgba(128,128,128,.3))',
   layer: 'var(--dsw-alias-bg-layer-1, rgba(128,128,128,.08))',
   active: 'var(--dsw-alias-interactive-bg-active, rgba(128,128,128,.18))',
-  danger: 'var(--dsw-alias-label-danger, #d33)',
+  danger: 'var(--dsw-alias-label-danger, #b91c1c)',
 }
 
 const s: Record<string, CSSProperties> = {
   root: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, color: tok.text, fontSize: 13 },
   bar: { display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', borderBottom: `1px solid ${tok.border}`, flexWrap: 'wrap' },
   title: { fontWeight: 600, marginRight: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 },
-  button: { font: 'inherit', fontSize: 12, padding: '3px 9px', borderRadius: 6, border: `1px solid ${tok.border}`, background: 'transparent', color: 'inherit', cursor: 'pointer' },
+  button: { font: 'inherit', fontSize: 12, padding: '3px 9px', minHeight: 26, display: 'inline-flex', alignItems: 'center', borderRadius: 6, border: `1px solid ${tok.border}`, background: 'transparent', color: 'inherit', cursor: 'pointer' },
   stage: { position: 'relative', flex: '1 1 55%', minHeight: 200, background: '#000' },
   frame: { position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, display: 'block' },
   hint: { padding: '6px 10px', color: tok.muted, fontSize: 12, borderBottom: `1px solid ${tok.border}` },
   error: { padding: '6px 10px', color: tok.danger, fontSize: 12, borderBottom: `1px solid ${tok.border}` },
+  noticeRow: { display: 'flex', alignItems: 'flex-start', gap: 8 },
+  noticeText: { flex: 1, minWidth: 0, maxHeight: 132, overflow: 'auto', whiteSpace: 'pre-wrap' },
+  noticeClose: { flexShrink: 0, font: 'inherit', fontSize: 14, lineHeight: 1, padding: '2px 6px', minWidth: 26, minHeight: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer' },
   panel: { flex: '1 1 45%', overflow: 'auto', padding: '8px 10px', minHeight: 0 },
   slot: { borderTop: `1px solid ${tok.border}`, padding: '8px 0' },
   slotHead: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 },
@@ -80,6 +86,14 @@ const s: Record<string, CSSProperties> = {
   img: { width: 76, height: 76, objectFit: 'contain', borderRadius: 8, border: `1px solid ${tok.border}`, background: `repeating-conic-gradient(${tok.layer} 0% 25%, transparent 0% 50%) 50% / 12px 12px` },
   small: { fontSize: 11, color: tok.muted },
   row: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 13 },
+  releasePanel: { borderBottom: `1px solid ${tok.border}`, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflow: 'auto' },
+  releaseHead: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 },
+  releaseStep: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '1px 0' },
+  field: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 },
+  input: { font: 'inherit', fontSize: 12, padding: '2px 6px', borderRadius: 6, border: `1px solid ${tok.border}`, background: 'transparent', color: 'inherit', minWidth: 180 },
+  check: { width: 26, height: 26, flex: 'none', borderRadius: 6, border: `1px solid ${tok.border}`, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0 },
+  doneTitle: { color: tok.muted, textDecoration: 'line-through' },
+  badge: { fontSize: 11, color: tok.muted, border: `1px solid ${tok.border}`, borderRadius: 999, padding: '1px 7px', flex: 'none' },
 }
 
 // ---------------------------------------------------------------- files
@@ -197,8 +211,42 @@ function Thumb({ readBytes, sessionId, path, version, children, title, src }: {
   </div>
 }
 
-function StudioTab(props: any): ReactNode {
-  const { useTabInfo, t, readBytes, runCommand } = props as { useTabInfo: () => any; t: T } & TabInjected
+interface ReleaseStepView {
+  id: string
+  title: string
+  owner: 'wechat' | 'plugin' | 'user'
+  status: 'todo' | 'done' | 'skipped'
+  blocked: boolean
+}
+
+interface ReleaseView {
+  progress: { done: number; total: number; percent: number }
+  steps: ReleaseStepView[]
+  /** Steps that are relevant, not done and not blocked: what to do next. */
+  next?: ReleaseStepView[]
+  /** Steps held back by a prerequisite. */
+  blocked?: ReleaseStepView[]
+  /** Set once the plugin wrote RELEASE.md / REVIEW.md next to the export. */
+  materialsAt?: string | null
+  reviewAt?: string | null
+  materialsPresent?: boolean
+  reviewPresent?: boolean
+  materialsStale?: boolean
+  reviewStale?: boolean
+  exportStale?: boolean
+  uploadStale?: boolean
+  uploads?: Array<{ version: string; at: string; note?: string }>
+}
+
+interface CommerceView {
+  enabled: boolean
+  ads: { interstitial?: string; rewarded?: string }
+  iap: { enabled: boolean; licenseNumber?: string; merchantId?: string; payUrl?: string }
+  analytics: boolean
+  check?: { ok: boolean; problems: string[]; notes: string[] }
+}
+
+function StudioTab(props: any): ReactNode {  const { useTabInfo, t, readBytes, runCommand } = props as { useTabInfo: () => any; t: T } & TabInjected
   const { tab } = useTabInfo()
   const target = useMemo(() => parseStudioAddress(tab.contentId), [tab.contentId])
   if (target === undefined) throw new Error(`dsh-game-studio: not a studio address "${tab.contentId}"`)
@@ -290,6 +338,10 @@ function StudioTab(props: any): ReactNode {
         const file = (JSON.parse(result.text) as { file?: string }).file ?? ''
         setNotice({ kind: 'info', text: t('tab.exported', { file }) })
       }
+      if (action === 'export-wechat') {
+        const dir = (JSON.parse(result.text) as { dir?: string }).dir ?? ''
+        setNotice({ kind: 'info', text: t('tab.exportedWechat', { dir }) })
+      }
       reload()
     } finally {
       setOpeningPublic(false)
@@ -298,18 +350,237 @@ function StudioTab(props: any): ReactNode {
     }
   }, [runCommand, sessionId, project, reload, t])
 
+  // ---- WeChat launch wizard -------------------------------------------------
+  const [release, setRelease] = useState<ReleaseView | null>(null)
+  const [releaseOpen, setReleaseOpen] = useState(false)
+  const [releaseBusy, setReleaseBusy] = useState(false)
+  // Preview writes a QR PNG next to the export; show it here so the user scans it
+  // instead of hunting for a file path.
+  const [qrPath, setQrPath] = useState<string | undefined>()
+  const [uploadVersion, setUploadVersion] = useState('1.0.0')
+  const qrUrl = useFileUrl(readBytes, sessionId, qrPath, qrPath ?? '', 'image/png')
+
+  const loadRelease = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-release ${JSON.stringify({ project, op: 'status' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      setRelease(JSON.parse(result.text) as ReleaseView)
+    } catch (error) {
+      setNotice({ kind: 'error', text: String((error as Error)?.message ?? error) })
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t])
+
+  const toggleReleaseStep = useCallback(async (step: ReleaseStepView) => {
+    setReleaseBusy(true)
+    try {
+      const status = step.status === 'done' ? 'todo' : 'done'
+      const result = await runCommand(sessionId, `wechat-release ${JSON.stringify({ project, op: 'update', step: step.id, status })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      setRelease(JSON.parse(result.text) as ReleaseView)
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t])
+
+  const writeReleaseMaterials = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-release ${JSON.stringify({ project, op: 'materials' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      const file = (JSON.parse(result.text) as { file?: string }).file ?? ''
+      setNotice({ kind: 'info', text: t('tab.releaseMaterialsSaved', { file }) })
+      void loadRelease()
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t, loadRelease])
+
+  const writeReviewGuide = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-release ${JSON.stringify({ project, op: 'review' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      const parsed = JSON.parse(result.text) as { file?: string; risks?: unknown[] }
+      setNotice({ kind: 'info', text: t('tab.releaseReviewSaved', { file: parsed.file ?? '', count: String(parsed.risks?.length ?? 0) }) })
+      void loadRelease()
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t])
+
+  const openDevtools = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-devtools ${JSON.stringify({ project, op: 'open' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      setNotice({ kind: 'info', text: t('tab.releaseDevtoolsOpened') })
+      await loadRelease()
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t, loadRelease])
+
+  const previewDevtools = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-devtools ${JSON.stringify({ project, op: 'preview' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      const parsed = JSON.parse(result.text) as { qr?: string | null }
+      setQrPath(parsed.qr ?? undefined)
+      setNotice({ kind: 'info', text: parsed.qr ? t('tab.previewQr') : t('tab.previewNoQr') })
+    } catch (error) {
+      setNotice({ kind: 'error', text: String((error as Error)?.message ?? error) })
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t])
+
+  const uploadDevtools = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const version = uploadVersion.trim() || '1.0.0'
+      const result = await runCommand(sessionId, `wechat-devtools ${JSON.stringify({ project, op: 'upload', version })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      setNotice({ kind: 'info', text: t('tab.uploaded', { version }) })
+      await loadRelease()
+    } catch (error) {
+      setNotice({ kind: 'error', text: String((error as Error)?.message ?? error) })
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t, uploadVersion, loadRelease])
+
+  const checkEnvironment = useCallback(async () => {
+    setReleaseBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-devtools ${JSON.stringify({ project, op: 'doctor' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      const report = JSON.parse(result.text) as {
+        ready?: boolean
+        problems?: Array<{ code?: string; hint?: string }>
+        hints?: string[]
+      }
+      if (report.ready) {
+        setNotice({ kind: 'info', text: t('tab.envReady') })
+        return
+      }
+      // The host sends stable codes; unknown codes fall back to its own hint.
+      const lines = (report.problems ?? []).map((problem) => {
+        if (problem.code === 'cli_missing') return t('tab.envCliMissing')
+        if (problem.code === 'port_closed') return t('tab.envPortClosed')
+        if (problem.code === 'tourist_appid') return t('tab.envTourist')
+        return problem.hint ?? ''
+      }).filter(Boolean)
+      const fallback = (report.hints ?? []).join(' ')
+      setNotice({
+        kind: 'error',
+        text: lines.length > 0 ? t('tab.envHints', { hints: lines.join(' ') }) : t('tab.envHints', { hints: fallback }),
+      })
+    } catch (error) {
+      setNotice({ kind: 'error', text: String((error as Error)?.message ?? error) })
+    } finally {
+      setReleaseBusy(false)
+    }
+  }, [runCommand, sessionId, project, t])
+
+  const toggleRelease = useCallback(() => {
+    const next = !releaseOpen
+    setReleaseOpen(next)
+    if (next && release === null) void loadRelease()
+  }, [releaseOpen, release, loadRelease])
+
+  // The button shows how far the release got; a fresh game shows the first-run hint.
+  useEffect(() => {
+    if (release === null) void loadRelease()
+  }, [release, loadRelease])
+
+  const ownerLabel = (owner: ReleaseStepView['owner']): string => owner === 'wechat'
+    ? t('tab.releaseOwner.wechat')
+    : owner === 'plugin' ? t('tab.releaseOwner.plugin') : t('tab.releaseOwner.user')
+
+  // ---- WeChat monetization -------------------------------------------------
+  const [commerce, setCommerce] = useState<CommerceView | null>(null)
+  const [commerceOpen, setCommerceOpen] = useState(false)
+  const [commerceBusy, setCommerceBusy] = useState(false)
+  const [adsOn, setAdsOn] = useState(false)
+  const [interstitial, setInterstitial] = useState('')
+  const [rewarded, setRewarded] = useState('')
+  const [iapOn, setIapOn] = useState(false)
+  const [licence, setLicence] = useState('')
+  const [merchant, setMerchant] = useState('')
+  const [payUrl, setPayUrl] = useState('')
+
+  const applyCommerce = useCallback((view: CommerceView) => {
+    setCommerce(view)
+    setAdsOn(Boolean(view.enabled))
+    setInterstitial(view.ads?.interstitial ?? '')
+    setRewarded(view.ads?.rewarded ?? '')
+    setIapOn(Boolean(view.iap?.enabled))
+    setLicence(view.iap?.licenseNumber ?? '')
+    setMerchant(view.iap?.merchantId ?? '')
+    setPayUrl(view.iap?.payUrl ?? '')
+  }, [])
+
+  const loadCommerce = useCallback(async () => {
+    setCommerceBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-commerce ${JSON.stringify({ project, op: 'status' })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      applyCommerce(JSON.parse(result.text) as CommerceView)
+    } finally {
+      setCommerceBusy(false)
+    }
+  }, [runCommand, sessionId, project, t, applyCommerce])
+
+  const saveCommerce = useCallback(async () => {
+    setCommerceBusy(true)
+    try {
+      const result = await runCommand(sessionId, `wechat-commerce ${JSON.stringify({
+        project, op: 'configure',
+        enabled: adsOn,
+        interstitial,
+        rewarded,
+        analytics: commerce?.analytics ?? true,
+        iapEnabled: iapOn,
+        licenseNumber: licence,
+        merchantId: merchant,
+        payUrl,
+      })}`)
+      if (!result.ok) { setNotice({ kind: 'error', text: commandErrorCopy(result.text, t) }); return }
+      applyCommerce(JSON.parse(result.text) as CommerceView)
+      setNotice({ kind: 'info', text: t('tab.commerceSaved') })
+    } finally {
+      setCommerceBusy(false)
+    }
+  }, [runCommand, sessionId, project, t, applyCommerce, commerce, adsOn, interstitial, rewarded, iapOn, licence, merchant, payUrl])
+
+  const toggleCommerce = useCallback(() => {
+    const next = !commerceOpen
+    setCommerceOpen(next)
+    if (next && commerce === null) void loadCommerce()
+  }, [commerceOpen, commerce, loadCommerce])
+
   const title = state?.title ?? baseName(project)
   const activeShare = liveShare(state?.share, heartbeat)
   const activeShareCopy = activeShare ? shareCopy(activeShare, t, clock(activeShare.expiresAt)) : undefined
   const pubInfo = publishState(published, state?.build?.buildId, t)
   const lang = t('tab.reload') === '重新载入' ? 'zh' : 'en'
   return <div style={s.root} data-plugin="dsh-game-studio">
+    <style>{STUDIO_CSS}</style>
     <div style={s.bar}>
       <span style={s.title} title={project}>{title}</span>
       {state?.build && <span style={s.small}>{t('tab.build', { id: state.build.buildId, size: `${Math.round(state.build.bytes / 1024)} KB` })}</span>}
       <button type="button" style={s.button} onClick={reload} disabled={busy}>{t('tab.reload')}</button>
       <button type="button" style={s.button} onClick={() => { void run('build', {}) }} disabled={busy}>{t('tab.rebuild')}</button>
       <button type="button" style={s.button} onClick={() => { void run('export', {}) }} disabled={busy}>{t('tab.export')}</button>
+      <button type="button" style={s.button} onClick={() => { void run('export-wechat', {}) }} disabled={busy}>{t('tab.exportWechat')}</button>
+      <button type="button" style={s.button} onClick={toggleRelease} disabled={busy}>
+        {release ? `${t('tab.release')} · ${release.progress.done}/${release.progress.total}` : t('tab.release')}
+      </button>
+      <button type="button" style={s.button} onClick={toggleCommerce} disabled={busy}>{t('tab.commerce')}</button>
       <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30' }) }} disabled={busy}>{t('tab.share')}</button>
       <button type="button" style={s.button} onClick={() => { void run('share', { minutes: '30', scope: 'public' }) }} disabled={busy}>
         {openingPublic ? t('tab.shareOpening') : t('tab.sharePublic')}
@@ -318,6 +589,109 @@ function StudioTab(props: any): ReactNode {
         {publishing ? t('tab.publishing') : pubInfo.buttonLabel}
       </button>
     </div>
+    {notice && (
+      <div style={{ ...(notice.kind === 'error' ? s.error : s.hint), ...s.noticeRow }}>
+        <span style={s.noticeText}>{notice.text}</span>
+        <button type="button" style={s.noticeClose} aria-label={t('tab.dismissNotice')} onClick={() => { setNotice(undefined) }}>×</button>
+      </div>
+    )}
+    {releaseOpen && <div style={s.releasePanel}>
+      <div style={s.releaseHead}>
+        <strong>{t('tab.release')}</strong>
+        <span style={s.small}>
+          {release && release.next && release.next.length > 0
+            ? t('tab.releaseNext', { title: release.next[0].title })
+            : release && release.blocked && release.blocked.length > 0
+              ? t('tab.releaseBlockedHint', { title: release.blocked[0].title })
+              : ''}
+        </span>
+        {release?.exportStale && <span style={s.small}>{t('tab.exportStale')}</span>}
+        {release?.uploadStale && <span style={s.small}>{t('tab.uploadStale')}</span>}
+        {release?.uploads && release.uploads.length > 0 && (
+          <span style={s.small}>{t('tab.lastUpload', { version: release.uploads[release.uploads.length - 1].version })}</span>
+        )}
+        {release?.uploads?.some((entry) => entry.version === uploadVersion.trim())
+          && <span style={s.small}>{t('tab.versionUploaded')}</span>}
+        {release?.materialsAt && (release.materialsPresent === false
+          ? <span style={s.small}>{t('tab.materialsMissing')}</span>
+          : release.materialsStale
+            ? <span style={s.small}>{t('tab.materialsStale')}</span>
+            : <span style={s.small}>{t('tab.materialsReady')}</span>)}
+        {release?.reviewAt && (release.reviewPresent === false
+          ? <span style={s.small}>{t('tab.reviewMissing')}</span>
+          : release.reviewStale
+            ? <span style={s.small}>{t('tab.reviewStale')}</span>
+            : <span style={s.small}>{t('tab.reviewReady')}</span>)}
+        {release && <span style={s.small}>{t('tab.releaseProgress', {
+          done: String(release.progress.done), total: String(release.progress.total), percent: String(release.progress.percent),
+        })}</span>}
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void loadRelease() }}>{t('tab.reload')}</button>
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void writeReleaseMaterials() }}>{t('tab.releaseMaterials')}</button>
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void writeReviewGuide() }}>{t('tab.releaseReview')}</button>
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void openDevtools() }}>{t('tab.releaseDevtools')}</button>
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void checkEnvironment() }}>{t('tab.checkEnv')}</button>
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void previewDevtools() }}>{t('tab.preview')}</button>
+        <input style={{ ...s.input, minWidth: 84, width: 84 }} value={uploadVersion} disabled={releaseBusy}
+          aria-label={t('tab.uploadVersion')}
+          onChange={(event) => { setUploadVersion(event.target.value) }} />
+        <button type="button" style={s.button} disabled={releaseBusy} onClick={() => { void uploadDevtools() }}>{t('tab.upload')}</button>
+      </div>
+      {release && release.progress.done === 0 && <div style={s.small}>{t('tab.releaseFirstHint')}</div>}
+      {qrUrl !== undefined && <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px',
+      }}>
+        <img src={qrUrl} alt="preview QR" width={160} height={160} style={{ border: `1px solid ${tok.border}`, borderRadius: 8 }} />
+        <span style={s.small}>{t('tab.previewScan')}</span>
+      </div>}
+      {(release?.steps ?? []).filter(step => step.status !== 'skipped').map(step => <div key={step.id} style={s.releaseStep}>
+        <button type="button" style={s.check} disabled={releaseBusy || step.blocked}
+          title={step.blocked ? t('tab.releaseBlocked') : step.title}
+          aria-label={step.title}
+          aria-pressed={step.status === 'done'}
+          onClick={() => { void toggleReleaseStep(step) }}>{step.status === 'done' ? '✓' : step.blocked ? '·' : '○'}</button>
+        <span style={step.status === 'done'
+          ? { ...s.small, ...s.doneTitle, flex: 1, minWidth: 0 }
+          : { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{step.title}</span>
+        {step.note && <span style={{ ...s.small, maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={step.note}>{step.note}</span>}
+        <span style={s.badge}>{ownerLabel(step.owner)}</span>
+      </div>)}
+    </div>}
+    {commerceOpen && (() => {
+      const live = commerceFormHints({ adsOn, interstitial, rewarded, iapOn, licence, merchant, payUrl })
+      return <div style={s.releasePanel}>
+      <div style={s.releaseHead}>
+        <strong>{t('tab.commerce')}</strong>
+        <button type="button" style={s.button} disabled={commerceBusy} onClick={() => { void loadCommerce() }}>{t('tab.reload')}</button>
+        <button type="button" style={s.button} disabled={commerceBusy} onClick={() => { void saveCommerce() }}>{t('tab.commerceSave')}</button>
+      </div>
+      <label style={s.field}>
+        <input type="checkbox" checked={adsOn} onChange={event => setAdsOn(event.target.checked)} />{t('tab.commerceEnabled')}
+      </label>
+      <label style={s.field}>{t('tab.commerceInterstitial')}
+        <input style={s.input} value={interstitial} placeholder="adunit-..." onChange={event => setInterstitial(event.target.value)} />
+      </label>
+      <label style={s.field}>{t('tab.commerceRewarded')}
+        <input style={s.input} value={rewarded} placeholder="adunit-..." onChange={event => setRewarded(event.target.value)} />
+      </label>
+      <label style={s.field}>
+        <input type="checkbox" checked={iapOn} onChange={event => setIapOn(event.target.checked)} />{t('tab.commerceIap')}
+      </label>
+      <label style={s.field}>{t('tab.commerceLicence')}
+        <input style={s.input} value={licence} onChange={event => setLicence(event.target.value)} />
+      </label>
+      <label style={s.field}>{t('tab.commerceMerchant')}
+        <input style={s.input} value={merchant} onChange={event => setMerchant(event.target.value)} />
+      </label>
+      <label style={s.field}>{t('tab.commercePayUrl')}
+        <input style={s.input} value={payUrl} placeholder="https://..." onChange={event => setPayUrl(event.target.value)} />
+      </label>
+      {(commerce?.check?.problems ?? []).map((problem, index) => <div key={`p${index}`} style={s.error}>{problem}</div>)}
+      {(commerce?.check?.notes ?? []).map((note, index) => <div key={`n${index}`} style={s.small}>{note}</div>)}
+      {live.problems.map((problem, index) => <div key={`lp${index}`} style={s.error}>{problem}</div>)}
+      {live.notes.map((note, index) => <div key={`ln${index}`} style={s.small}>{note}</div>)}
+      <div style={s.small}>{t('tab.commerceDataHint')}</div>
+    </div>
+    })()}
     {confirmAction === 'publish' && <div style={{ ...s.hint, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
       <span style={{ color: tok.text }}>{t('tab.publishConfirmHint')}</span>
       <button type="button" style={s.button} disabled={busy} onClick={() => { setConfirmAction(null); void run('publish', { lang }) }}>{t('tab.publishConfirmYes')}</button>
@@ -356,7 +730,6 @@ function StudioTab(props: any): ReactNode {
         </div>
       </div>
     </div>}
-    {notice && <div style={notice.kind === 'error' ? s.error : s.hint}>{notice.text}</div>}
     {state === undefined ? <div style={s.hint}>{t('tab.loading')}</div>
       : state === null || state.build === null ? <div style={s.hint}>{t('tab.noBuild')}</div>
         : <>
@@ -460,6 +833,11 @@ const SHELF_CSS = `
 [data-view="shelf"] .dgs-chip[aria-pressed="true"] { background: var(--dsw-alias-label-primary, #222); color: var(--dsw-alias-bg-base, #fff); font-weight: 600; }
 [data-view="shelf"] .dgs-sort { color: var(--dsw-alias-label-secondary, #888); }
 [data-view="shelf"] .dgs-sort[aria-pressed="true"] { color: var(--dsw-alias-label-primary, inherit); font-weight: 600; }
+`
+
+const STUDIO_CSS = `
+[data-plugin="dsh-game-studio"] button:focus-visible,
+[data-plugin="dsh-game-studio"] input:focus-visible { outline: 2px solid var(--dsw-alias-interactive-border-focus, #4c8bf5); outline-offset: 2px; }
 `
 
 function when(iso: string): string {
@@ -772,7 +1150,12 @@ function ShelfTab(props: any): ReactNode {
       <button type="button" style={s.button}
         onClick={() => { void navigator.clipboard?.writeText(wallPublished.url).catch(() => undefined) }}>{t('tab.shareCopy')}</button>
     </div>}
-    {notice && <div style={notice.kind === 'error' ? s.error : s.hint}>{notice.text}</div>}
+    {notice && (
+      <div style={{ ...(notice.kind === 'error' ? s.error : s.hint), ...s.noticeRow }}>
+        <span style={s.noticeText}>{notice.text}</span>
+        <button type="button" style={s.noticeClose} aria-label={t('tab.dismissNotice')} onClick={() => { setNotice(undefined) }}>×</button>
+      </div>
+    )}
     {(!sessionId || !cwd) && allGames.length === 0 ? <div style={s.hint}>{t('shelf.noSession')}</div>
       : scan === undefined && sessionId && cwd && allGames.length === 0 ? <div style={s.hint}>{t('shelf.scanning')}</div>
         : <>

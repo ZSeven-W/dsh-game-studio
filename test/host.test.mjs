@@ -3,7 +3,7 @@
 // spend-approval gate, candidate numbering and wiring are checked as shipped.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { registerHooks } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -321,6 +321,227 @@ test('/game-studio status keeps a live share reachable and clears stale state.js
   assert.equal(afterUnload.kind, 'success', afterUnload.text)
   assert.equal(JSON.parse(afterUnload.text).share, null)
   assert.equal(JSON.parse(await readFile(statePath, 'utf8')).share, null)
+})
+
+// ---------------------------------------------------------------- wechat release
+
+test('/game-studio wechat-release reports the checklist, records steps and writes materials', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const project = join(root, 'game')
+
+  const initial = await runCommand(`wechat-release ${JSON.stringify({ project, op: 'status' })}`)
+  assert.equal(initial.kind, 'success', initial.text)
+  const view = JSON.parse(initial.text)
+  assert.ok(view.progress.total > 0)
+  assert.equal(view.progress.done, 0)
+  assert.ok(view.steps.some(step => step.id === 'record' && step.owner === 'wechat'), 'filing is a console step')
+  assert.ok(view.next.length > 0)
+
+  const updated = await runCommand(`wechat-release ${JSON.stringify({ project, op: 'update', step: 'register', status: 'done' })}`)
+  assert.equal(updated.kind, 'success', updated.text)
+  assert.equal(JSON.parse(updated.text).progress.done, 1)
+  assert.equal(JSON.parse(await readFile(join(project, '.studio', 'wechat-release.json'), 'utf8')).steps.register.status, 'done')
+
+  const materials = await runCommand(`wechat-release ${JSON.stringify({ project, op: 'materials' })}`)
+  assert.equal(materials.kind, 'success', materials.text)
+  const text = await readFile(JSON.parse(materials.text).file, 'utf8')
+  assert.match(text, /小游戏备案/u)
+  assert.match(text, /适龄提示/u)
+})
+
+test('/game-studio wechat-devtools says to export first instead of guessing a path', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const result = await runCommand(`wechat-devtools ${JSON.stringify({ project: join(root, 'game'), op: 'open' })}`)
+  assert.equal(result.kind, 'error')
+  assert.match(result.text, /run the WeChat export first/u)
+})
+
+test('/game-studio wechat-commerce stores ad unit IDs and refuses a bad one', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const project = join(root, 'game')
+
+  const initial = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'status' })}`)
+  assert.equal(initial.kind, 'success', initial.text)
+  assert.equal(JSON.parse(initial.text).embedded, null)
+
+  const refused = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'configure', enabled: true, interstitial: 'oops' })}`)
+  assert.equal(refused.kind, 'error')
+  assert.match(refused.text, /adunit-/u)
+
+  const configured = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'configure', enabled: true, interstitial: 'adunit-abc123def456' })}`)
+  assert.equal(configured.kind, 'success', configured.text)
+  assert.equal(JSON.parse(configured.text).embedded.interstitial, 'adunit-abc123def456')
+
+  // The sidebar sends an empty string when the user clears a field; turning the
+  // ads switch off at the same time is the valid way to remove the last unit.
+  const cleared = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'configure', enabled: false, interstitial: '' })}`)
+  assert.equal(cleared.kind, 'success', cleared.text)
+  assert.equal(JSON.parse(cleared.text).ads.interstitial, undefined)
+
+  // Clearing the only unit while ads stay on is refused, not silently saved.
+  const refusedClear = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'configure', enabled: true })}`)
+  assert.equal(refusedClear.kind, 'error')
+})
+
+test('/game-studio wechat-release review reports the risks and writes the guide', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const project = join(root, 'game')
+  const result = await runCommand(`wechat-release ${JSON.stringify({ project, op: 'review' })}`)
+  assert.equal(result.kind, 'success', result.text)
+  const parsed = JSON.parse(result.text)
+  assert.ok(parsed.risks.some(risk => risk.id === 'appid'), 'a fresh game has no AppID')
+  assert.ok(parsed.risks.some(risk => risk.id === 'record'), 'filing is not done yet')
+  assert.match(await readFile(parsed.file, 'utf8'), /审核风险自查/u)
+})
+
+test('/game-studio wechat-ci writes the upload kit next to an exported project', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const gameDir = join(root, 'game')
+  const exportDir = join(gameDir, 'export', 'wechat', 'moon-garden')
+  await mkdir(exportDir, { recursive: true })
+  await writeFile(join(exportDir, 'game.js'), '// game\n')
+  await writeFile(join(exportDir, 'project.config.json'), JSON.stringify({ appid: 'wx1234567890abcdef', compileType: 'game' }))
+  const result = await runCommand(`wechat-ci ${JSON.stringify({ project: gameDir, version: '2.0.0' })}`)
+  assert.equal(result.kind, 'success', result.text)
+  const parsed = JSON.parse(result.text)
+  assert.ok(parsed.files.includes('.github/workflows/wechat-upload.yml'))
+  assert.match(await readFile(join(exportDir, 'ci', 'upload.mjs'), 'utf8'), /miniprogram-ci/u)
+
+  // Without an export the command must say so, not guess a path.
+  const missing = await runCommand(`wechat-ci ${JSON.stringify({ project: join(root, 'empty-game') })}`)
+  assert.equal(missing.kind, 'error')
+  assert.match(missing.text, /run the WeChat export first/u)
+})
+
+test('/game-studio wechat-* refuses a misspelt action instead of guessing', async (t) => {
+  const { root, runCommand } = await harness(t)
+  const project = join(root, 'game')
+  const devtools = await runCommand(`wechat-devtools ${JSON.stringify({ project, op: 'preivew' })}`)
+  assert.equal(devtools.kind, 'error')
+  assert.match(devtools.text, /Unknown DevTools action/u)
+
+  const commerce = await runCommand(`wechat-commerce ${JSON.stringify({ project, op: 'configur' })}`)
+  assert.equal(commerce.kind, 'error')
+  assert.match(commerce.text, /Unknown commerce action/u)
+
+  const release = await runCommand(`wechat-release ${JSON.stringify({ project, op: 'material' })}`)
+  assert.equal(release.kind, 'error')
+  assert.match(release.text, /Unknown release action/u)
+})
+
+test('/game-studio without an action explains itself, and a typo lists the real ones', async (t) => {
+  const { runCommand } = await harness(t)
+  const empty = await runCommand('')
+  assert.equal(empty.kind, 'success')
+  assert.match(empty.text, /Game Studio actions/u)
+  assert.match(empty.text, /export-wechat/u)
+  assert.match(empty.text, /wechat-release/u)
+
+  const typo = await runCommand('export-wechatt {"project": "moon-garden"}')
+  assert.equal(typo.kind, 'error')
+  assert.match(typo.text, /Unknown action "export-wechatt"/u)
+  assert.match(typo.text, /Valid actions: apply, revert, build, export, export-wechat/u)
+  assert.match(typo.text, /no action for details/u)
+})
+
+test('a brand-new game goes from create to a WeChat export with no prior state', async (t) => {
+  const { root, call, runCommand } = await harness(t)
+  await call('game_studio_create', { path: 'fresh', title: 'Fresh Start' })
+
+  // Swap the SVG placeholders for PNG art so the export needs no browser.
+  const dir = join(root, 'fresh')
+  const manifest = JSON.parse(await readFile(join(dir, 'game.json'), 'utf8'))
+  for (const [slot, spec] of Object.entries(manifest.slots)) {
+    const file = `assets/${slot}.png`
+    const png = new PNG({ width: spec.size[0], height: spec.size[1] })
+    png.data.fill(180)
+    for (let i = 3; i < png.data.length; i += 4) png.data[i] = 255
+    await writeFile(join(dir, file), PNG.sync.write(png))
+    spec.file = file
+  }
+  await writeFile(join(dir, 'game.json'), JSON.stringify(manifest, null, 2))
+
+  const exported = await runCommand(`export-wechat ${JSON.stringify({ project: 'fresh', appid: 'touristappid' })}`)
+  assert.equal(exported.kind, 'success', exported.text)
+  const view = JSON.parse(exported.text)
+  for (const file of ['game.js', 'game.json', 'project.config.json']) assert.ok(view.files.includes(file), file)
+
+  // First-run wizard, materials, review and monetization all create their state.
+  const status = await runCommand(`wechat-release ${JSON.stringify({ project: 'fresh', op: 'status' })}`)
+  assert.equal(status.kind, 'success', status.text)
+  assert.equal(JSON.parse(status.text).steps.length, 15)
+
+  const materials = await runCommand(`wechat-release ${JSON.stringify({ project: 'fresh', op: 'materials' })}`)
+  assert.equal(materials.kind, 'success', materials.text)
+
+  const review = await runCommand(`wechat-release ${JSON.stringify({ project: 'fresh', op: 'review' })}`)
+  assert.equal(review.kind, 'success', review.text)
+
+  const commerce = await runCommand(`wechat-commerce ${JSON.stringify({ project: 'fresh', op: 'status' })}`)
+  assert.equal(commerce.kind, 'success', commerce.text)
+  assert.equal(JSON.parse(commerce.text).enabled, false, 'a fresh game starts with monetization off')
+})
+
+test('WeChat actions called before the export say what to do first', async (t) => {
+  const { call, runCommand } = await harness(t)
+  await call('game_studio_create', { path: 'empty', title: 'Empty' })
+
+  for (const op of ['open', 'preview', 'upload']) {
+    const result = await runCommand(`wechat-devtools ${JSON.stringify({ project: 'empty', op })}`)
+    assert.equal(result.kind, 'error', op)
+    assert.match(result.text, /run the WeChat export first/u, op)
+  }
+  const ci = await runCommand(`wechat-ci ${JSON.stringify({ project: 'empty' })}`)
+  assert.equal(ci.kind, 'error')
+  assert.match(ci.text, /run the WeChat export first/u)
+
+  // Materials and the pre-review can be prepared before the export: they land in
+  // the game's export folder and the review names the missing export as a risk.
+  const materials = await runCommand(`wechat-release ${JSON.stringify({ project: 'empty', op: 'materials' })}`)
+  assert.equal(materials.kind, 'success', materials.text)
+  assert.match(JSON.parse(materials.text).file, /export/u)
+
+  const review = await runCommand(`wechat-release ${JSON.stringify({ project: 'empty', op: 'review' })}`)
+  assert.equal(review.kind, 'success', review.text)
+  assert.ok(JSON.parse(review.text).risks.some((risk) => risk.id === 'export'))
+})
+
+test('the JSON the sidebar renders still carries every field it reads', async (t) => {
+  const { call, runCommand } = await harness(t)
+  await call('game_studio_create', { path: 'panel', title: 'Panel' })
+
+  const status = JSON.parse((await runCommand(`wechat-release ${JSON.stringify({ project: 'panel', op: 'status' })}`)).text)
+  for (const field of ['progress', 'steps', 'next', 'blocked', 'appid', 'ageRating', 'monetization']) {
+    assert.ok(field in status, `status must carry ${field}`)
+  }
+  assert.deepEqual(Object.keys(status.progress).sort(), ['done', 'percent', 'total'])
+  const step = status.steps[0]
+  for (const field of ['id', 'title', 'owner', 'status', 'blocked']) {
+    assert.ok(field in step, `a step must carry ${field}`)
+  }
+
+  const updated = JSON.parse((await runCommand(`wechat-release ${JSON.stringify({ project: 'panel', op: 'update', step: 'register' })}`)).text)
+  assert.ok('progress' in updated && 'steps' in updated, 'the update reply is rendered as a status')
+
+  const commerce = JSON.parse((await runCommand(`wechat-commerce ${JSON.stringify({ project: 'panel', op: 'status' })}`)).text)
+  for (const field of ['enabled', 'ads', 'iap', 'analytics', 'check']) {
+    assert.ok(field in commerce, `commerce must carry ${field}`)
+  }
+  assert.ok('problems' in commerce.check && 'notes' in commerce.check)
+
+  const configured = JSON.parse((await runCommand(`wechat-commerce ${JSON.stringify({ project: 'panel', op: 'configure', enabled: true, interstitial: 'adunit-123456', rewarded: 'adunit-654321' })}`)).text)
+  assert.equal(configured.enabled, true)
+  assert.equal(configured.ads.interstitial, 'adunit-123456')
+
+  const review = JSON.parse((await runCommand(`wechat-release ${JSON.stringify({ project: 'panel', op: 'review' })}`)).text)
+  // Without an export these land in the game's export folder with a fallback name.
+  assert.match(review.file, /review\.md$/iu)
+  for (const field of ['id', 'severity', 'title', 'fix']) {
+    assert.ok(field in review.risks[0], `a risk must carry ${field}`)
+  }
+
+  const materials = JSON.parse((await runCommand(`wechat-release ${JSON.stringify({ project: 'panel', op: 'materials' })}`)).text)
+  assert.match(materials.file, /release\.md$/iu)
 })
 
 // ---------------------------------------------------------------- playtest
@@ -1397,3 +1618,5 @@ test('gh api retries transient network errors on GET and git object writes, does
   const failCalls = await noRetryCreate.readCalls()
   assert.equal(failCalls.filter(c => c.method === 'POST' && c.path === 'user/repos').length, 1, 'POST user/repos is never retried')
 })
+
+
