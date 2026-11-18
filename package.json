@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ZSeven-W/dsh-game-studio.git"
+    "url": "git+https://github.com/ZSeven-W/dsh-game-studio.git"
   },
   "homepage": "https://github.com/ZSeven-W/dsh-game-studio#readme",
   "bugs": {
@@ -14,7 +14,7 @@
   "type": "module",
   "main": "lib/index.js",
   "bin": {
-    "dsh-game-studio-mcp": "./lib/mcp-server.js"
+    "dsh-game-studio-mcp": "plugins/game-studio/scripts/mcp-server.mjs"
   },
   "exports": {
     ".": "./lib/index.js",
