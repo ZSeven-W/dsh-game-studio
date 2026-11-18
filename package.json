@@ -64,7 +64,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
     "mcp": "node lib/mcp-server.js",
     "doctor": "node lib/mcp-server.js --doctor",
     "setup": "node scripts/install-hosts.mjs codex",
