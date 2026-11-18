@@ -110,6 +110,7 @@ type Dir = keyof typeof KEYS
 
 interface GameState {
   phase: string
+  time?: number
   score?: number
   hearts?: number
   fps?: number
@@ -495,7 +496,9 @@ export async function playtest(dir: string, options: PlaytestOptions = {}): Prom
     let last = state.hero
     let still = 0
     let midTaken = false
-    const deadline = Date.now() + seconds * 1000
+    const roundDuration = Number(rules.duration ?? manifest.rules?.duration ?? NaN)
+    const playStarted = Date.now()
+    const deadline = playStarted + seconds * 1000
     while (Date.now() < deadline) {
       state = await read()
       if (state.phase !== 'playing') break
@@ -515,7 +518,10 @@ export async function playtest(dir: string, options: PlaytestOptions = {}): Prom
         for (const key of held) if (!want.has(key)) { await page.keyboard.up(KEYS[key]); held.delete(key) }
         for (const key of want) if (!held.has(key)) { await page.keyboard.down(KEYS[key]); held.add(key) }
       }
-      if (!midTaken && Date.now() > deadline - seconds * 500) { await shot('mid'); midTaken = true }
+      const elapsedMs = typeof state.time === 'number' && Number.isFinite(roundDuration) && roundDuration > 0
+        ? (roundDuration - state.time) * 1000
+        : Date.now() - playStarted
+      if (!midTaken && elapsedMs > seconds * 500) { await shot('mid'); midTaken = true }
       await page.waitForTimeout(100)
     }
     for (const key of held) await page.keyboard.up(KEYS[key])

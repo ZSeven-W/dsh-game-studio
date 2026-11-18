@@ -33641,7 +33641,9 @@ async function playtest(dir, options = {}) {
     let last = state.hero;
     let still = 0;
     let midTaken = false;
-    const deadline = Date.now() + seconds * 1e3;
+    const roundDuration = Number(rules.duration ?? manifest.rules?.duration ?? NaN);
+    const playStarted = Date.now();
+    const deadline = playStarted + seconds * 1e3;
     while (Date.now() < deadline) {
       state = await read();
       if (state.phase !== "playing") break;
@@ -33667,7 +33669,8 @@ async function playtest(dir, options = {}) {
           held.add(key);
         }
       }
-      if (!midTaken && Date.now() > deadline - seconds * 500) {
+      const elapsedMs = typeof state.time === "number" && Number.isFinite(roundDuration) && roundDuration > 0 ? (roundDuration - state.time) * 1e3 : Date.now() - playStarted;
+      if (!midTaken && elapsedMs > seconds * 500) {
         await shot("mid");
         midTaken = true;
       }
