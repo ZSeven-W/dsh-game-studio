@@ -10,7 +10,8 @@ node_modules/
 
 # Build and test output. lib/ is produced by `npm run build` on every
 # checkout (CI builds it; npm pack runs after the build).
-lib/
+/lib/
+.dsh-game-studio/
 coverage/
 *.log
 *.tgz

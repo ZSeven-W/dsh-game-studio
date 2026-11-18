@@ -5,6 +5,8 @@
  * the project, its dist/ build and its version history are never touched.
  */
 import { copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { renderHtml } from './build.ts'
@@ -31,6 +33,9 @@ export const GAME_STATE_CONTRACT = 'The playtest autopilot reads window.__gameSt
   + 'players never trigger it, so it needs no rule or menu switch. Without it the autopilot only holds arrow keys toward the nearest pickup. '
   + 'Every keyboard action (steering, jump, dash, skills, cards) must also work by touch on phones: give active skills or jump/dash on-screen touch buttons bound to pointerdown (with stopPropagation), and track virtual joystick / button pointers by pointerId so one thumb can steer while the other taps a skill.'
 
+export const PLAYTEST_PLATFORMS = ['web', 'wechat'] as const
+export type PlaytestPlatform = typeof PLAYTEST_PLATFORMS[number]
+
 export interface PlaytestOptions {
   /** How long the autopilot plays, in seconds (1–60). */
   seconds?: number
@@ -38,6 +43,8 @@ export interface PlaytestOptions {
   rules?: Record<string, unknown>
   /** Phone-shaped 390×844 touch viewport or 960×540 landscape; default follows game.json orientation. */
   portrait?: boolean
+  /** Runtime environment to simulate: "web" (default) or "wechat" (WeChat Mini Game capsule overlay, wx.* APIs, single-WebGL check). */
+  platform?: PlaytestPlatform
   /** Only draw the code-drawn characters' close-ups, one image per slot, without playing. */
   charactersOnly?: boolean
   /** Device pixel ratio of the page and its screenshots. */
@@ -54,7 +61,9 @@ export interface PlaytestShot {
 export interface PlaytestReport {
   runDir: string
   browser: string
+  platform: PlaytestPlatform
   viewport: { width: number; height: number; touch: boolean }
+  capsuleRect?: { top: number; bottom: number; left: number; right: number; width: number; height: number }
   rules: Record<string, unknown>
   /** Phase changes in order, with seconds since the page loaded. */
   phases: Array<{ phase: string; at: number }>
@@ -90,6 +99,11 @@ const KEEP_RUNS = 5
 const VIEWPORTS = {
   portrait: { width: 390, height: 844, touch: true },
   landscape: { width: 960, height: 540, touch: false },
+  wechatLandscape: { width: 844, height: 390, touch: true },
+}
+const WX_CAPSULES = {
+  portrait: { top: 51, bottom: 83, left: 291, right: 378, width: 87, height: 32 },
+  landscape: { top: 12, bottom: 44, left: 745, right: 832, width: 87, height: 32 },
 }
 const KEYS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' } as const
 type Dir = keyof typeof KEYS
@@ -109,10 +123,29 @@ interface GameState {
 type Playwright = typeof import('playwright-core')
 type Browser = Awaited<ReturnType<Playwright['chromium']['launch']>>
 
-async function launchBrowser(): Promise<{ browser: Browser; name: string }> {
-  let chromium: Playwright['chromium']
-  try { ({ chromium } = await import('playwright-core')) }
-  catch { throw new StudioError('playwright-core is missing from this dsh-game-studio install', 'NO_BROWSER') }
+async function loadPlaywrightCore(): Promise<Playwright> {
+  try {
+    return await import('playwright-core')
+  } catch {
+    const roots = [
+      process.env.DSH_GAME_STUDIO_ROOT,
+      await readFile(join(homedir(), '.dsh-game-studio', 'repo-root'), 'utf8').then(s => s.trim(), () => ''),
+    ].filter((item): item is string => Boolean(item))
+    for (const root of roots) {
+      try {
+        const req = createRequire(join(root, 'package.json'))
+        return req('playwright-core') as Playwright
+      } catch { /* try next */ }
+    }
+    throw new StudioError(
+      'playwright-core is missing from this dsh-game-studio install. Run `npm install` inside the dsh-game-studio repository first.',
+      'NO_BROWSER',
+    )
+  }
+}
+
+export async function launchBrowser(): Promise<{ browser: Browser; name: string }> {
+  const { chromium } = await loadPlaywrightCore()
   const tried: string[] = []
   for (const channel of ['chrome', 'msedge']) {
     try {
@@ -184,6 +217,10 @@ function steer(state: GameState, stuck: boolean): Set<Dir> {
 }
 
 export async function playtest(dir: string, options: PlaytestOptions = {}): Promise<PlaytestReport> {
+  const platform: PlaytestPlatform = options.platform ?? 'web'
+  if (!PLAYTEST_PLATFORMS.includes(platform)) {
+    throw new StudioError(`Unknown playtest platform "${platform}". Available: ${PLAYTEST_PLATFORMS.join(', ')}`, 'BAD_PLATFORM')
+  }
   const seconds = Math.min(60, Math.max(1, Math.round(options.seconds ?? 15)))
   const manifest = await loadManifest(dir)
   const rules = options.rules ?? {}
@@ -201,9 +238,12 @@ export async function playtest(dir: string, options: PlaytestOptions = {}): Prom
 
   // Played the way the game is meant to be held unless the call asks otherwise.
   const landscape = options.portrait === undefined ? manifest.orientation === 'landscape' : options.portrait === false
-  const viewport = landscape ? VIEWPORTS.landscape : VIEWPORTS.portrait
+  const viewport = platform === 'wechat'
+    ? (landscape ? VIEWPORTS.wechatLandscape : VIEWPORTS.portrait)
+    : (landscape ? VIEWPORTS.landscape : VIEWPORTS.portrait)
+  const capsuleRect = platform === 'wechat' ? (landscape ? WX_CAPSULES.landscape : WX_CAPSULES.portrait) : undefined
   const report: PlaytestReport = {
-    runDir, browser: '', viewport, rules, phases: [], finalPhase: '', bestScore: 0,
+    runDir, browser: '', platform, viewport, ...(capsuleRect ? { capsuleRect } : {}), rules, phases: [], finalPhase: '', bestScore: 0,
     heroOffScreen: 0, errors: [], requests: [], shots: [], renders: [], fileSlots: [], notes: [],
     charactersOnly: options.charactersOnly === true,
     buildCurrent: built === current,
@@ -229,6 +269,101 @@ export async function playtest(dir: string, options: PlaytestOptions = {}): Prom
       // real phones render at 2-3× anyway. The 960-wide landscape view is readable at 1×.
       deviceScaleFactor: options.scale ?? (viewport.touch ? 2 : 1),
     })
+    if (platform === 'wechat' && capsuleRect) {
+      await context.addInitScript(({ vw, vh, cap }) => {
+        const storage = new Map<string, string>()
+        const safeArea = {
+          top: cap.top,
+          bottom: vh - (vh > vw ? 34 : 21),
+          left: 0,
+          right: vw,
+          width: vw,
+          height: vh - cap.top - (vh > vw ? 34 : 21),
+          capsule: { ...cap },
+          topHudY: cap.bottom + 8,
+        }
+        ;(window as any).__wxSafeArea = safeArea
+        ;(window as any).__wxWebglContexts = 0
+        ;(window as any).__inRenderSlots = false
+        const origGetCtx = HTMLCanvasElement.prototype.getContext
+        HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, attrs?: any) {
+          const ctx = origGetCtx.call(this, type as any, attrs)
+          if (ctx && (type === 'webgl' || type === 'webgl2') && !(window as any).__inRenderSlots) {
+            if (!(this as any).__countedWxGl) {
+              ;(this as any).__countedWxGl = true
+              ;(window as any).__wxWebglContexts = ((window as any).__wxWebglContexts || 0) + 1
+            }
+          }
+          return ctx as any
+        }
+        const winInfo = {
+          windowWidth: vw,
+          windowHeight: vh,
+          screenWidth: vw,
+          screenHeight: vh,
+          pixelRatio: 2,
+          statusBarHeight: vh > vw ? 47 : 0,
+          safeArea: { top: safeArea.top, bottom: safeArea.bottom, left: 0, right: vw, width: vw, height: safeArea.height },
+        }
+        ;(window as any).wx = {
+          getWindowInfo: () => ({ ...winInfo }),
+          getSystemInfoSync: () => ({ ...winInfo, platform: 'devtools', brand: 'iPhone', model: 'iPhone 15' }),
+          getDeviceInfo: () => ({ platform: 'devtools', brand: 'iPhone', model: 'iPhone 15' }),
+          getMenuButtonBoundingClientRect: () => ({ ...cap }),
+          getStorageSync: (k: string) => storage.get(String(k)) ?? '',
+          setStorageSync: (k: string, v: unknown) => { storage.set(String(k), String(v)) },
+          removeStorageSync: (k: string) => { storage.delete(String(k)) },
+          clearStorageSync: () => { storage.clear() },
+          vibrateShort: () => {},
+          vibrateLong: () => {},
+          showToast: () => {},
+          showModal: () => {},
+          showShareMenu: () => {},
+          onShareAppMessage: () => {},
+          onShareTimeline: () => {},
+          createInnerAudioContext: () => ({
+            src: '', loop: false, autoplay: false, volume: 1,
+            play() {}, pause() {}, stop() {}, seek() {}, destroy() {},
+            onCanplay() {}, onEnded() {}, onError() {},
+          }),
+          createRewardedVideoAd: () => {
+            let onCloseCb: ((res: { isEnded: boolean }) => void) | null = null
+            return {
+              load: () => Promise.resolve(),
+              show: () => { setTimeout(() => { onCloseCb?.({ isEnded: true }) }, 30); return Promise.resolve() },
+              onLoad: () => {}, offLoad: () => {},
+              onError: () => {}, offError: () => {},
+              onClose: (fn: (res: { isEnded: boolean }) => void) => { onCloseCb = fn },
+              offClose: () => { onCloseCb = null },
+            }
+          },
+        }
+        let gameVal: any
+        Object.defineProperty(window, 'GAME', {
+          configurable: true,
+          get() { return gameVal },
+          set(next) {
+            if (next && typeof next === 'object') {
+              next.isWeChatMiniGame = true
+              next.safeArea = safeArea
+            }
+            gameVal = next
+          },
+        })
+        document.addEventListener('DOMContentLoaded', () => {
+          const pill = document.createElement('div')
+          pill.id = '__dsh-wx-capsule-overlay'
+          pill.style.cssText = `position:fixed;left:${cap.left}px;top:${cap.top}px;width:${cap.width}px;height:${cap.height}px;`
+            + 'border-radius:16px;background:rgba(0,0,0,0.58);border:0.5px solid rgba(255,255,255,0.28);'
+            + 'display:flex;align-items:center;justify-content:space-around;box-sizing:border-box;padding:0 8px;'
+            + 'pointer-events:none;z-index:2147483647;color:#fff;font:700 13px/1 -apple-system,sans-serif;'
+          pill.innerHTML = '<span style="letter-spacing:1.5px">•••</span>'
+            + '<span style="width:1px;height:16px;background:rgba(255,255,255,0.25)"></span>'
+            + '<span style="font-size:15px">◎</span>'
+          ;(document.body || document.documentElement).appendChild(pill)
+        })
+      }, { vw: viewport.width, vh: viewport.height, cap: capsuleRect })
+    }
     const page = await context.newPage()
     page.setDefaultTimeout(15_000)
     const fileUrl = pathToFileURL(gameFile).href
@@ -268,7 +403,11 @@ export async function playtest(dir: string, options: PlaytestOptions = {}): Prom
     // Close-ups of the characters the game draws in code (templates that support it).
     // Bigger when the agent is looking at the models themselves.
     const size = report.charactersOnly ? 384 : 256
-    const renders = await page.evaluate(`typeof window.__renderSlots === 'function' ? window.__renderSlots(${size}) : null`)
+    const renders = await page.evaluate(`(() => {
+      window.__inRenderSlots = true
+      try { return typeof window.__renderSlots === 'function' ? window.__renderSlots(${size}) : null }
+      finally { window.__inRenderSlots = false }
+    })()`)
       .catch((error: Error) => { report.errors.push(`__renderSlots failed: ${error.message.slice(0, 200)}`); return null }) as Record<string, string> | null
     if (renders && Object.keys(renders).length > 0) {
       await mkdir(paths.renders(dir), { recursive: true })
@@ -384,6 +523,14 @@ export async function playtest(dir: string, options: PlaytestOptions = {}): Prom
     if (state.phase === 'won' || state.phase === 'lost') await page.waitForTimeout(700)
     state = await read()
     await shot('end')
+    if (platform === 'wechat') {
+      const glContexts = await page.evaluate('Number(window.__wxWebglContexts || 0)').catch(() => 0) as number
+      if (glContexts > 1) {
+        report.notes.push(
+          `WeChat Mini Game warning: the game created ${glContexts} active WebGL contexts; real iOS/Android WeChat supports only 1 WebGL context on screenCanvas.`,
+        )
+      }
+    }
     report.finalPhase = state.phase
     if (typeof state.hearts === 'number') report.hearts = state.hearts
     if (fps.length > 0) report.fps = { min: Math.min(...fps), avg: Math.round(fps.reduce((a, b) => a + b, 0) / fps.length) }
@@ -439,7 +586,8 @@ export function describePlaytest(report: PlaytestReport): string {
     ].join('\n')
   }
   const lines = [
-    `Playtest in ${report.browser}, ${report.viewport.width}×${report.viewport.height}${report.viewport.touch ? ' touch, screenshots at 2× pixels' : ''}`
+    `Playtest in ${report.browser}${report.platform === 'wechat' ? ' (WeChat Mini Game simulation)' : ''}, ${report.viewport.width}×${report.viewport.height}${report.viewport.touch ? ' touch, screenshots at 2× pixels' : ''}`
+      + (report.capsuleRect ? `, WeChat capsule at (${report.capsuleRect.left},${report.capsuleRect.top})-(${report.capsuleRect.right},${report.capsuleRect.bottom}) — keep top-right buttons below y=${report.capsuleRect.bottom + 8}` : '')
       + (Object.keys(report.rules).length > 0 ? `, rules for this run only: ${JSON.stringify(report.rules)}` : '')
       + (report.autoplay === 'game' ? '; played by the game\'s own window.__autoplay' : '; played by arrow keys toward the nearest pickup'),
     `Phases: ${report.phases.map(p => `${p.phase}@${p.at}s`).join(' → ') || 'none'}; final: ${report.finalPhase}`,

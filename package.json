@@ -1,7 +1,7 @@
 {
   "name": "@zseven-w/dsh-game-studio",
-  "version": "0.1.0-rc.5",
-  "description": "Describe a small game in one sentence, play it in the DeepSeek Harness sidebar, swap in AI art, and publish to GitHub Pages or Cloudflare in one click.",
+  "version": "0.1.0-rc.6",
+  "description": "Describe a small 2D/3D game in one sentence, playtest in headless Chrome, swap in AI art, export WeChat Mini Games (< 4 MB), and publish to GitHub Pages — for DeepSeek Harness, Codex, Claude Code, and Antigravity.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -13,8 +13,12 @@
   },
   "type": "module",
   "main": "lib/index.js",
+  "bin": {
+    "dsh-game-studio-mcp": "./lib/mcp-server.js"
+  },
   "exports": {
     ".": "./lib/index.js",
+    "./mcp-server": "./lib/mcp-server.js",
     "./client": "./lib/client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg",
@@ -22,12 +26,19 @@
   },
   "files": [
     "lib",
+    "plugins",
+    "skills",
+    ".agents",
+    ".claude-plugin",
+    ".mcp.json",
+    "scripts/install-hosts.mjs",
     "template/*/game.js",
     "template/*/game.json",
     "template/*/assets/*",
     "locale/*.json",
     "icon.svg",
     "cordis.patch.yml",
+    "INSTALL.md",
     "README.md",
     "README.*.md",
     "LICENSE",
@@ -37,19 +48,32 @@
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
+    "codex",
+    "claude-code",
+    "mcp",
     "game",
     "gamedev",
     "ai-game-generator",
     "html5-games",
+    "wechat-minigame",
     "threejs",
     "github-pages"
   ],
   "engines": {
-    "node": ">=24.11.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "mcp": "node lib/mcp-server.js",
+    "doctor": "node lib/mcp-server.js --doctor",
+    "setup": "node scripts/install-hosts.mjs codex",
+    "setup:codex": "node scripts/install-hosts.mjs codex",
+    "setup:claude": "node scripts/install-hosts.mjs claude",
+    "setup:agy": "node scripts/install-hosts.mjs agy",
+    "setup:grok": "node scripts/install-hosts.mjs grok",
+    "setup:all": "node scripts/install-hosts.mjs all",
+    "verify:codex": "node scripts/install-hosts.mjs verify-codex"
   },
   "dsh": {
     "bundle": {

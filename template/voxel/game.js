@@ -808,6 +808,7 @@
   window.__renderSlots = renderSlots;
   // Tell the studio sidebar how the characters look in this build.
   setTimeout(function () {
+    if (!parentWindow) return;
     try { post({ type: 'renders', renders: renderSlots(256) }); } catch (error) { reportError('character renders failed: ' + (error && error.message || error)); }
   }, 400);
 

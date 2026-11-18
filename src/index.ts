@@ -3,34 +3,34 @@
  * share the same operations, so the sidebar buttons and the agent do exactly
  * the same thing.
  */
-import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
-import { basename, join, relative } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { basename, relative } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import {
-  applyCandidate, generateCandidates, prepareGeneration, revertSlot, withProjectLock, writeState,
+  applyCandidate, generateCandidates, prepareGeneration, revertSlot, writeState,
   type CandidateMeta, type Generation, type ImageGenerator,
 } from './assets.ts'
 import { buildProject } from './build.ts'
 import { runCodexBatch, type CodexBatch } from './generation.ts'
 import {
-  createRepo, DEFAULT_GITHUB_REPO, DEFAULT_PAGES_TIMEOUT_MS, emptyRepoManifest, ensurePages,
-  GAMES_FEED_FILE, GH_AUTH_AGENT_HINT, ghInstallCommand, ghLogin, guessDirectoryLang, loadRepoManifest,
-  NO_GH_AGENT_HINT, pickGameSlug, projectSourceId, publishFiles, renderDirectoryPage, renderGamesFeed,
-  REPO_MARKER_FILE, repoExists, requireGh, waitForPages, type PublishedRecord, type StudioRepoManifest,
+  DEFAULT_GITHUB_REPO, GH_AUTH_AGENT_HINT, ghInstallCommand, NO_GH_AGENT_HINT,
 } from './github.ts'
+import {
+  exportProjectHtml, publishProjectToPages, restoreProjectVersion, shareProjectGame,
+} from './operations.ts'
 import { openaiCost } from './pricing.ts'
-import { describePlaytest, GAME_STATE_CONTRACT, playtest, RENDERS_CONTRACT } from './playtest.ts'
+import { describePlaytest, GAME_STATE_CONTRACT, playtest, PLAYTEST_PLATFORMS, RENDERS_CONTRACT, type PlaytestPlatform } from './playtest.ts'
 import { loadReference, type ReferenceImage } from './reference.ts'
-import { startShare, stopAllShares, stopShare, type ShareScope } from './share.ts'
+import { stopAllShares, stopShare, type ShareScope } from './share.ts'
 import { askToShare, askToSpend, spendNotice } from './spend.ts'
 import { cloudflaredInstallCommand, NO_TUNNEL_AGENT_HINT, requireCloudflared } from './tunnel.ts'
-import { listVersions, restoreFiles } from './versions.ts'
-import { describeProject, exportWall, isPlainFile, listGames, readCoverAsset, renderOnlineWallPage, type CoverAsset, type WallLang } from './wall.ts'
-import type { ShelfGame } from './client/shelf.ts'
-import { createProject, loadManifest, ORIENTATIONS, paths, TEMPLATES, unnamedSlots, type SlotRequest } from './project.ts'
+import { listVersions } from './versions.ts'
+import { exportWall, listGames, type WallLang } from './wall.ts'
+import { exportWechatProject, findWechatCli, NO_WECHAT_CLI_HINT, uploadWechatProject } from './wechat.ts'
+import { createProject, loadManifest, ORIENTATIONS, TEMPLATES, unnamedSlots, type SlotRequest } from './project.ts'
 import { CODEX_EFFORTS, resolveCodex, type CodexEffort } from './providers/codex.ts'
 import { OPENAI_DEFAULT_MODEL, openaiGenerate } from './providers/openai.ts'
-import { readJson, resolveInside, sha256, shortId, StudioError, writeJson } from './util.ts'
+import { resolveInside, shortId, StudioError } from './util.ts'
 
 /** Told to the agent so it never goes looking for how the asset ledger works. */
 const EDIT_SLOT_FILES = 'You may draw a slot\'s picture yourself by overwriting its file in assets/ (e.g. write your own SVG); '
@@ -87,6 +87,8 @@ export interface Config {
   githubRepo?: string
   /** Maximum time in milliseconds to wait for a GitHub Pages deployment to finish building. Default 180000 (3 minutes). */
   pagesTimeoutMs?: number
+  /** Optional path to WeChat DevTools CLI (`wechatide` or `cli`) for uploading WeChat Mini Game experience builds. */
+  wechatCliPath?: string
 }
 
 const QUALITIES = ['low', 'medium', 'high'] as const
@@ -232,32 +234,15 @@ export function apply(ctx: any, config: Config = {}): void {
   }
 
   async function restoreVersion(dir: string, version: number) {
-    const restored = await withProjectLock(dir, () => restoreFiles(dir, version))
-    const build = await buildProject(dir, `Back to version ${restored.number}`)
-    await writeState(dir, build)
-    return { restored: restored.number, note: restored.note, buildId: build.buildId }
+    return restoreProjectVersion(dir, version)
   }
 
   async function shareGame(dir: string, minutes: number, scope: ShareScope = 'lan', signal?: AbortSignal) {
-    const info = await startShare(dir, minutes, {
-      scope,
-      cloudflaredPath: config.cloudflaredPath,
-      signal,
-      onStopped: () => { void writeState(dir).catch(() => undefined) },
-    })
-    await writeState(dir)
-    return { url: info.url, expiresAt: info.expiresAt, scope: info.scope }
+    return shareProjectGame(dir, minutes, scope, { cloudflaredPath: config.cloudflaredPath, signal })
   }
 
   async function exportGame(dir: string, fileName?: string) {
-    const manifest = await loadManifest(dir)
-    const build = await buildProject(dir, 'Exported')
-    await writeState(dir, build)
-    const slug = (fileName ?? manifest.title).normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/gu, '').toLowerCase() || 'game'
-    const target = join(paths.exportDir(dir), `${slug}.html`)
-    await mkdir(paths.exportDir(dir), { recursive: true })
-    await copyFile(build.artifact, target)
-    return { file: target, bytes: (await stat(target)).size, buildId: build.buildId }
+    return exportProjectHtml(dir, fileName)
   }
 
   async function publishToPages(opts: {
@@ -270,320 +255,14 @@ export function apply(ctx: any, config: Config = {}): void {
     exec?: any
     signal?: AbortSignal
   }) {
-    const { cwd, dir, wall = false, projects, remove = false, lang, exec, signal } = opts
-    const gh = requireGh(config.ghPath)
-    const owner = await ghLogin(gh)
-    const repo = (config.githubRepo ?? DEFAULT_GITHUB_REPO).trim() || DEFAULT_GITHUB_REPO
-
-    let titleEn = 'Game wall'
-    let titleZh = '游戏墙'
-    let artifactBytes: Buffer | undefined
-    let buildId = ''
-    let singleProjectInfo: ShelfGame | undefined
-    let singleCoverAsset: CoverAsset | undefined
-    let wallBuiltGames: Array<{ game: ShelfGame; artifactBytes: Buffer; buildId: string; source: string }> = []
-
-    if (wall) {
-      if (!remove) {
-        const scan = await listGames(cwd, signal)
-        const byPath = new Map(scan.games.map(game => [game.project, game]))
-        let chosen: ShelfGame[]
-        if (projects && projects.length > 0) {
-          chosen = []
-          for (const path of projects) {
-            const resolved = resolveInside(cwd, path)
-            const game = byPath.get(resolved)
-            if (game) chosen.push(game)
-          }
-        } else {
-          chosen = scan.games
-        }
-        for (const game of chosen) {
-          const artifact = paths.artifact(game.project)
-          if (!(await isPlainFile(artifact))) continue
-          const bytes = await readFile(artifact)
-          wallBuiltGames.push({
-            game,
-            artifactBytes: bytes,
-            buildId: sha256(bytes).slice(0, 12),
-            source: projectSourceId(game.project),
-          })
-        }
-        if (wallBuiltGames.length === 0) {
-          throw new StudioError('No built games to put on the wall', 'NOTHING_TO_EXPORT')
-        }
-      }
-    } else {
-      if (!dir) throw new StudioError('path is required unless wall is true.', 'BAD_PATH')
-      const manifest = await loadManifest(dir)
-      titleEn = manifest.title
-      titleZh = manifest.title
-      if (!remove) {
-        try {
-          artifactBytes = await readFile(paths.artifact(dir))
-        } catch {
-          throw new StudioError('Build the game with game_studio_build before publishing it.', 'NO_BUILD')
-        }
-        buildId = sha256(artifactBytes).slice(0, 12)
-        singleProjectInfo = await describeProject(dir, signal)
-        singleCoverAsset = await readCoverAsset(singleProjectInfo.cover)
-      }
-    }
-
-    const repoInfo = await repoExists(gh, owner, repo, signal)
-    const { exists } = repoInfo
-    let branch = repoInfo.defaultBranch
-
-    // Read the remote manifest before approval (read-only GETs) so wall publish can list
-    // which unpublished or updated games will be uploaded along with the wall.
-    let repoManifest: StudioRepoManifest = exists
-      ? await loadRepoManifest(gh, owner, repo, branch, signal)
-      : emptyRepoManifest()
-
-    interface PlannedWallGame {
-      game: ShelfGame
-      slug: string
-      source: string
-      buildId: string
-      artifactBytes: Buffer
-      hadExisting: boolean
-      needsUpload: boolean
-    }
-    const wallPlan: PlannedWallGame[] = []
-    if (wall && !remove) {
-      const plannedGames = { ...repoManifest.games }
-      for (const item of wallBuiltGames) {
-        const slug = pickGameSlug(item.game.project, plannedGames)
-        const existing = plannedGames[slug]
-        const hadExisting = existing !== undefined
-        const needsUpload = !existing || existing.buildId !== item.buildId
-        plannedGames[slug] = existing ?? {
-          title: item.game.title,
-          source: item.source,
-          publishedAt: '',
-          buildId: item.buildId,
-        }
-        wallPlan.push({ ...item, slug, hadExisting, needsUpload })
-      }
-    }
-
-    if (exec !== undefined) {
-      const toUpload = wallPlan.filter(item => item.needsUpload)
-      const listEn = toUpload.map(item => `"${item.game.title}"`).join(', ')
-      const listZh = toUpload.map(item => `《${item.game.title}》`).join('、')
-      const notice = remove ? {
-        en: `Remove "${titleEn}" from ${owner}/${repo}; its GitHub Pages link will stop working.`,
-        zh: `从 ${owner}/${repo} 删除《${titleZh}》，它的 GitHub Pages 链接将失效。`,
-      } : wall ? {
-        en: `Publish "${titleEn}" to GitHub Pages`
-          + (toUpload.length > 0 ? ` (along with ${listEn})` : '')
-          + `: uploads to your public repository ${owner}/${repo}, where anyone can open and view the game files, and the link stays live until you remove it.`
-          + (!exists ? ` Will first create a new public repository ${owner}/${repo} under your GitHub account.` : ''),
-        zh: `把《${titleZh}》`
-          + (toUpload.length > 0 ? `（连同${listZh}）` : '')
-          + `发布到 GitHub Pages：上传到你的公开仓库 ${owner}/${repo}，任何人都能打开和查看游戏文件，链接长期有效，直到你删除。`
-          + (!exists ? `会先在你的 GitHub 账号下新建公开仓库 ${owner}/${repo}。` : ''),
-      } : {
-        en: `Publish "${titleEn}" to GitHub Pages: uploads to your public repository ${owner}/${repo}, where anyone can open and view the game files, and the link stays live until you remove it.`
-          + (!exists ? ` Will first create a new public repository ${owner}/${repo} under your GitHub account.` : ''),
-        zh: `把《${titleZh}》发布到 GitHub Pages：上传到你的公开仓库 ${owner}/${repo}，任何人都能打开和查看游戏文件，链接长期有效，直到你删除。`
-          + (!exists ? `会先在你的 GitHub 账号下新建公开仓库 ${owner}/${repo}。` : ''),
-      }
-      await askToShare(approval, exec, 'game_studio_publish', notice)
-    }
-
-    if (!exists) {
-      if (remove) {
-        if (!wall && dir) await rm(paths.published(dir), { force: true }).catch(() => undefined)
-        throw new StudioError(
-          wall
-            ? `The game wall is not published in ${owner}/${repo} (游戏墙没有发布在 ${owner}/${repo}).`
-            : `This game is not published in ${owner}/${repo} (这个游戏没有发布在 ${owner}/${repo}).`,
-          'NOT_PUBLISHED',
-        )
-      }
-      const created = await createRepo(gh, repo, signal)
-      branch = created.defaultBranch
-      repoManifest = emptyRepoManifest()
-    }
-
-    const now = new Date().toISOString()
-    let slug: string
-    let commit: string
-
-    if (wall) {
-      slug = 'wall'
-      if (remove) {
-        if (!repoManifest.wall) {
-          throw new StudioError(`The game wall is not published in ${owner}/${repo} (游戏墙没有发布在 ${owner}/${repo}).`, 'NOT_PUBLISHED')
-        }
-        repoManifest.wall = null
-        const pageLang = guessDirectoryLang(repoManifest, lang)
-        const indexHtml = renderDirectoryPage(repoManifest, pageLang)
-        const gamesFeed = renderGamesFeed(repoManifest, owner, pageLang)
-        ;({ commit } = await publishFiles({
-          gh, owner, repo, branch,
-          files: [
-            { path: '.nojekyll', content: Buffer.alloc(0) },
-            { path: REPO_MARKER_FILE, content: Buffer.from(`${JSON.stringify(repoManifest, undefined, 2)}\n`, 'utf8') },
-            { path: GAMES_FEED_FILE, content: Buffer.from(`${JSON.stringify(gamesFeed, undefined, 2)}\n`, 'utf8') },
-            { path: 'index.html', content: Buffer.from(indexHtml, 'utf8') },
-          ],
-          remove: ['wall'],
-          message: 'Remove game wall',
-          signal,
-        }))
-      } else {
-        const gameFiles: Array<{ path: string; content: Buffer }> = []
-        const removePrefixes: string[] = []
-        for (const item of wallPlan) {
-          const existing = repoManifest.games[item.slug]
-          const coverAsset = item.needsUpload || !existing?.cover ? await readCoverAsset(item.game.cover) : undefined
-          const coverPath = coverAsset ? `${item.slug}/cover.${coverAsset.ext}` : (existing?.cover ?? null)
-          if (item.needsUpload) {
-            gameFiles.push({ path: `${item.slug}/index.html`, content: item.artifactBytes })
-            if (coverAsset) {
-              gameFiles.push({ path: `${item.slug}/cover.${coverAsset.ext}`, content: coverAsset.bytes })
-            }
-            if (item.hadExisting) {
-              removePrefixes.push(item.slug)
-            }
-          } else if (coverAsset && !existing?.cover) {
-            gameFiles.push({ path: `${item.slug}/cover.${coverAsset.ext}`, content: coverAsset.bytes })
-          }
-          repoManifest.games[item.slug] = {
-            title: item.game.title,
-            source: item.source,
-            publishedAt: item.needsUpload ? now : (existing?.publishedAt ?? now),
-            buildId: item.buildId,
-            ...(item.game.dimension ? { dimension: item.game.dimension } : {}),
-            orientation: item.game.orientation,
-            cover: coverPath,
-          }
-        }
-        repoManifest.wall = { publishedAt: now, games: Object.keys(repoManifest.games).length }
-        const pageLang = guessDirectoryLang(repoManifest, lang)
-        const indexHtml = renderDirectoryPage(repoManifest, pageLang)
-        const gamesFeed = renderGamesFeed(repoManifest, owner, pageLang)
-        const wallHtml = renderOnlineWallPage(pageLang)
-        ;({ commit } = await publishFiles({
-          gh, owner, repo, branch, retryInitialRef: !exists,
-          files: [
-            { path: '.nojekyll', content: Buffer.alloc(0) },
-            { path: REPO_MARKER_FILE, content: Buffer.from(`${JSON.stringify(repoManifest, undefined, 2)}\n`, 'utf8') },
-            { path: GAMES_FEED_FILE, content: Buffer.from(`${JSON.stringify(gamesFeed, undefined, 2)}\n`, 'utf8') },
-            { path: 'index.html', content: Buffer.from(indexHtml, 'utf8') },
-            { path: 'wall/index.html', content: Buffer.from(wallHtml, 'utf8') },
-            ...gameFiles,
-          ],
-          ...(removePrefixes.length > 0 ? { remove: removePrefixes } : {}),
-          message: 'Publish game wall',
-          signal,
-        }))
-      }
-    } else {
-      const source = projectSourceId(dir!)
-      if (remove) {
-        const matched = Object.entries(repoManifest.games).find(([, g]) => g.source === source)?.[0]
-        if (!matched) {
-          await rm(paths.published(dir!), { force: true }).catch(() => undefined)
-          throw new StudioError(`This game is not published in ${owner}/${repo} (这个游戏没有发布在 ${owner}/${repo}).`, 'NOT_PUBLISHED')
-        }
-        slug = matched
-        delete repoManifest.games[slug]
-        if (repoManifest.wall) {
-          repoManifest.wall = { ...repoManifest.wall, games: Object.keys(repoManifest.games).length }
-        }
-        const pageLang = guessDirectoryLang(repoManifest, lang)
-        const indexHtml = renderDirectoryPage(repoManifest, pageLang)
-        const gamesFeed = renderGamesFeed(repoManifest, owner, pageLang)
-        ;({ commit } = await publishFiles({
-          gh, owner, repo, branch,
-          files: [
-            { path: '.nojekyll', content: Buffer.alloc(0) },
-            { path: REPO_MARKER_FILE, content: Buffer.from(`${JSON.stringify(repoManifest, undefined, 2)}\n`, 'utf8') },
-            { path: GAMES_FEED_FILE, content: Buffer.from(`${JSON.stringify(gamesFeed, undefined, 2)}\n`, 'utf8') },
-            { path: 'index.html', content: Buffer.from(indexHtml, 'utf8') },
-          ],
-          remove: [slug],
-          message: `Remove ${titleEn}`,
-          signal,
-        }))
-        await rm(paths.published(dir!), { force: true }).catch(() => undefined)
-      } else {
-        slug = pickGameSlug(dir!, repoManifest.games)
-        const hadExisting = repoManifest.games[slug] !== undefined
-        const coverPath = singleCoverAsset ? `${slug}/cover.${singleCoverAsset.ext}` : null
-        repoManifest.games[slug] = {
-          title: titleEn,
-          source,
-          publishedAt: now,
-          buildId,
-          ...(singleProjectInfo?.dimension ? { dimension: singleProjectInfo.dimension } : {}),
-          orientation: singleProjectInfo?.orientation ?? 'portrait',
-          cover: coverPath,
-        }
-        if (repoManifest.wall) {
-          repoManifest.wall = { ...repoManifest.wall, games: Object.keys(repoManifest.games).length }
-        }
-        const pageLang = lang ?? (/[\u3400-\u9fff]/u.test(titleEn) ? 'zh' : guessDirectoryLang(repoManifest))
-        const indexHtml = renderDirectoryPage(repoManifest, pageLang)
-        const gamesFeed = renderGamesFeed(repoManifest, owner, pageLang)
-        ;({ commit } = await publishFiles({
-          gh, owner, repo, branch, retryInitialRef: !exists,
-          files: [
-            { path: '.nojekyll', content: Buffer.alloc(0) },
-            { path: REPO_MARKER_FILE, content: Buffer.from(`${JSON.stringify(repoManifest, undefined, 2)}\n`, 'utf8') },
-            { path: GAMES_FEED_FILE, content: Buffer.from(`${JSON.stringify(gamesFeed, undefined, 2)}\n`, 'utf8') },
-            { path: 'index.html', content: Buffer.from(indexHtml, 'utf8') },
-            { path: `${slug}/index.html`, content: artifactBytes! },
-            ...(singleCoverAsset ? [{ path: `${slug}/cover.${singleCoverAsset.ext}`, content: singleCoverAsset.bytes }] : []),
-          ],
-          ...(hadExisting ? { remove: [slug] } : {}),
-          message: `Publish ${titleEn}`,
-          signal,
-        }))
-      }
-    }
-
-    const pages = await ensurePages(gh, owner, repo, branch, signal)
-    const siteUrl = pages.url
-    const url = `${siteUrl}${slug}/`
-    const status = await waitForPages(gh, owner, repo, commit, config.pagesTimeoutMs ?? DEFAULT_PAGES_TIMEOUT_MS, signal)
-    if (status === 'errored') {
-      throw new StudioError(`GitHub Pages failed to build ${owner}/${repo} (status: errored).`, 'PAGES_ERRORED')
-    }
-
-    if (!wall && !remove && dir) {
-      const record: PublishedRecord = {
-        url, siteUrl, repo: `${owner}/${repo}`, slug, publishedAt: now, buildId, status,
-      }
-      await writeJson(paths.published(dir), record)
-    } else if (wall && !remove) {
-      for (const item of wallPlan) {
-        const record: PublishedRecord = {
-          url: `${siteUrl}${item.slug}/`,
-          siteUrl,
-          repo: `${owner}/${repo}`,
-          slug: item.slug,
-          publishedAt: repoManifest.games[item.slug]?.publishedAt ?? now,
-          buildId: item.buildId,
-          status,
-        }
-        await writeJson(paths.published(item.game.project), record)
-      }
-    }
-
-    return {
-      ...(dir ? { project: dir } : {}),
-      url,
-      siteUrl,
-      repo: `${owner}/${repo}`,
-      slug,
-      status,
-      ...(remove ? { removed: true } : {}),
-      ...(status === 'building' ? { note: 'GitHub Pages is still deploying; the link may take a minute or two to open.' } : {}),
-    }
+    const { exec, ...rest } = opts
+    return publishProjectToPages({
+      ...rest,
+      ghPath: config.ghPath,
+      githubRepo: config.githubRepo,
+      pagesTimeoutMs: config.pagesTimeoutMs,
+      ...(exec !== undefined ? { onApprove: notice => askToShare(approval, exec, 'game_studio_publish', notice) } : {}),
+    })
   }
 
   const projectParam = { type: 'string', required: true, description: 'Game project folder, relative to the working directory.' } as const
@@ -828,6 +507,76 @@ export function apply(ctx: any, config: Config = {}): void {
   }))
 
   ctx.tools.register(defineTool({
+    name: 'game_studio_export_wechat',
+    description: 'Export the game as a ready-to-open WeChat Mini Game package (`<project>/wx-minigame/`) from the exact same `game.js` and `game.json` '
+      + 'source, enforcing WeChat\'s 4.00 MB main-package limit. Generates `project.config.json`, `game.json`, universal `weapp-adapter.js` '
+      + '(WebGL2 + Canvas2D + multi-touch pointer/touch + `localStorage` + WebAudio + capsule safe-area `window.GAME.safeArea`), '
+      + '`wx-config.js` + `window.GAME.watchRewardedAd()` (zero-interstitial IAA helper that defaults to instant free rewards before 100 UV), '
+      + 'and `WECHAT_SUBMISSION_DRAFT.md` (pre-filled MP submission copy + 5 mandatory qualification system descriptions). '
+      + 'Note: WeChat Mini Games render only to `<canvas id="game">` (2D Canvas or Three.js WebGL + CanvasTexture HUD), never HTML `<div>` overlays; '
+      + 'run `game_studio_playtest` with `platform: "wechat"` to verify top-right UI clears WeChat\'s capsule button.',
+    parameters: {
+      path: projectParam,
+      appid: { type: 'string', description: 'WeChat Mini Game AppID (e.g. "wx1234567890abcdef"). Preserves existing AppID on rebuild; defaults to "touristappid" for local DevTools preview.' },
+      shareTitle: { type: 'string', description: 'Optional default title for WeChat friend/Moments share cards.' },
+      adUnitId: { type: 'string', description: 'Optional Rewarded Video Ad Unit ID ("adunit-..."). Leave empty before reaching 100 cumulative UV.' },
+    },
+    timeoutMs: 120_000,
+    output: {
+      schema: json,
+      render: (_args: any, value: any) => [{ type: 'text', text: JSON.stringify(value) }],
+      presentationMeta: (_args: any, value: any) => presentation('export', value.project, { file: value.outDir }),
+    },
+    async execute(args: any, exec: any) {
+      const dir = await projectDir(exec, args.path)
+      return exportWechatProject(dir, {
+        ...(typeof args.appid === 'string' && args.appid.trim() ? { appid: args.appid } : {}),
+        ...(typeof args.shareTitle === 'string' && args.shareTitle.trim() ? { shareTitle: args.shareTitle } : {}),
+        ...(typeof args.adUnitId === 'string' ? { adUnitId: args.adUnitId } : {}),
+        signal: exec.signal,
+      })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'game_studio_upload_wechat',
+    description: 'Upload an exported WeChat Mini Game (`<project>/wx-minigame/`) as a WeChat 体验版 / candidate release via the local '
+      + 'WeChat DevTools CLI (`wechatide` or WeChat DevTools `cli`). Requires a real WeChat Mini Game `appid` (not `touristappid`) '
+      + 'and asks the user for approval before uploading.',
+    parameters: {
+      path: projectParam,
+      version: { type: 'string', required: true, description: 'Release version string, e.g. "1.0.0".' },
+      desc: { type: 'string', description: 'Player-facing Chinese release summary shown to WeChat reviewers (avoid git commit jargon).' },
+      appid: { type: 'string', description: 'Optional WeChat Mini Game AppID override ("wx...") written to project.config.json before upload.' },
+      confirmToken: { type: 'string', description: 'Optional `confirmation_upload_...` token when `wechatide` prompts for first-time confirmation.' },
+    },
+    timeoutMs: 120_000,
+    output: {
+      schema: json,
+      render: (_args: any, value: any) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    async execute(args: any, exec: any) {
+      const dir = await projectDir(exec, args.path)
+      if (!findWechatCli(config.wechatCliPath)) {
+        throw new StudioError(`WeChat DevTools CLI not found on this computer. ${NO_WECHAT_CLI_HINT}`, 'NO_WECHAT_CLI')
+      }
+      const title = (await loadManifest(dir)).title
+      await askToShare(approval, exec, 'game_studio_upload_wechat', {
+        en: `Upload "${title}" (v${args.version}) to your WeChat Mini Game backend via WeChat DevTools CLI.`,
+        zh: `通过微信开发者工具 CLI 将《${title}》（v${args.version}）上传到你的微信小游戏后台。`,
+      })
+      return uploadWechatProject(dir, {
+        version: String(args.version ?? ''),
+        ...(typeof args.desc === 'string' ? { desc: args.desc } : {}),
+        ...(typeof args.appid === 'string' ? { appid: args.appid } : {}),
+        ...(typeof args.confirmToken === 'string' ? { confirmToken: args.confirmToken } : {}),
+        cliPath: config.wechatCliPath,
+        signal: exec.signal,
+      })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'game_studio_versions',
     description: 'List the saved versions of the game, newest first. Every build that changed the game is a version '
       + '(code, rules and art together); the user can go back to any of them with game_studio_restore_version.',
@@ -876,6 +625,7 @@ export function apply(ctx: any, config: Config = {}): void {
       rules: { type: 'string', description: 'JSON object of rule overrides from game.json for this run only, e.g. {"duration": 3}.' },
       portrait: { type: 'boolean', description: 'true plays on a phone-shaped 390×844 touch screen, false at 960×540 landscape. '
         + 'Default follows "orientation" in game.json (portrait unless it says landscape); set that instead of passing this every time.' },
+      platform: { type: 'string', enum: PLAYTEST_PLATFORMS, description: 'Runtime to simulate: "web" (default) or "wechat" (injects wx.* APIs, single-WebGL check, and renders WeChat\'s top-right capsule button on screenshots so UI collisions are immediately visible).' },
     },
     timeoutMs: 180_000,
     output: {
@@ -900,6 +650,7 @@ export function apply(ctx: any, config: Config = {}): void {
         ...(args.seconds !== undefined ? { seconds: Number(args.seconds) } : {}),
         ...(rules ? { rules } : {}),
         ...(typeof args.portrait === 'boolean' ? { portrait: args.portrait } : {}),
+        ...(typeof args.platform === 'string' ? { platform: args.platform as PlaytestPlatform } : {}),
         ...(args.characters === true ? { charactersOnly: true } : {}),
         signal: exec.signal,
       })
@@ -1083,6 +834,7 @@ export function apply(ctx: any, config: Config = {}): void {
           else if (action === 'revert') result = await revertSlot(dir, String(payload.slot))
           else if (action === 'build') { const build = await buildProject(dir, 'Rebuilt from the sidebar'); await writeState(dir, build); result = build }
           else if (action === 'export') result = await exportGame(dir)
+          else if (action === 'export-wechat') result = await exportWechatProject(dir, { ...(typeof payload.appid === 'string' ? { appid: payload.appid } : {}) })
           else if (action === 'restore') result = await restoreVersion(dir, Math.trunc(Number(payload.version)))
           // The user pressed the button themselves, so no further approval is asked.
           else if (action === 'share') result = await shareGame(dir, Number(payload.minutes ?? 30), payload.scope === 'public' ? 'public' : 'lan')

@@ -5,8 +5,8 @@
 <h1 align="center">DSH 游戏工坊</h1>
 
 <p align="center">
-  <strong>一句话描述一个小游戏 —— 在 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> 对话的侧栏里直接玩，换上 AI 美术，导出成一个 HTML 文件。</strong><br />
-  <sub>10 个 agent 工具 &bull; 侧栏实时预览 &bull; 2D 与 3D 体素模板 &bull; OpenAI 或 Codex 生图、花钱前先确认 &bull; 自动试玩 &bull; 版本历史 &bull; 单文件导出</sub>
+  <strong>一句话描述一个小游戏 —— 在 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> 对话侧栏里直接玩，或在 Codex / Claude Code / Antigravity 中创作，换上 AI 美术，一键导出单文件 HTML、发布 GitHub Pages 或打包上架微信小游戏（&lt; 4 MB）。</strong><br />
+  <sub>15 个 agent 工具 &bull; 支持 DSH + Codex + Claude Code + Antigravity &bull; 2D 与 3D 体素模板 &bull; OpenAI 或 Codex 生图 &bull; 微信胶囊模拟自动试玩 &bull; 微信小游戏一键导出与 CLI 上传 &bull; GitHub Pages</sub>
 </p>
 
 <p align="center">
@@ -14,8 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>包名：<code>@zseven-w/dsh-game-studio</code> &middot; 当前插件版本：<code>0.1.0-rc.5</code> &middot; 已在 DSH <code>0.2.1-rc.5</code> 上测试</sub><br />
-  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>在线试玩游戏墙（10 款实测 2D/3D 小游戏，手机/电脑点开即玩）</strong></a> &middot; <sub>在线源订阅：<code>finiking/dsh-games</code></sub>
+  <sub>包名：<code>@zseven-w/dsh-game-studio</code> &middot; 当前插件版本：<code>0.1.0-rc.6</code> &middot; 已在 DSH <code>0.2.1-rc.5</code> 及 Codex / Claude Code MCP 测试</sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>在线试玩游戏墙（10 款实测 2D/3D 小游戏）</strong></a> &middot; 📖 <a href="./INSTALL.md"><strong>多端安装指南（DSH / Codex / Claude / AGY）</strong></a>
 </p>
 
 <br />
@@ -40,7 +40,7 @@
 | 🎨 **换上自己的美术，花钱前先确认** | `game_studio_generate_asset` 用 OpenAI 图像接口或本机 Codex CLI 给每个槽位生成带编号的候选图。花钱之前会弹出审批卡，写明服务、张数和预估费用。你在聊天里附上的图片可以作为参考图。 |
 | 🤖 **自动试玩** | `game_studio_playtest` 在无界面的 Chrome 或 Edge 里玩最新代码，报告阶段、得分、帧率、脚本错误并附截图。不靠方向键操作的游戏（格子、卡牌、瞄准、节奏……）定义 `window.__autoplay`，试玩就能玩到真正的玩法。 |
 | 🕰️ **版本历史** | 每次让游戏发生变化的构建都会保存；`game_studio_restore_version` 把代码、规则和美术一起恢复。 |
-| 📦 **单文件导出** | `game_studio_export` 生成一个不联网、自包含的 HTML 文件，用任何浏览器打开，或放到任意静态托管上。 |
+| 📦 **单文件 HTML 与微信小游戏双端导出** | `game_studio_export` 生成零网络单文件 HTML；`game_studio_export_wechat` 从同一份 `game.js` 导出 `< 4.00 MB` 微信小游戏目录（`wx-minigame/`），内置真机 WebGL2/Canvas2D/多点触控/WebAudio 适配层、零打扰激励视频 `watchRewardedAd` 助手及微信资质审核填写草案。 |
 | 📱 **在手机上试玩** | `game_studio_share` 在本地网络上开一个临时只读链接（或通过 `cloudflared` 开启 Cloudflare 临时公网链接，发给任何网络下的朋友都能玩），侧栏里会显示二维码。 |
 | 🌐 **发布到 GitHub Pages** | `game_studio_publish` 用本机已登录的 `gh` 把构建好的 HTML（或整面游戏墙）推到你名下的公开仓库并开启 GitHub Pages，生成关掉电脑也能长期游玩的网址。 |
 | 🗂️ **游戏墙** | 点右栏的 **+**，选 **游戏工坊 · 游戏墙**：工作区里做过的游戏铺满一面墙，封面是最近一次试玩的画面，可按 2D/3D 筛选，按最近修改、版本数或名称排序。点一下就能玩，不经过 agent，也不花 token。你还可以订阅在线游戏源（`owner/repo`、GitHub 仓库地址或 GitHub Pages 网址），把别人发布的游戏合入墙内直接游玩。**导出游戏墙**会把本地游戏打包成一个离线网页，发给朋友就能玩。 |
@@ -80,13 +80,15 @@
 | --- | --- |
 | `game_studio_create` | 从 `collector`（2D）或 `voxel`（3D）模板创建能玩的游戏，构建并显示在侧栏。参数包括标题、美术风格、`orientation`（竖屏或横屏）和 `slots`：游戏自己的美术槽位，用用户的语言命名。 |
 | `game_studio_build` | 改完 `game.json` 或 `game.js` 后重新构建、刷新预览，并附一句说明存成一个版本。 |
-| `game_studio_playtest` | 无界面地玩最新代码（手机竖屏或 960×540 横屏），报告阶段、最高分、剩余生命、帧率、错误和截图；`characters: true` 只返回角色特写。 |
+| `game_studio_playtest` | 无界面地玩最新代码（手机竖屏或横屏），报告阶段、最高分、剩余生命、帧率、错误和截图；传 `platform: "wechat"` 可模拟微信右上角胶囊安全区叠层与单 WebGL 上下文校验；`characters: true` 只返回角色特写。 |
 | `game_studio_generate_asset` | 用 `openai` 或 `codex` 给一个槽位生成 1–4 张候选图，可选参考图。花钱前先审批；Codex 在后台运行。 |
 | `game_studio_apply_asset` | 按编号把候选图放进游戏，重新构建并刷新。 |
 | `game_studio_revert_asset` | 把某个槽位恢复成上一张美术。 |
 | `game_studio_versions` | 列出已保存的版本，最新的在前。 |
 | `game_studio_restore_version` | 把整个游戏恢复到较早的版本。 |
 | `game_studio_export` | 导出一个自包含、可离线游玩的 HTML 文件。 |
+| `game_studio_export_wechat` | 一键导出 `< 4.00 MB` 微信小游戏目录（`wx-minigame/`），自动转存 SVG 槽位为 PNG，生成 `weapp-adapter.js`、`wx-config.js`（满 100 UV 前自动首发限免）及 `WECHAT_SUBMISSION_DRAFT.md` 提审与五大系统说明草案。 |
+| `game_studio_upload_wechat` | 通过本机微信开发者工具 CLI（`wechatide` 或 `cli`）一键上传微信小游戏体验版。 |
 | `game_studio_share` | 在本地网络开启（或关闭）一个临时只读链接让手机试玩；传 `public: true` 则通过 `cloudflared` 生成任何网络都能打开的临时公网链接。 |
 | `game_studio_list` | 列出工作区里的游戏（标题、2D/3D、是否已构建、版本数），agent 能按名字找到「那个企鹅游戏」。 |
 | `game_studio_export_wall` | 导出游戏墙：一个离线 HTML 页面，每个已构建的游戏一个格子，点格子就能玩。 |
@@ -119,14 +121,28 @@
 - 生成 AI 美术需要 OpenAI API key 或已登录的 Codex CLI。都没有时，游戏仍可用代码画的角色正常运行。
 - 可选：安装 `cloudflared`（macOS 可用 `brew install cloudflared`）以使用公网临时分享链接；安装并登录 `gh`（`brew install gh` 并运行 `gh auth login`）以发布到 GitHub Pages。
 
-## 安装到 DSH
+## 安装到 DSH、Codex、Claude Code 与 Antigravity
 
-从 npm 安装到 DSH profile：
+### DeepSeek Harness（DSH —— 含右侧实时预览侧栏）
 
 ```sh
 dsh plugin --profile web add @zseven-w/dsh-game-studio@latest
 dsh web
 ```
+
+### Codex / Claude Code / Antigravity / Grok CLI（独立 MCP 插件）
+
+```sh
+git clone https://github.com/ZSeven-W/dsh-game-studio.git
+cd dsh-game-studio
+npm install
+npm run setup          # 一键注册到 Codex 并通过 codex app-server 验证全部 15 个工具
+npm run setup:claude   # 安装到 Claude Code
+npm run setup:agy      # 安装到 Antigravity
+npm run setup:all      # 一次性安装到全部宿主
+```
+
+复制给 Agent 的一键安装提示词与卸载命令详见 [INSTALL.md](./INSTALL.md)。
 
 ## 快速开始
 

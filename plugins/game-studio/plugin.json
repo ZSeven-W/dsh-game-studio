@@ -1,0 +1,54 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "dsh-game-studio",
+  "version": "0.1.0-rc.6",
+  "description": "Build playable 2D Canvas and 3D Three.js games, verify with headless Chrome playtests, generate transparent AI sprites, export < 4 MB WeChat Mini Games with CLI upload, and publish permanent links to GitHub Pages.",
+  "author": {
+    "name": "ZSeven-W",
+    "url": "https://github.com/ZSeven-W"
+  },
+  "repository": "https://github.com/ZSeven-W/dsh-game-studio",
+  "homepage": "https://github.com/ZSeven-W/dsh-game-studio",
+  "license": "MIT",
+  "keywords": [
+    "game",
+    "gamedev",
+    "threejs",
+    "html5-games",
+    "wechat-minigame",
+    "ai-art",
+    "mcp",
+    "codex"
+  ],
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "onboardingSkill": "./skills/game-studio/SKILL.md",
+      "interface": {
+        "displayName": "DSH Game Studio",
+        "shortDescription": "Build 2D/3D games, playtest in Chrome, swap AI sprites, and export WeChat Mini Games",
+        "longDescription": "Create playable 2D Canvas and 3D Three.js WebGL games from clean starter templates, run automated headless Chrome playtests (including WeChat Mini Game top-right capsule safe-area simulation), generate alpha-checked AI sprites via OpenAI or Codex CLI, export < 4 MB WeChat Mini Game packages with submission drafts, and publish permanent playable links to GitHub Pages.",
+        "developerName": "ZSeven-W",
+        "category": "Creative & Media",
+        "capabilities": [
+          "Create 2D Canvas & 3D Three.js games",
+          "Headless Chrome playtest & WeChat capsule check",
+          "Generate & crop transparent AI game sprites",
+          "Export < 4 MB WeChat Mini Game & CLI upload",
+          "Publish playable links to GitHub Pages"
+        ],
+        "websiteURL": "https://github.com/ZSeven-W/dsh-game-studio",
+        "defaultPrompt": [
+          "做一个竖屏 3D 翻箱凑三潮玩小游戏，自动试玩验证并导出微信小游戏目录。",
+          "Build a portrait 2D arcade game, playtest it in headless Chrome, and open a local preview link.",
+          "Export this game project to WeChat Mini Game (`wx-minigame/`) and check the 4 MB package budget and capsule safe area."
+        ],
+        "brandColor": "#F4B740",
+        "composerIcon": "./assets/icon.svg",
+        "composerIconDark": "./assets/icon.svg",
+        "logo": "./assets/logo.png",
+        "logoDark": "./assets/logo.png"
+      }
+    }
+  }
+}

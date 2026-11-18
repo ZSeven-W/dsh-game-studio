@@ -33,19 +33,28 @@ const CSP = [
 const STYLE = 'html,body{margin:0;width:100%;height:100%;height:100dvh;overflow:hidden;background:#000;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}'
   + 'canvas{display:block;width:100vw;height:100vh;height:100dvh;touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}'
 
-const RUNTIME_FILES: Record<RuntimeId, URL> = {
-  // Built by scripts/build.mjs; resolves to <package>/lib/vendor from both src/ and lib/.
-  three: new URL('../lib/vendor/three.js', import.meta.url),
+const RUNTIME_FILES: Record<RuntimeId, URL[]> = {
+  // Built by scripts/build.mjs; resolves from src/, lib/, and plugins/game-studio/scripts/.
+  three: [
+    new URL('../lib/vendor/three.js', import.meta.url),
+    new URL('../vendor/three.js', import.meta.url),
+  ],
+}
+
+export async function readRuntimeScript(id: RuntimeId): Promise<string> {
+  if (!(RUNTIMES as readonly string[]).includes(id)) {
+    throw new StudioError(`Unknown runtime "${id}" in game.json; available: ${RUNTIMES.join(', ')}`, 'BAD_MANIFEST')
+  }
+  for (const url of RUNTIME_FILES[id]) {
+    try { return await readFile(url, 'utf8') } catch { /* try next */ }
+  }
+  throw new StudioError(`Runtime "${id}" is missing from this dsh-game-studio install`, 'MISSING_RUNTIME')
 }
 
 async function runtimeScripts(manifest: GameManifest): Promise<string[]> {
   const scripts: string[] = []
   for (const id of manifest.runtime ?? []) {
-    if (!(RUNTIMES as readonly string[]).includes(id)) {
-      throw new StudioError(`Unknown runtime "${id}" in game.json; available: ${RUNTIMES.join(', ')}`, 'BAD_MANIFEST')
-    }
-    try { scripts.push(await readFile(RUNTIME_FILES[id], 'utf8')) }
-    catch { throw new StudioError(`Runtime "${id}" is missing from this dsh-game-studio install`, 'MISSING_RUNTIME') }
+    scripts.push(await readRuntimeScript(id))
   }
   return scripts
 }
@@ -55,7 +64,7 @@ async function runtimeScripts(manifest: GameManifest): Promise<string[]> {
  * can keep one shared copy instead of one per 3D game.
  */
 export async function runtimeTag(id: RuntimeId): Promise<string> {
-  return `<script>${inlineSafe(await readFile(RUNTIME_FILES[id], 'utf8'))}</script>`
+  return `<script>${inlineSafe(await readRuntimeScript(id))}</script>`
 }
 
 /** Keep inline JSON and code from closing the script element early. */

@@ -1,0 +1,15 @@
+{
+  "name": "dsh-game-studio",
+  "owner": {
+    "name": "ZSeven-W"
+  },
+  "description": "DSH Game Studio for Claude Code, Codex, Antigravity, and DeepSeek Harness — create 2D/3D web games, run headless Chrome playtests, generate AI sprites, export WeChat Mini Games (< 4 MB), and publish to GitHub Pages.",
+  "plugins": [
+    {
+      "name": "dsh-game-studio",
+      "source": "./",
+      "description": "2D Canvas & 3D Three.js game studio with headless playtesting, AI sprite generation, WeChat Mini Game (< 4 MB) export & CLI upload, and GitHub Pages publishing",
+      "category": "creative"
+    }
+  ]
+}

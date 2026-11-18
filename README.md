@@ -5,8 +5,8 @@
 <h1 align="center">DSH Game Studio</h1>
 
 <p align="center">
-  <strong>Describe a small game in one sentence — play it in the sidebar of a <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> conversation, swap in AI art, export one HTML file.</strong><br />
-  <sub>10 agent tools &bull; live sidebar preview &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art with a cost check first &bull; self-playing playtests &bull; version history &bull; one-file export</sub>
+  <strong>Describe a small game in one sentence — play it in the <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> sidebar or build it in Codex / Claude Code / Antigravity, swap in AI art, and ship to Web, GitHub Pages, or WeChat Mini Games (&lt; 4 MB).</strong><br />
+  <sub>15 agent tools &bull; DSH + Codex + Claude Code + Antigravity &bull; 2D and 3D voxel templates &bull; OpenAI or Codex art &bull; self-playing playtests &bull; WeChat Mini Game export &amp; CLI upload &bull; GitHub Pages</sub>
 </p>
 
 <p align="center">
@@ -14,8 +14,8 @@
 </p>
 
 <p align="center">
-  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.5</code> &middot; Tested with DSH <code>0.2.1-rc.5</code></sub><br />
-  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>Live Demo Game Wall (10 playable 2D &amp; 3D games)</strong></a> &middot; <sub>Subscribe in Online Sources: <code>finiking/dsh-games</code></sub>
+  <sub>Package: <code>@zseven-w/dsh-game-studio</code> &middot; Current plugin release: <code>0.1.0-rc.6</code> &middot; Tested with DSH <code>0.2.1-rc.5</code> &amp; Codex / Claude Code MCP</sub><br />
+  🎮 <a href="https://finiking.github.io/dsh-games/wall/"><strong>Live Demo Game Wall (10 playable 2D &amp; 3D games)</strong></a> &middot; 📖 <a href="./INSTALL.md"><strong>Multi-Host Setup (DSH / Codex / Claude / AGY)</strong></a>
 </p>
 
 <br />
@@ -40,7 +40,7 @@ Ask the agent for a game in plain words — "a 3D game: a red panda collects bam
 | 🎨 **Your own art, with a cost check first** | `game_studio_generate_asset` makes numbered candidates per slot with the OpenAI image API or the local Codex CLI. Before anything is spent you get an approval card with the service, image count and expected cost. A picture you attach in chat can be the reference. |
 | 🤖 **Self-playing playtests** | `game_studio_playtest` plays the latest code in a headless Chrome or Edge and reports phases, score, frame rate, script errors and screenshots. Games that are not steered with arrow keys (grids, cards, aiming, rhythm…) define `window.__autoplay`, so the playtest plays their real loop. |
 | 🕰️ **Version history** | Every build that changed the game is saved; `game_studio_restore_version` brings back code, rules and art together. |
-| 📦 **One-file export** | `game_studio_export` writes a self-contained HTML file with no network access — open it in any browser or put it on any static host. |
+| 📦 **One-file Web export &amp; WeChat Mini Game (&lt; 4 MB)** | `game_studio_export` writes a zero-network HTML file; `game_studio_export_wechat` builds a `< 4.00 MB` WeChat Mini Game (`wx-minigame/`) from the same `game.js`, complete with WebGL2/Canvas2D/Pointer/WebAudio adapter, zero-interstitial IAA helper, and MP submission draft. |
 | 📱 **Try it on your phone** | `game_studio_share` opens a temporary read-only link on your local network — or a temporary public link via a Cloudflare Quick Tunnel (`cloudflared`) so friends on any network can play — with a QR code in the sidebar. |
 | 🌐 **Publish to GitHub Pages** | `game_studio_publish` pushes the built HTML (or the whole game wall) to a public repository under your signed-in `gh` account and enables GitHub Pages for a permanent link that stays live after you close your computer. |
 | 🗂️ **My games** | Open the sidebar's **+** and pick **Game Studio · My games**: every game in the workspace as a tile with its latest playtest picture, filtered by 2D/3D and sorted by recency, versions or name. Click one to play it — no agent, no tokens. You can also subscribe to online game sources (`owner/repo`, GitHub repository URL, or GitHub Pages URL) to browse and play published games alongside your own. **Export wall** packs your local games into one offline page to send to friends. |
@@ -80,13 +80,15 @@ Measured in a real DSH with DeepSeek-V4.1-Flash, each game made from one sentenc
 | --- | --- |
 | `game_studio_create` | Create a playable game from the `collector` (2D) or `voxel` (3D) template, build it and show it in the sidebar. Takes the title, an art style, `orientation` (portrait or landscape) and `slots` — the game's own art slots, named in the user's language. |
 | `game_studio_build` | Rebuild after editing `game.json` or `game.js`, refresh the preview and save a version with a short note. |
-| `game_studio_playtest` | Play the latest code headlessly (phone-shaped portrait or 960×540 landscape) and report phases, best score, hearts, fps, errors and screenshots; `characters: true` returns close-ups of the characters only. |
+| `game_studio_playtest` | Play the latest code headlessly (phone-shaped portrait or 960×540 landscape) and report phases, best score, hearts, fps, errors and screenshots; pass `platform: "wechat"` to simulate WeChat's top-right capsule safe area &amp; single-WebGL constraint; `characters: true` returns close-ups only. |
 | `game_studio_generate_asset` | Generate 1–4 candidate images for one slot with `openai` or `codex`, optionally following a reference picture. Asks for approval before spending. Codex runs in the background. |
 | `game_studio_apply_asset` | Put a candidate into the game by its number, rebuild and refresh. |
 | `game_studio_revert_asset` | Go back to a slot's previous art. |
 | `game_studio_versions` | List saved versions, newest first. |
 | `game_studio_restore_version` | Restore an earlier version of the whole game. |
 | `game_studio_export` | Export one self-contained, offline HTML file. |
+| `game_studio_export_wechat` | Export a `< 4.00 MB` WeChat Mini Game directory (`wx-minigame/`) with `weapp-adapter.js`, `wx-config.js` (`watchRewardedAd`), SVG-to-PNG slot rasterization, and `WECHAT_SUBMISSION_DRAFT.md`. |
+| `game_studio_upload_wechat` | Upload the exported `wx-minigame/` package as a WeChat 体验版 build via local WeChat DevTools CLI (`wechatide` or `cli`). |
 | `game_studio_share` | Open (or close) a temporary read-only link on the local network, or pass `public: true` for a temporary public link via `cloudflared` so anyone with the link can play. |
 | `game_studio_list` | List the games in the working directory with title, 2D/3D, build state and versions, so the agent finds "the penguin game" by name. |
 | `game_studio_export_wall` | Export the game wall: one offline HTML page with a tile per built game; click a tile to play it. |
@@ -119,14 +121,28 @@ The sidebar's buttons (apply, revert, build, export, restore, share, publish) ca
 - For AI art, either an OpenAI API key or the Codex CLI signed in. Without either, games still work with their code-drawn characters.
 - Optional: `cloudflared` (`brew install cloudflared` on macOS) for temporary public share links; `gh` (`brew install gh` and `gh auth login`) for publishing to GitHub Pages.
 
-## Install into DSH
+## Install into DSH, Codex, Claude Code &amp; Antigravity
 
-Install from npm into a DSH profile:
+### DeepSeek Harness (DSH — with Live Sidebar UI)
 
 ```sh
 dsh plugin --profile web add @zseven-w/dsh-game-studio@latest
 dsh web
 ```
+
+### Codex / Claude Code / Antigravity / Grok CLI (Standalone MCP Plugin)
+
+```sh
+git clone https://github.com/ZSeven-W/dsh-game-studio.git
+cd dsh-game-studio
+npm install
+npm run setup          # Codex (registers plugin + verifies all 15 tools via codex app-server)
+npm run setup:claude   # Claude Code
+npm run setup:agy      # Antigravity
+npm run setup:all      # All hosts at once
+```
+
+See [INSTALL.md](./INSTALL.md) for agent-copyable setup prompts and clean uninstall commands.
 
 ## Quick start
 

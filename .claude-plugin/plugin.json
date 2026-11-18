@@ -1,0 +1,8 @@
+{
+  "name": "dsh-game-studio",
+  "version": "0.1.0-rc.6",
+  "description": "DSH Game Studio — build 2D/3D web games, run headless Chrome playtests (Web & WeChat Mini Game capsule simulation), generate transparent AI art, export < 4 MB WeChat Mini Games, and publish to GitHub Pages",
+  "author": {
+    "name": "ZSeven-W"
+  }
+}
