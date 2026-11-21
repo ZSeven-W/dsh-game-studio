@@ -548,13 +548,14 @@
   window.addEventListener('keyup', function (event) { if (KEYMAP[event.code]) keys[KEYMAP[event.code]] = false; });
   window.addEventListener('blur', function () { keys = {}; });
   function showPause() {
-    if (paused) showCard('Paused', 'Press P to continue', '');
+    if (paused) showCard('Paused', 'Tap or press P to continue', '');
     else card.style.display = 'none';
   }
   var drag = null;
   canvas.addEventListener('pointerdown', function (event) {
     canvas.focus();
     if (phase !== 'playing') { if (canRestart()) start(); return; }
+    if (paused) { paused = false; showPause(); return; }
     if (!drag) {
       drag = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, dy: 0 };
       joyBase.style.display = 'block';
