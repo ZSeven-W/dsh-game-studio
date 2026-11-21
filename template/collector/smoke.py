@@ -139,6 +139,16 @@ def main():
                 ppage.mouse.click(195, 400)
                 wait_phase(ppage, {"playing"}, timeout_ms=3000)
 
+            # Losing focus pauses play. The whole first touch gesture should
+            # resume the timer without also steering the hero.
+            ppage.evaluate("window.dispatchEvent(new Event('blur'))")
+            paused_state = state(ppage)
+            ppage.evaluate("new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+            assert state(ppage)["time"] == paused_state["time"], "blur did not pause the timer"
+            touch_drag(ppage, 195, 420, 195, 280)
+            ppage.wait_for_function("t => window.__gameState().time < t", arg=paused_state["time"], timeout=3000)
+            assert state(ppage)["hero"] == paused_state["hero"], "resume gesture moved the hero"
+
             h0 = state(ppage)["hero"]
             touch_drag(ppage, 195, 420, 195, 280, steps=8, hold=0.5)
             h1 = state(ppage)["hero"]
@@ -146,6 +156,7 @@ def main():
             ppage.screenshot(path=os.path.join(HERE, "qa", "phone.png"))
             results["phone"] = {
                 "tap_starts": True,
+                "touch_resumes_after_blur": True,
                 "hero_y_from": round(h0["y"], 2),
                 "hero_y_to": round(h1["y"], 2),
             }

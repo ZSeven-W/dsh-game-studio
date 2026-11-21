@@ -778,7 +778,10 @@
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#ffffff';
       fitFont('Paused', 46 * s, maxW, 'bold');
-      ctx.fillText('Paused', cssW / 2, cssH * 0.5);
+      ctx.fillText('Paused', cssW / 2, cssH * 0.46);
+      var resumeHint = 'Tap or press P to resume';
+      fitFont(resumeHint, 20 * s, maxW);
+      ctx.fillText(resumeHint, cssW / 2, cssH * 0.56);
       ctx.textAlign = 'left';
     }
   }
@@ -920,6 +923,7 @@
     if (phase === 'title') { startGame(); return; }
     if (phase === 'won' || phase === 'lost') { if (restartGuard <= 0) startGame(); return; }
     if (phase === 'playing') {
+      if (paused) { paused = false; return; }
       if (!joystick) {
         joystick = { id: e.pointerId, ox: e.clientX, oy: e.clientY, dx: 0, dy: 0 };
         try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
