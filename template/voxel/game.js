@@ -68,11 +68,34 @@
     if (!THREE) throw new Error('the three.js runtime is missing');
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
   } catch (error) {
-    var note = document.createElement('div');
-    note.textContent = 'This game needs WebGL, which is not available here (' + (error && error.message || error) + ').';
-    note.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;'
-      + 'color:#fff;font:16px system-ui,sans-serif;text-align:center;background:#1d2550';
-    document.body.appendChild(note);
+    var failTarget = canvas;
+    var failCtx = canvas.getContext('2d');
+    if (!failCtx) {
+      try {
+        failTarget = document.createElement('canvas');
+        failTarget.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:2147483647';
+        (document.body || document.documentElement).appendChild(failTarget);
+        failCtx = failTarget.getContext('2d');
+      } catch (e) { failCtx = null; }
+    }
+    if (failCtx) {
+      var failW = window.innerWidth || 390, failH = window.innerHeight || 844;
+      failTarget.width = failW;
+      failTarget.height = failH;
+      failCtx.fillStyle = '#1d2550';
+      failCtx.fillRect(0, 0, failW, failH);
+      failCtx.fillStyle = '#fff';
+      failCtx.font = '16px system-ui,sans-serif';
+      failCtx.textAlign = 'center';
+      failCtx.textBaseline = 'middle';
+      var failText = 'This game needs WebGL, which is not available here ('
+        + ((error && error.message) || error) + ').';
+      var failLines = wrapCanvasText(failCtx, failText, Math.max(160, failW - 48));
+      var failStart = failH / 2 - (failLines.length - 1) * 11;
+      for (var fi = 0; fi < failLines.length; fi++) {
+        failCtx.fillText(failLines[fi], failW / 2, failStart + fi * 22);
+      }
+    }
     reportError('WebGL unavailable: ' + (error && error.message || error));
     window.__gameState = function () { return { phase: 'error', score: 0, renderer: 'none' }; };
     return;
@@ -439,38 +462,219 @@
     } catch (e) { /* audio is optional */ }
   }
 
-  /* 7. HUD — DOM layered over the canvas. */
-  function el(tag, css, parent) {
-    var node = document.createElement(tag);
-    node.style.cssText = css;
-    (parent || document.body).appendChild(node);
-    return node;
+  /* 7. HUD — one 2D canvas uploaded as a CanvasTexture on an orthographic
+   * overlay. WeChat Mini Game has no DOM renderer and allows a single WebGL
+   * context, so every pill, timer, joystick and modal is drawn here instead of
+   * in HTML. The texture is only re-uploaded when its content changes. */
+  var HUD_FONT = 'system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+  var hudCanvas = document.createElement('canvas');
+  hudCanvas.width = 1;
+  hudCanvas.height = 1;
+  var hudCtx = hudCanvas.getContext('2d');
+  var hudTexture = new THREE.CanvasTexture(hudCanvas);
+  hudTexture.colorSpace = THREE.SRGBColorSpace;
+  hudTexture.minFilter = THREE.LinearFilter;
+  hudTexture.magFilter = THREE.LinearFilter;
+  hudTexture.generateMipmaps = false;
+  var hudScene = new THREE.Scene();
+  var hudCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  hudCamera.position.z = 1;
+  var hudMaterial = new THREE.MeshBasicMaterial({ map: hudTexture, transparent: true, depthTest: false, depthWrite: false });
+  hudMaterial.toneMapped = false;
+  hudScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), hudMaterial));
+  /* The virtual joystick follows the finger at pointer rate, so it lives as
+   * geometry instead of being repainted into the HUD texture every move. */
+  function hudMesh(geometry, opacity, order) {
+    var material = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: opacity,
+      depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+    });
+    material.toneMapped = false;
+    var mesh = new THREE.Mesh(geometry, material);
+    mesh.visible = false;
+    mesh.renderOrder = order;
+    hudScene.add(mesh);
+    return mesh;
   }
-  var FONT = 'font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;';
-  var hud = el('div', 'position:fixed;inset:0;pointer-events:none;user-select:none;color:#fff;' + FONT
-    + 'font-size:clamp(14px,2.4vmin,22px);text-shadow:0 2px 6px rgba(0,0,0,.45)');
-  var pillCss = 'position:absolute;top:2.2vmin;padding:.45em .9em;border-radius:999px;background:rgba(14,18,40,.42);'
-    + 'border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(6px);display:flex;gap:.6em;align-items:center;font-weight:700';
-  var leftPill = el('div', pillCss + ';left:2.2vmin', hud);
-  var heartsEl = el('span', 'color:#ff8a9a;letter-spacing:.08em', leftPill);
-  var scoreEl = el('span', '', leftPill);
-  var timerEl = el('div', pillCss + ';right:2.2vmin;font-variant-numeric:tabular-nums', hud);
-  var shieldEl = el('div', 'position:absolute;left:2.2vmin;top:calc(2.2vmin + 2.6em);padding:.3em .8em;border-radius:999px;'
-    + 'background:rgba(120,220,255,.25);border:1px solid rgba(160,235,255,.5);font-size:.8em;font-weight:700;display:none', hud);
-  var joyBase = el('div', 'position:absolute;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;'
-    + 'border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);display:none;pointer-events:none', hud);
-  var joyKnob = el('div', 'position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;'
-    + 'border-radius:50%;background:rgba(255,255,255,.55);box-shadow:0 2px 8px rgba(0,0,0,.35)', joyBase);
-  var card = el('div', 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;width:min(86vw,560px);'
-    + 'padding:1.4em 1.2em;border-radius:22px;background:rgba(14,16,38,.5);border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(8px)', hud);
-  var cardTitle = el('div', 'font-size:2.3em;font-weight:800;letter-spacing:.02em;color:#ffe2a8;line-height:1.15', card);
-  var cardBody = el('div', 'margin-top:.55em;opacity:.95;line-height:1.5', card);
-  var cardHint = el('div', 'margin-top:1em;font-weight:700;color:#fff3cf', card);
+  var joyBaseFill = hudMesh(new THREE.CircleGeometry(1, 48), 0.08, 10);
+  var joyBaseRing = hudMesh(new THREE.RingGeometry(0.94, 1, 48), 0.35, 11);
+  var joyKnob = hudMesh(new THREE.CircleGeometry(1, 32), 0.55, 12);
+  var hudWidth = 1, hudHeight = 1, hudPixelRatio = 1;
+  var hudSignature = '', cardState = null;
+
+  function roundRect(ctx, x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function wrapCanvasText(ctx, text, maxWidth) {
+    var lines = [];
+    var paragraphs = String(text == null ? '' : text).split('\n');
+    for (var p = 0; p < paragraphs.length; p++) {
+      var tokens = paragraphs[p].split(/(\s+)/);
+      var line = '';
+      for (var t = 0; t < tokens.length; t++) {
+        var token = tokens[t];
+        if (!token) continue;
+        if (ctx.measureText(line + token).width <= maxWidth) { line += token; continue; }
+        if (line.trim()) { lines.push(line.trim()); line = ''; }
+        var chars = token.split(''), chunk = '';
+        for (var c = 0; c < chars.length; c++) {
+          var next = chunk + chars[c];
+          if (ctx.measureText(next).width <= maxWidth || !chunk) chunk = next;
+          else { lines.push(chunk); chunk = chars[c]; }
+        }
+        line = chunk;
+      }
+      lines.push(line.trim());
+    }
+    return lines;
+  }
+
   function showCard(title, body, hint) {
-    card.style.display = 'block';
-    cardTitle.textContent = title;
-    cardBody.textContent = body;
-    cardHint.textContent = hint;
+    cardState = { title: title, body: body, hint: hint };
+    hudSignature = '';
+  }
+  function hideCard() {
+    if (!cardState) return;
+    cardState = null;
+    hudSignature = '';
+  }
+  function hudScale() { return Math.max(14, Math.min(22, Math.min(hudWidth, hudHeight) * 0.024)); }
+  function hudTextShadow(ctx, on) {
+    ctx.shadowColor = on ? 'rgba(0,0,0,.45)' : 'transparent';
+    ctx.shadowBlur = on ? 6 : 0;
+    ctx.shadowOffsetY = on ? 2 : 0;
+  }
+
+  function drawHud() {
+    if (!hudCtx || hudWidth <= 1 || hudHeight <= 1) return;
+    var ctx = hudCtx, w = hudWidth, h = hudHeight;
+    ctx.setTransform(hudPixelRatio, 0, 0, hudPixelRatio, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    var base = hudScale(), pad = Math.min(w, h) * 0.022;
+    var pillH = Math.round(base * 1.9), innerPad = base * 0.9, pillR = pillH / 2;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    var heartsText = '♥'.repeat(Math.max(0, hearts)) + '♡'.repeat(Math.max(0, R.hearts - hearts));
+    var scoreText = '✦ ' + score;
+    ctx.font = '700 ' + base + 'px ' + HUD_FONT;
+    var heartsW = ctx.measureText(heartsText).width;
+    var scoreW = ctx.measureText(scoreText).width;
+    var gap = base * 0.6;
+    var leftW = innerPad * 2 + heartsW + gap + scoreW;
+    ctx.fillStyle = 'rgba(14,18,40,.42)';
+    ctx.strokeStyle = 'rgba(255,255,255,.14)';
+    ctx.lineWidth = 1;
+    roundRect(ctx, pad, pad, leftW, pillH, pillR);
+    ctx.fill();
+    ctx.stroke();
+    var cy = pad + pillH / 2, tx = pad + innerPad;
+    hudTextShadow(ctx, true);
+    ctx.fillStyle = '#ff8a9a';
+    ctx.fillText(heartsText, tx, cy);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(scoreText, tx + heartsW + gap, cy);
+    hudTextShadow(ctx, false);
+
+    var seconds = Math.max(0, Math.ceil(timeLeft));
+    var timerText = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+    ctx.font = '700 ' + base + 'px ' + HUD_FONT;
+    var timerW = ctx.measureText(timerText).width;
+    var timerPillW = timerW + innerPad * 2;
+    var timerX = w - pad - timerPillW;
+    ctx.fillStyle = 'rgba(14,18,40,.42)';
+    ctx.strokeStyle = 'rgba(255,255,255,.14)';
+    roundRect(ctx, timerX, pad, timerPillW, pillH, pillR);
+    ctx.fill();
+    ctx.stroke();
+    hudTextShadow(ctx, true);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(timerText, timerX + innerPad, cy);
+    hudTextShadow(ctx, false);
+
+    if (shield > 0) {
+      var shieldText = 'Shield ' + Math.ceil(shield) + 's';
+      var shieldBase = base * 0.8;
+      ctx.font = '700 ' + shieldBase + 'px ' + HUD_FONT;
+      var shieldW = ctx.measureText(shieldText).width + shieldBase * 1.6;
+      var shieldH = shieldBase * 1.8;
+      var shieldY = pad + pillH + base * 0.45;
+      ctx.fillStyle = 'rgba(120,220,255,.25)';
+      ctx.strokeStyle = 'rgba(160,235,255,.5)';
+      roundRect(ctx, pad, shieldY, shieldW, shieldH, shieldH / 2);
+      ctx.fill();
+      ctx.stroke();
+      hudTextShadow(ctx, true);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(shieldText, pad + shieldBase * 0.8, shieldY + shieldH / 2);
+      hudTextShadow(ctx, false);
+    }
+
+    if (cardState) {
+      var cardW = Math.min(w * 0.86, 560);
+      var padX = base * 1.4, padY = base * 1.2;
+      var titleSize = base * 2.3, bodySize = base, hintSize = base;
+      var titleLH = titleSize * 1.15, bodyLH = bodySize * 1.5, hintLH = hintSize * 1.3;
+      ctx.font = '800 ' + titleSize + 'px ' + HUD_FONT;
+      var titleLines = wrapCanvasText(ctx, cardState.title, cardW - padX * 2);
+      ctx.font = '400 ' + bodySize + 'px ' + HUD_FONT;
+      var bodyLines = cardState.body ? wrapCanvasText(ctx, cardState.body, cardW - padX * 2) : [];
+      ctx.font = '700 ' + hintSize + 'px ' + HUD_FONT;
+      var hintLines = cardState.hint ? wrapCanvasText(ctx, cardState.hint, cardW - padX * 2) : [];
+      var cardH = padY * 2 + titleLines.length * titleLH
+        + (bodyLines.length ? bodySize * 0.55 + bodyLines.length * bodyLH : 0)
+        + (hintLines.length ? hintSize * 1.0 + hintLines.length * hintLH : 0);
+      var cardX = (w - cardW) / 2, cardY = (h - cardH) / 2;
+      ctx.fillStyle = 'rgba(14,16,38,.5)';
+      ctx.strokeStyle = 'rgba(255,255,255,.16)';
+      ctx.lineWidth = 1;
+      roundRect(ctx, cardX, cardY, cardW, cardH, 22);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      hudTextShadow(ctx, true);
+      var cursorY = cardY + padY;
+      ctx.fillStyle = '#ffe2a8';
+      ctx.font = '800 ' + titleSize + 'px ' + HUD_FONT;
+      for (var i = 0; i < titleLines.length; i++) {
+        ctx.fillText(titleLines[i], w / 2, cursorY + titleLH / 2);
+        cursorY += titleLH;
+      }
+      if (bodyLines.length) {
+        cursorY += bodySize * 0.55;
+        ctx.fillStyle = 'rgba(255,255,255,.95)';
+        ctx.font = '400 ' + bodySize + 'px ' + HUD_FONT;
+        for (var b = 0; b < bodyLines.length; b++) {
+          ctx.fillText(bodyLines[b], w / 2, cursorY + bodyLH / 2);
+          cursorY += bodyLH;
+        }
+      }
+      if (hintLines.length) {
+        cursorY += hintSize * 1.0;
+        ctx.fillStyle = '#fff3cf';
+        ctx.font = '700 ' + hintSize + 'px ' + HUD_FONT;
+        for (var n = 0; n < hintLines.length; n++) {
+          ctx.fillText(hintLines[n], w / 2, cursorY + hintLH / 2);
+          cursorY += hintLH;
+        }
+      }
+      hudTextShadow(ctx, false);
+      ctx.textAlign = 'left';
+    }
+    ctx.textBaseline = 'alphabetic';
+    hudTexture.needsUpdate = true;
   }
 
   /* 8. GAME STATE */
@@ -512,9 +716,9 @@
   function setPhase(next) {
     phase = next;
     endedAt = performance.now();
-    if (next !== 'playing' && drag) { drag = null; joyBase.style.display = 'none'; }
+    if (next !== 'playing' && drag) drag = null;
     if (next === 'title') showCard(TITLE, 'Collect the lanterns, dodge the thorn creatures!', 'Press any key / tap to start');
-    else if (next === 'playing') card.style.display = 'none';
+    else if (next === 'playing') hideCard();
     else if (next === 'won') showCard('Night falls safely', 'You collected ' + score + ' lantern' + (score === 1 ? '' : 's') + '. Best: ' + best, 'Press any key / tap to play again');
     else if (next === 'lost') showCard('Caught!', 'Lanterns: ' + score + '. Best: ' + best, 'Press any key / tap to try again');
     post({ type: 'state', phase: phase, score: score });
@@ -549,7 +753,7 @@
   window.addEventListener('blur', function () { keys = {}; });
   function showPause() {
     if (paused) showCard('Paused', 'Tap or press P to continue', '');
-    else card.style.display = 'none';
+    else hideCard();
   }
   var drag = null;
   canvas.addEventListener('pointerdown', function (event) {
@@ -558,10 +762,6 @@
     if (paused) { paused = false; showPause(); return; }
     if (!drag) {
       drag = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, dy: 0 };
-      joyBase.style.display = 'block';
-      joyBase.style.left = event.clientX + 'px';
-      joyBase.style.top = event.clientY + 'px';
-      joyKnob.style.transform = 'translate(0px,0px)';
       try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* not captured */ }
     }
   });
@@ -569,16 +769,9 @@
     if (!drag || event.pointerId !== drag.id) return;
     drag.dx = event.clientX - drag.x;
     drag.dy = event.clientY - drag.y;
-    var r = 42, d = Math.hypot(drag.dx, drag.dy);
-    var kx = d > r ? drag.dx / d * r : drag.dx;
-    var ky = d > r ? drag.dy / d * r : drag.dy;
-    joyKnob.style.transform = 'translate(' + kx.toFixed(1) + 'px,' + ky.toFixed(1) + 'px)';
   });
   function endDrag(event) {
-    if (drag && event.pointerId === drag.id) {
-      drag = null;
-      joyBase.style.display = 'none';
-    }
+    if (drag && event.pointerId === drag.id) drag = null;
   }
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
@@ -735,9 +928,46 @@
     renderer.setSize(width, heightPx, false);
     camera.aspect = width / heightPx;
     camera.updateProjectionMatrix();
+    hudWidth = width;
+    hudHeight = heightPx;
+    hudPixelRatio = renderer.getPixelRatio();
+    hudCanvas.width = Math.max(1, Math.round(width * hudPixelRatio));
+    hudCanvas.height = Math.max(1, Math.round(heightPx * hudPixelRatio));
+    hudTexture.needsUpdate = true;
+    hudSignature = '';
   }
   window.addEventListener('resize', resize);
   resize();
+
+  function drawHudIfNeeded() {
+    var signature = phase + '|' + score + '|' + hearts + '|' + Math.ceil(timeLeft) + '|' + Math.ceil(shield)
+      + '|' + (paused ? 1 : 0)
+      + '|' + (cardState ? cardState.title + '|' + cardState.body + '|' + cardState.hint : '');
+    if (signature === hudSignature) return;
+    hudSignature = signature;
+    drawHud();
+  }
+
+  function updateJoystick() {
+    var show = !!drag;
+    joyBaseFill.visible = show;
+    joyBaseRing.visible = show;
+    joyKnob.visible = show;
+    if (!show) return;
+    var w = hudWidth, h = hudHeight;
+    var baseX = drag.x / w * 2 - 1;
+    var baseY = 1 - drag.y / h * 2;
+    var baseScaleX = 46 / w * 2, baseScaleY = 46 / h * 2;
+    joyBaseFill.position.set(baseX, baseY, 0);
+    joyBaseFill.scale.set(baseScaleX, baseScaleY, 1);
+    joyBaseRing.position.set(baseX, baseY, 0);
+    joyBaseRing.scale.set(baseScaleX, baseScaleY, 1);
+    var distance = Math.hypot(drag.dx, drag.dy), limit = 42;
+    var knobX = distance > limit ? drag.dx / distance * limit : drag.dx;
+    var knobY = distance > limit ? drag.dy / distance * limit : drag.dy;
+    joyKnob.position.set(baseX + knobX / w * 2, baseY - knobY / h * 2, 0);
+    joyKnob.scale.set(20 / w * 2, 20 / h * 2, 1);
+  }
 
   /* 12. LOOP */
   var last = performance.now();
@@ -748,13 +978,12 @@
     try {
       update(dt, now);
       placeCamera(dt);
-      heartsEl.textContent = '♥'.repeat(Math.max(0, hearts)) + '♡'.repeat(Math.max(0, R.hearts - hearts));
-      scoreEl.textContent = '✦ ' + score;
-      var seconds = Math.ceil(timeLeft);
-      timerEl.textContent = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
-      shieldEl.style.display = shield > 0 ? 'block' : 'none';
-      shieldEl.textContent = 'Shield ' + Math.ceil(shield) + 's';
+      drawHudIfNeeded();
+      updateJoystick();
       renderer.render(scene, camera);
+      renderer.autoClear = false;
+      renderer.render(hudScene, hudCamera);
+      renderer.autoClear = true;
     } catch (error) {
       reportError(error && error.message || error);
       throw error;
