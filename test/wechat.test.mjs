@@ -52,7 +52,7 @@ test('exportWechatProject exports a 2D game under 4 MB, rasterizes SVGs when bro
   }
 })
 
-test('exportWechatProject exports a 3D Three.js game, flags English title & HTML DOM HUD warnings, and boots inside a simulated WeChat CommonJS sandbox', async () => {
+test('exportWechatProject exports a 3D Three.js game with a canvas HUD, flags the English title, and boots inside a simulated WeChat CommonJS sandbox', async () => {
   const ws = await mkdtemp(join(tmpdir(), 'dgs-wx-3d-'))
   try {
     const dir = join(ws, 'voxel-isle')
@@ -66,7 +66,12 @@ test('exportWechatProject exports a 3D Three.js game, flags English title & HTML
     assert.equal(exported.syncedImages.length, 0)
     assert.ok((await stat(join(exported.outDir, 'js', 'three.js'))).size > 100_000)
     assert.ok(exported.warnings.some(w => w.includes('ASCII English')))
-    assert.ok(exported.warnings.some(w => w.includes('HTML DOM elements')))
+    // The 3D template draws its HUD into a CanvasTexture on the single WebGL
+    // context, so the WeChat export must not report an invisible HTML HUD.
+    assert.ok(!exported.warnings.some(w => w.includes('HTML DOM elements')))
+    const gameSource = await readFile(join(exported.outDir, 'js', 'core-game.js'), 'utf8')
+    assert.match(gameSource, /new THREE\.CanvasTexture/u)
+    assert.doesNotMatch(gameSource, /createElement\(\s*['"](?:div|span|button)['"]\s*\)/u)
 
     // Boot weapp-adapter.js + wx-config.js + watchRewardedAd + touch->pointer synthesis in Node!
     const touchHandlers = {}
